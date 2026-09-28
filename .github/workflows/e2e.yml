@@ -1,0 +1,62 @@
+name: e2e
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/**
+      - database/**
+      - infra/**
+      - tests/**
+      - docker-compose.yml
+      - .github/workflows/e2e.yml
+  pull_request:
+    paths:
+      - apps/**
+      - database/**
+      - infra/**
+      - tests/**
+      - docker-compose.yml
+      - .github/workflows/e2e.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Ambiente (.env, redes, certificado local)
+        run: |
+          make env network
+          make -C infra/traefik certs
+
+      # Stack completo pelo compose da raiz, com o registry-sync lendo as
+      # fixtures do repositório em vez da internet.
+      # Sem --wait: o serviço migrate roda e sai, e o --wait trata isso como
+      # falha. O e2e.sh espera a API e a primeira sincronização.
+      - name: Sobe o stack
+        run: docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml up -d --build
+
+      - name: e2e (Traefik HTTPS → API → Valkey/Postgres)
+        run: tests/e2e/e2e.sh
+
+      - name: Backup e restore verificado
+        run: |
+          make backup
+          make verify-backup
+
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose logs --no-color --tail=200
+
+      - name: Derruba o stack
+        if: always()
+        run: docker compose down -v

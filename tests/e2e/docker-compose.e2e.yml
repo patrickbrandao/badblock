@@ -1,0 +1,13 @@
+# Override do e2e: o registry-sync lê as fixtures do repositório em vez da
+# internet, para o teste ser rápido e determinístico (CI).
+#
+#   docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml up -d --build
+#
+# Os caminhos relativos resolvem a partir da raiz do repositório.
+
+services:
+  registry-sync:
+    environment:
+      SOURCES_DIR: /fixtures
+    volumes:
+      - ./apps/registry-sync/testdata/sources:/fixtures:ro

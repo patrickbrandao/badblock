@@ -1,0 +1,42 @@
+# Valkey do BadBlock: cache cache-aside da registry-api.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não publica porta no
+# host: só os containers da rede badblock o alcançam.
+
+name: badblock-valkey
+
+services:
+  valkey:
+    image: valkey/valkey:9-alpine
+    container_name: badblock-valkey
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - /usr/local/etc/valkey/valkey.conf
+      - --requirepass
+      - ${VALKEY_PASSWORD:?defina VALKEY_PASSWORD no .env}
+      - --maxmemory
+      - ${VALKEY_MAXMEMORY:-256mb}
+    environment:
+      VALKEYCLI_AUTH: ${VALKEY_PASSWORD:?defina VALKEY_PASSWORD no .env}
+    volumes:
+      - ./valkey.conf:/usr/local/etc/valkey/valkey.conf:ro
+    networks:
+      badblock:
+        aliases: [badblock-valkey]
+    healthcheck:
+      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

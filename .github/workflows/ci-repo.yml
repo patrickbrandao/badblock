@@ -1,0 +1,54 @@
+name: repo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets:
+    name: gitleaks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # O repositório é público: nenhum segredo pode entrar no histórico.
+      - name: gitleaks (histórico completo)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 \
+            git /repo --config /repo/.gitleaks.toml --redact --verbose
+
+  lint:
+    name: workflows, scripts e compose
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: actionlint
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+
+      - name: shellcheck
+        run: |
+          shellcheck -s sh \
+            release-images.sh scripts/*.sh tests/e2e/*.sh infra/traefik/*.sh \
+            database/postgresql/*.sh database/postgresql/bootstrap/*.sh database/postgresql/backup/*.sh
+
+      # O compose da raiz (com include) e cada compose isolado precisam ser válidos.
+      - name: docker compose config
+        run: |
+          make env network
+          docker compose config --quiet
+          docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml config --quiet
+          for f in database/postgresql database/valkey infra/traefik apps/registry-sync apps/registry-api; do
+            (cd "$f" && docker compose --env-file ../../.env config --quiet)
+          done

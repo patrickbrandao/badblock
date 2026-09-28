@@ -1,0 +1,21 @@
+# BadBlock — stack completo, em desenvolvimento e em produção.
+#
+#   make up                 # cria as redes, gera o .env se faltar e sobe tudo
+#   docker compose up -d    # equivalente, com as redes já criadas (make network)
+#
+# Cada componente mora na própria pasta, com um docker-compose.yml que também
+# sobe sozinho; este arquivo só os reúne. Os valores vêm do .env desta pasta
+# (copie o .env.example ou rode `make env`).
+#
+# O Traefik local (infra/traefik) tem o profile "dev" e só sobe com
+# COMPOSE_PROFILES=dev. Em produção, deixe COMPOSE_PROFILES vazio: a API se
+# publica no Traefik que já roda no servidor (rede externa "traefik").
+
+name: badblock
+
+include:
+  - database/postgresql/docker-compose.yml
+  - database/valkey/docker-compose.yml
+  - infra/traefik/docker-compose.yml
+  - apps/registry-sync/docker-compose.yml
+  - apps/registry-api/docker-compose.yml

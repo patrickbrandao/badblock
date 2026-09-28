@@ -1,0 +1,9 @@
+bin/
+testdata/
+*.test
+coverage.out
+.env
+.env.*
+docker-compose.yml
+Makefile
+README.md

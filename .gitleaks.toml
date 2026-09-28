@@ -1,0 +1,20 @@
+# gitleaks — o repositório é público: nenhum segredo real pode entrar nele.
+# Estende as regras padrão e libera só o que é dado público ou falso de teste.
+
+title = "BadBlock"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dados públicos das fontes e senhas falsas dos testes"
+paths = [
+  # Recortes dos arquivos públicos dos RIRs: opaque-ids em hex parecem chaves.
+  '''apps/registry-sync/testdata/sources/''',
+  '''apps/registry-api/testdata/''',
+]
+regexes = [
+  # Senhas fixas e óbvias dos containers descartáveis dos testes.
+  '''(owner|sync|api)pw''',
+  '''POSTGRES_PASSWORD=pg\b''',
+]

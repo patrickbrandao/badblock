@@ -1,0 +1,617 @@
+openapi: 3.1.0
+info:
+  title: BadBlock Registry API
+  version: "1"
+  summary: ASNs e prefixos IP do mundo, com a hierarquia IANA → RIR → NIC.br.
+  description: |
+    Consulta os dados públicos de registro de recursos da Internet: blocos da
+    IANA, delegações dos cinco RIRs (AFRINIC, APNIC, ARIN, LACNIC, RIPE NCC),
+    vínculos ASN ↔ bloco do NIC.br e nomes de AS do asn.txt do RIPE. Os dados
+    são sincronizados a cada hora pelo registry-sync.
+
+    **Importante:** `country` é o país de registro no RIR, não geolocalização.
+    Os vínculos ASN ↔ prefixo são de registro (`nicbr`: explícito no NIC.br;
+    `holder`: mesmo titular no RIR), não de roteamento BGP.
+
+    Toda resposta traz `dataset.version`, a versão do central usada. Respostas
+    de dados têm `ETag`; repita a requisição com `If-None-Match` para receber
+    `304` enquanto a versão não mudar.
+
+    A API é pública e tem limite de requisições por IP (HTTP 429 quando
+    excedido), mais rígido nas listas por país e RIR.
+  license:
+    name: MIT
+    identifier: MIT
+  contact:
+    url: https://github.com/patrickbrandao/badblock
+servers:
+  - url: /
+tags:
+  - name: IP
+  - name: ASN
+  - name: Prefixo
+  - name: Titular
+  - name: Listas
+  - name: Histórico
+  - name: Meta
+  - name: Legado
+paths:
+  /v1/ip:
+    get:
+      tags: [IP]
+      summary: Informações do IP de quem chama
+      description: Usa o IP real do cliente (X-Forwarded-For/X-Real-IP só quando vindos do proxy confiável).
+      operationId: getMyIP
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-Client-IP-Source:
+              description: De onde veio o IP (peer, x-forwarded-for, x-real-ip).
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IPResponse" }
+        "503": { $ref: "#/components/responses/NotReady" }
+  /v1/ip/{ip}:
+    get:
+      tags: [IP]
+      summary: Informações de um IPv4 ou IPv6
+      operationId: getIP
+      parameters:
+        - name: ip
+          in: path
+          required: true
+          schema: { type: string }
+          examples:
+            v4: { value: 45.171.60.1 }
+            v6: { value: "2804:5964::1" }
+      responses:
+        "200":
+          description: OK (também para IPs sem delegação, com flags.bogon = true)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IPResponse" }
+        "304": { description: Não modificado (If-None-Match) }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/NotReady" }
+  /v1/asn/{asn}:
+    get:
+      tags: [ASN]
+      summary: Informações de um ASN
+      description: Aceita "61613" ou "AS61613". Números sem delegação de RIR respondem só com a cadeia da IANA.
+      operationId: getASN
+      parameters:
+        - $ref: "#/components/parameters/ASN"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ASNResponse" }
+        "304": { description: Não modificado }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/asn/{asn}/history:
+    get:
+      tags: [Histórico]
+      summary: Histórico de mudanças de um ASN
+      operationId: getASNHistory
+      parameters:
+        - $ref: "#/components/parameters/ASN"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistoryResponse" }
+  /v1/prefix/{ip}/{len}:
+    get:
+      tags: [Prefixo]
+      summary: Informações de um prefixo
+      description: |
+        `match` = `exact` quando há registro do próprio prefixo, `covering` quando
+        só um bloco maior o contém, `none` quando nada o cobre. `children` lista
+        as delegações mais específicas dentro dele (até 1000).
+      operationId: getPrefix
+      parameters:
+        - { name: ip, in: path, required: true, schema: { type: string }, example: 45.171.60.0 }
+        - { name: len, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 128 }, example: 22 }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PrefixResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+  /v1/prefix/{ip}/{len}/history:
+    get:
+      tags: [Histórico]
+      summary: Histórico de mudanças de um prefixo (todos os níveis)
+      operationId: getPrefixHistory
+      parameters:
+        - { name: ip, in: path, required: true, schema: { type: string } }
+        - { name: len, in: path, required: true, schema: { type: integer } }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistoryResponse" }
+  /v1/holder/{rir}/{id}:
+    get:
+      tags: [Titular]
+      summary: Titular (opaque-id do RIR), seus ASNs e prefixos
+      operationId: getHolder
+      parameters:
+        - $ref: "#/components/parameters/RIR"
+        - { name: id, in: path, required: true, schema: { type: string }, example: "258500" }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HolderResponse" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /v1/holder/{rir}/{id}/history:
+    get:
+      tags: [Histórico]
+      summary: Histórico de mudanças de um titular
+      operationId: getHolderHistory
+      parameters:
+        - $ref: "#/components/parameters/RIR"
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HistoryResponse" }
+  /v1/country/{cc}/prefixes:
+    get:
+      tags: [Listas]
+      summary: Prefixos delegados a um país
+      description: Com `format=txt`, a lista completa sai em texto, um CIDR por linha (ipset, nftables, MikroTik).
+      operationId: listCountryPrefixes
+      parameters:
+        - $ref: "#/components/parameters/Country"
+        - $ref: "#/components/parameters/Status"
+        - $ref: "#/components/parameters/Family"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Format"
+        - $ref: "#/components/parameters/Aggregate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PrefixList" }
+            text/plain:
+              schema: { type: string, example: "45.171.60.0/22\n200.192.152.0/22\n" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429": { description: Limite de requisições excedido }
+  /v1/country/{cc}/asns:
+    get:
+      tags: [Listas]
+      summary: ASNs registrados em um país
+      operationId: listCountryASNs
+      parameters:
+        - $ref: "#/components/parameters/Country"
+        - $ref: "#/components/parameters/Status"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Format"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ASNList" }
+            text/plain:
+              schema: { type: string, example: "1916\n61613\n" }
+  /v1/rir/{rir}/prefixes:
+    get:
+      tags: [Listas]
+      summary: Prefixos delegados por um RIR
+      operationId: listRIRPrefixes
+      parameters:
+        - $ref: "#/components/parameters/RIR"
+        - { name: country, in: query, schema: { type: string }, description: Filtra também por país }
+        - $ref: "#/components/parameters/Status"
+        - $ref: "#/components/parameters/Family"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Format"
+        - $ref: "#/components/parameters/Aggregate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PrefixList" }
+            text/plain:
+              schema: { type: string }
+  /v1/rir/{rir}/asns:
+    get:
+      tags: [Listas]
+      summary: ASNs delegados por um RIR
+      operationId: listRIRASNs
+      parameters:
+        - $ref: "#/components/parameters/RIR"
+        - { name: country, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Status"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Format"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ASNList" }
+            text/plain:
+              schema: { type: string }
+  /v1/meta/sources:
+    get:
+      tags: [Meta]
+      summary: Estado de cada fonte de dados (atualização, erros)
+      operationId: listSources
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sources:
+                    type: array
+                    items: { $ref: "#/components/schemas/Source" }
+                  dataset: { $ref: "#/components/schemas/Dataset" }
+  /asn/{asn}:
+    get:
+      tags: [Legado]
+      summary: Formato do POC antigo (compatibilidade)
+      description: Campos planos; `cid` é o CNPJ do NIC.br; `status` em maiúsculas; `score` sempre "0". 404 responde `{}`.
+      operationId: getLegacyASN
+      parameters:
+        - $ref: "#/components/parameters/ASN"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LegacyASN" }
+        "404":
+          description: Não encontrado
+          content:
+            application/json:
+              schema: { type: object, maxProperties: 0 }
+  /status:
+    get:
+      tags: [Meta]
+      summary: Saúde da API (também em /health, GET e POST)
+      operationId: getStatus
+      responses:
+        "200":
+          description: online ou degraded (cache fora; a API segue pelo Postgres)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "503":
+          description: offline (sem Postgres)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+  /ping:
+    get:
+      tags: [Meta]
+      summary: Responde "pong"
+      operationId: ping
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema: { type: string, const: pong }
+components:
+  parameters:
+    ASN:
+      name: asn
+      in: path
+      required: true
+      schema: { type: string }
+      example: "61613"
+    RIR:
+      name: rir
+      in: path
+      required: true
+      schema: { type: string, enum: [afrinic, apnic, arin, lacnic, ripencc] }
+    Country:
+      name: cc
+      in: path
+      required: true
+      description: Código ISO 3166 de 2 letras
+      schema: { type: string, pattern: "^[A-Za-z]{2}$" }
+      example: BR
+    Status:
+      name: status
+      in: query
+      description: "Status separados por vírgula, ou all. Padrão: allocated,assigned."
+      schema: { type: string }
+    Family:
+      name: family
+      in: query
+      schema: { type: string, enum: ["4", "6"] }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Valor de next_cursor da página anterior.
+      schema: { type: string }
+    Format:
+      name: format
+      in: query
+      schema: { type: string, enum: [json, txt], default: json }
+    Aggregate:
+      name: aggregate
+      in: query
+      description: Com format=txt, junta blocos contíguos (menos regras de firewall).
+      schema: { type: boolean, default: false }
+  responses:
+    BadRequest:
+      description: Parâmetro inválido
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Não encontrado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotReady:
+      description: A primeira sincronização ainda não terminou
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, examples: [invalid_ip, not_found, dataset_not_ready] }
+            message: { type: string }
+    Dataset:
+      type: object
+      properties:
+        version: { type: integer }
+        updated_at: { type: string, format: date-time }
+    Prefix:
+      type: object
+      properties:
+        cidr: { type: string, examples: [45.171.60.0/22] }
+        level: { type: string, enum: [iana, special, rir, nicbr] }
+        rir: { type: [string, "null"], enum: [AFRINIC, APNIC, ARIN, LACNIC, RIPENCC, null] }
+        country: { type: [string, "null"], description: País de registro (não geolocalização) }
+        status: { type: [string, "null"], examples: [allocated, assigned, available, reserved, legacy] }
+        registered: { type: [string, "null"], format: date }
+        designation: { type: string, description: Nível iana/special }
+        rdap: { type: [string, "null"], format: uri }
+    Holder:
+      type: [object, "null"]
+      properties:
+        id: { type: string, examples: ["lacnic:258500"] }
+        name: { type: [string, "null"] }
+        name_source: { type: [string, "null"], enum: [nicbr, inferred, null] }
+        document: { type: [string, "null"], description: CNPJ (ou id estrangeiro) do NIC.br }
+    ASNLink:
+      type: object
+      properties:
+        asn: { type: integer }
+        name: { type: [string, "null"] }
+        link: { type: string, enum: [nicbr, holder] }
+    ChainItem:
+      type: object
+      properties:
+        cidr: { type: string }
+        level: { type: string }
+        rir: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        registered: { type: [string, "null"] }
+        designation: { type: string }
+    Flags:
+      type: object
+      properties:
+        bogon: { type: boolean, description: Não roteável ou não delegado por nenhum RIR }
+        special: { type: [string, "null"], description: Nome do bloco special-purpose da IANA }
+    IPResponse:
+      type: object
+      properties:
+        ip: { type: string }
+        prefix: { oneOf: [{ $ref: "#/components/schemas/Prefix" }, { type: "null" }] }
+        holder: { $ref: "#/components/schemas/Holder" }
+        asns: { type: array, items: { $ref: "#/components/schemas/ASNLink" } }
+        asns_truncated: { type: boolean }
+        chain: { type: array, items: { $ref: "#/components/schemas/ChainItem" } }
+        flags: { $ref: "#/components/schemas/Flags" }
+        dataset: { $ref: "#/components/schemas/Dataset" }
+    ASNResponse:
+      type: object
+      properties:
+        asn: { type: integer }
+        name: { type: [string, "null"] }
+        name_source: { type: [string, "null"], enum: [nicbr, asnames, null] }
+        handle: { type: [string, "null"] }
+        rir: { type: [string, "null"] }
+        country: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        registered: { type: [string, "null"], format: date }
+        rdap: { type: [string, "null"] }
+        holder: { $ref: "#/components/schemas/Holder" }
+        prefixes:
+          type: array
+          items:
+            type: object
+            properties:
+              cidr: { type: string }
+              link: { type: string, enum: [nicbr, holder] }
+              status: { type: [string, "null"] }
+              country: { type: [string, "null"] }
+        prefixes_total: { type: integer }
+        prefixes_truncated: { type: boolean }
+        chain:
+          type: array
+          items:
+            type: object
+            properties:
+              first: { type: integer }
+              last: { type: integer }
+              level: { type: string, enum: [iana, special] }
+              rir: { type: [string, "null"] }
+              designation: { type: string }
+        flags: { $ref: "#/components/schemas/Flags" }
+        first_seen: { type: [string, "null"], format: date-time }
+        updated_at: { type: [string, "null"], format: date-time }
+        dataset: { $ref: "#/components/schemas/Dataset" }
+    PrefixResponse:
+      type: object
+      properties:
+        query: { type: string }
+        match: { type: string, enum: [exact, covering, none] }
+        prefix: { oneOf: [{ $ref: "#/components/schemas/Prefix" }, { type: "null" }] }
+        holder: { $ref: "#/components/schemas/Holder" }
+        asns: { type: array, items: { $ref: "#/components/schemas/ASNLink" } }
+        chain: { type: array, items: { $ref: "#/components/schemas/ChainItem" } }
+        children:
+          type: array
+          items:
+            type: object
+            properties:
+              cidr: { type: string }
+              level: { type: string }
+              status: { type: [string, "null"] }
+              country: { type: [string, "null"] }
+              holder: { type: [string, "null"] }
+        children_truncated: { type: boolean }
+        flags: { $ref: "#/components/schemas/Flags" }
+        dataset: { $ref: "#/components/schemas/Dataset" }
+    ListPrefix:
+      type: object
+      properties:
+        cidr: { type: string }
+        rir: { type: [string, "null"] }
+        country: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        registered: { type: [string, "null"] }
+        holder: { type: string }
+    ListASN:
+      type: object
+      properties:
+        asn: { type: integer }
+        name: { type: [string, "null"] }
+        rir: { type: [string, "null"] }
+        country: { type: [string, "null"] }
+        status: { type: [string, "null"] }
+        registered: { type: [string, "null"] }
+        holder: { type: string }
+    PrefixList:
+      type: object
+      properties:
+        filter: { type: object }
+        items: { type: array, items: { $ref: "#/components/schemas/ListPrefix" } }
+        next_cursor: { type: [string, "null"] }
+        dataset: { $ref: "#/components/schemas/Dataset" }
+    ASNList:
+      type: object
+      properties:
+        filter: { type: object }
+        items: { type: array, items: { $ref: "#/components/schemas/ListASN" } }
+        next_cursor: { type: [string, "null"] }
+        dataset: { $ref: "#/components/schemas/Dataset" }
+    HolderResponse:
+      type: object
+      properties:
+        id: { type: string }
+        rir: { type: [string, "null"] }
+        name: { type: [string, "null"] }
+        name_source: { type: [string, "null"] }
+        document: { type: [string, "null"] }
+        country: { type: [string, "null"] }
+        counts:
+          type: object
+          properties:
+            asns: { type: integer }
+            ipv4_prefixes: { type: integer }
+            ipv6_prefixes: { type: integer }
+            ipv4_addresses: { type: integer }
+        asns: { type: array, items: { $ref: "#/components/schemas/ListASN" } }
+        prefixes: { type: array, items: { $ref: "#/components/schemas/ListPrefix" } }
+        next_cursor: { type: [string, "null"] }
+        first_seen: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        removed_at: { type: [string, "null"], format: date-time }
+        dataset: { $ref: "#/components/schemas/Dataset" }
+    HistoryResponse:
+      type: object
+      properties:
+        entity: { type: string, enum: [asn, prefix, holder] }
+        key: { type: string }
+        events:
+          type: array
+          items:
+            type: object
+            properties:
+              at: { type: string, format: date-time }
+              dataset_version: { type: integer }
+              action: { type: string, enum: [insert, update, remove, restore] }
+              level: { type: string }
+              before: { type: [object, "null"] }
+              after: { type: [object, "null"] }
+        dataset: { $ref: "#/components/schemas/Dataset" }
+    Source:
+      type: object
+      properties:
+        id: { type: string }
+        url: { type: [string, "null"] }
+        file_date: { type: [string, "null"], format: date }
+        records: { type: [integer, "null"] }
+        last_checked_at: { type: [string, "null"], format: date-time }
+        last_changed_at: { type: [string, "null"], format: date-time }
+        last_success_at: { type: [string, "null"], format: date-time }
+        last_error: { type: [string, "null"] }
+        last_error_at: { type: [string, "null"], format: date-time }
+    LegacyASN:
+      type: object
+      properties:
+        asn: { type: integer }
+        name: { type: string }
+        cid: { type: string }
+        country: { type: string }
+        rir: { type: string }
+        status: { type: string, examples: [ALLOCATED] }
+        score: { type: string, const: "0" }
+    Status:
+      type: object
+      properties:
+        success: { type: integer, enum: [0, 1] }
+        status: { type: string, enum: [online, degraded, offline] }
+        timestamp: { type: integer }
+        message: { type: string }
+        version: { type: string }
+        dataset_version: { type: integer }
+        checks:
+          type: object
+          properties:
+            postgres: { type: string }
+            cache: { type: string }

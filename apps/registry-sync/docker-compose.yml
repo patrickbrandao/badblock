@@ -1,0 +1,52 @@
+# registry-sync: importa e sincroniza os dados públicos de ASNs e prefixos IP
+# com o PostgreSQL do BadBlock.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não publica porta:
+# /health, /status e /ping ficam na rede interna (porta 8002).
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-registry-sync
+
+services:
+  registry-sync:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-registry-sync:${REGISTRY_SYNC_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${REGISTRY_SYNC_TAG:-dev}
+    container_name: badblock-registry-sync
+    restart: unless-stopped
+    environment:
+      # Monte a URL com o role badblock_sync. Senha só com letras e números.
+      POSTGRES_URL: ${REGISTRY_SYNC_POSTGRES_URL:-postgres://badblock_sync:${BADBLOCK_SYNC_PASSWORD:?defina BADBLOCK_SYNC_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      HTTP_PORT: "8002"
+      DATA_DIR: /data
+      SYNC_INTERVAL: ${SYNC_INTERVAL:-1h}
+      SYNC_SOURCE_INTERVALS: ${SYNC_SOURCE_INTERVALS:-}
+      SYNC_SOURCES: ${SYNC_SOURCES:-}
+      SOURCES_DIR: ${SOURCES_DIR:-}
+      REMOVAL_THRESHOLD: ${REMOVAL_THRESHOLD:-0.05}
+      REMOVAL_GRACE: ${REMOVAL_GRACE:-26h}
+      RAW_KEEP: ${RAW_KEEP:-7}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    volumes:
+      - sync-data:/data
+    networks: [badblock]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  sync-data:
+    name: badblock-sync-data
+
+networks:
+  badblock:
+    name: badblock
+    external: true

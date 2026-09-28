@@ -1,0 +1,40 @@
+# Traefik local do BadBlock (só desenvolvimento).
+#
+# Em produção os apps usam o Traefik que já roda no servidor, com a mesma
+# convenção: rede externa "traefik", entrypoint "websecure" e certresolver "le".
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+accessLog:
+  format: json
+
+api:
+  dashboard: true
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    # Sem forwardedHeaders.trustedIPs de propósito: o Traefik é a borda, então
+    # descarta os X-Forwarded-* e o X-Real-Ip enviados pelos clientes e grava
+    # os valores reais. Se um dia houver CDN ou balanceador na frente, liste
+    # as faixas dele aqui.
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: traefik
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true

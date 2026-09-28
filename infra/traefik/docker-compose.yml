@@ -1,0 +1,41 @@
+# Traefik local: HTTPS em *.badblock.localhost para testar as APIs no Mac.
+#
+# Tem o profile "dev": pelo compose da raiz só sobe com COMPOSE_PROFILES=dev
+# (padrão do .env de desenvolvimento). Em produção os apps usam o Traefik do
+# servidor. Antes da primeira subida: `make -C infra/traefik certs`.
+#
+# Portas só no loopback: nada deste Traefik fica acessível pela rede.
+
+name: badblock-traefik
+
+services:
+  traefik:
+    image: traefik:v3.7
+    container_name: badblock-traefik
+    profiles: ["dev"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:80:80"
+      - "127.0.0.1:443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
+      - ./certs:/certs:ro
+    networks: [traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.badblock-traefik.rule: Host(`traefik.badblock.localhost`)
+      traefik.http.routers.badblock-traefik.entrypoints: websecure
+      traefik.http.routers.badblock-traefik.tls: "true"
+      traefik.http.routers.badblock-traefik.service: api@internal
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  traefik:
+    name: traefik
+    external: true

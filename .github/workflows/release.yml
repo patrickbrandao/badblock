@@ -1,0 +1,84 @@
+name: release
+
+# Uma tag por app dispara a publicação da imagem no Docker Hub:
+#   git tag -a registry-api/v1.2.0 -m "registry-api v1.2.0" && git push origin registry-api/v1.2.0
+# (ou make -C apps/registry-api release V=1.2.0)
+#
+# Secrets necessários no repositório: DOCKERHUB_USERNAME e DOCKERHUB_TOKEN.
+
+on:
+  push:
+    tags:
+      - registry-sync/v*
+      - registry-api/v*
+
+permissions:
+  contents: read
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.parse.outputs.app }}
+      version: ${{ steps.parse.outputs.version }}
+      date: ${{ steps.parse.outputs.date }}
+    steps:
+      - id: parse
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          app="${TAG%%/v*}"
+          version="${TAG#*/v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "tag $TAG não segue SemVer (app/vX.Y.Z)"; exit 1
+          fi
+          {
+            echo "app=$app"
+            echo "version=$version"
+            echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: meta
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/${{ needs.meta.outputs.app }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/${{ needs.meta.outputs.app }}/go.mod
+          cache-dependency-path: apps/${{ needs.meta.outputs.app }}/go.sum
+      - run: go test -race -count=1 -tags integration ./...
+
+  image:
+    needs: [meta, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: apps/${{ needs.meta.outputs.app }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            tmsoftbrasil/badblock-${{ needs.meta.outputs.app }}:${{ needs.meta.outputs.version }}
+            tmsoftbrasil/badblock-${{ needs.meta.outputs.app }}:latest
+          build-args: |
+            VERSION=${{ needs.meta.outputs.version }}
+            COMMIT=${{ github.sha }}
+            BUILD_DATE=${{ needs.meta.outputs.date }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=${{ needs.meta.outputs.app }}
+          cache-to: type=gha,mode=max,scope=${{ needs.meta.outputs.app }}

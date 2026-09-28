@@ -1,0 +1,74 @@
+# registry-api: API HTTP de consulta, publicada em HTTPS pelo Traefik.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinha, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não publica porta:
+# o único caminho até ela é o Traefik, pela rede externa "traefik" — por isso
+# a API confia nos X-Forwarded-For/X-Real-IP vindos das redes internas
+# (TRUSTED_PROXIES).
+#
+# Rate limit por IP do cliente no próprio Traefik: um router geral e um router
+# de prioridade maior para as listas por país/RIR, que são as respostas pesadas.
+
+name: badblock-registry-api
+
+services:
+  registry-api:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-registry-api:${REGISTRY_API_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${REGISTRY_API_TAG:-dev}
+    container_name: badblock-registry-api
+    restart: unless-stopped
+    environment:
+      POSTGRES_URL: ${REGISTRY_API_POSTGRES_URL:-postgres://badblock_api:${BADBLOCK_API_PASSWORD:?defina BADBLOCK_API_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      REDIS_URL: ${REGISTRY_API_REDIS_URL:-redis://:${VALKEY_PASSWORD:?defina VALKEY_PASSWORD no .env}@badblock-valkey:6379/0}
+      REDIS_CACHE_ENABLED: ${REDIS_CACHE_ENABLED:-true}
+      REDIS_KEY_TTL: ${REDIS_KEY_TTL:-3600}
+      HTTP_PORT: "8001"
+      TRUSTED_PROXIES: ${API_TRUSTED_PROXIES:-127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
+      REAL_IP_HEADERS: ${API_REAL_IP_HEADERS:-X-Forwarded-For,X-Real-IP}
+      DB_POOL_MAX: ${API_DB_POOL_MAX:-20}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: traefik
+
+      traefik.http.services.badblock-api.loadbalancer.server.port: "8001"
+
+      traefik.http.routers.badblock-api.rule: Host(`${API_FQDN:-api.badblock.localhost}`)
+      traefik.http.routers.badblock-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.badblock-api.tls: "true"
+      traefik.http.routers.badblock-api.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-}
+      traefik.http.routers.badblock-api.service: badblock-api
+      traefik.http.routers.badblock-api.middlewares: badblock-api-ratelimit
+
+      traefik.http.routers.badblock-api-lists.rule: Host(`${API_FQDN:-api.badblock.localhost}`) && (PathPrefix(`/v1/country/`) || PathPrefix(`/v1/rir/`))
+      traefik.http.routers.badblock-api-lists.priority: "1000"
+      traefik.http.routers.badblock-api-lists.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.badblock-api-lists.tls: "true"
+      traefik.http.routers.badblock-api-lists.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-}
+      traefik.http.routers.badblock-api-lists.service: badblock-api
+      traefik.http.routers.badblock-api-lists.middlewares: badblock-api-lists-ratelimit
+
+      traefik.http.middlewares.badblock-api-ratelimit.ratelimit.average: ${API_RATE_AVERAGE:-5}
+      traefik.http.middlewares.badblock-api-ratelimit.ratelimit.burst: ${API_RATE_BURST:-20}
+      traefik.http.middlewares.badblock-api-ratelimit.ratelimit.period: 1s
+      traefik.http.middlewares.badblock-api-lists-ratelimit.ratelimit.average: ${API_LISTS_RATE_AVERAGE:-1}
+      traefik.http.middlewares.badblock-api-lists-ratelimit.ratelimit.burst: ${API_LISTS_RATE_BURST:-5}
+      traefik.http.middlewares.badblock-api-lists-ratelimit.ratelimit.period: 1s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true
+  traefik:
+    name: traefik
+    external: true

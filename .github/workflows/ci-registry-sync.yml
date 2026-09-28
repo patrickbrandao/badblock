@@ -1,0 +1,60 @@
+name: registry-sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/registry-sync/**
+      - database/postgresql/**
+      - .github/workflows/ci-registry-sync.yml
+  pull_request:
+    paths:
+      - apps/registry-sync/**
+      - database/postgresql/**
+      - .github/workflows/ci-registry-sync.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: apps/registry-sync
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: apps/registry-sync/go.mod
+          cache-dependency-path: apps/registry-sync/go.sum
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "arquivos sem gofmt:"; echo "$out"; exit 1; fi
+
+      - name: go vet
+        run: go vet -tags integration ./...
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
+          working-directory: apps/registry-sync
+
+      - name: Testes unitários
+        run: go test -race -count=1 ./...
+
+      # Sobe um PostgreSQL 18 com o bootstrap e as migrations de database/postgresql.
+      - name: Testes de integração (testcontainers)
+        run: go test -race -count=1 -tags integration ./...
+
+      - name: Imagem Docker
+        run: docker build --build-arg VERSION=ci --build-arg COMMIT="${GITHUB_SHA::7}" -t badblock-registry-sync:ci .

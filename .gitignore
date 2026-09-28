@@ -1,0 +1,41 @@
+# Material de referência local — nunca vai para o repositório.
+tmp/
+
+# Só os .env.example são versionados. Qualquer outro .env* (na raiz ou nas
+# pastas de cada componente) guarda segredos e fica de fora.
+.env
+.env.*
+!.env.example
+deploy.env
+
+# Scripts de operação do mantenedor na raiz (run-local.sh, run-prod.sh,
+# sync.sh...): guardam valores do ambiente dele e ficam fora do git. Só o
+# release-images.sh é versionado. Update_and_fixes é a mensagem de commit que
+# o run-commit.sh usa.
+/build.sh
+/destroy.sh
+/hub.sh
+/sync.sh
+/run-builder.sh
+/run-commit.sh
+/run-local.sh
+/run-prod.sh
+/run-rebuild.sh
+/Update_and_fixes
+
+# Certificados locais gerados pelo mkcert/openssl (infra/traefik/certs).
+*.pem
+*.key
+*.crt
+
+# Artefatos de build e teste dos apps Go.
+bin/
+dist/
+coverage.out
+*.test
+
+# Sistema operacional e editores.
+.DS_Store
+.idea/
+.vscode/
+*.swp
