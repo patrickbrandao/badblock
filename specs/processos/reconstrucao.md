@@ -35,7 +35,7 @@ tabela bate com o `dados.md`.
 ## 3. Coletores
 
 Para cada fonte, na ordem: `cgibr`, `lacnic` (depois os quatro clones de
-RIR), `iana`, `asnames`, `roothints`, `rootzone`, `rootanchors`, `anatel/pst`.
+RIR), `iana`, `ripe/asnames`, `roothints`, `rootzone`, `rootanchors`, `anatel/pst`.
 
 - Estrutura, laço, verificação, aplicação e configuração comuns:
   [../padroes/coletor.md](../padroes/coletor.md).

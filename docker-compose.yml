@@ -21,7 +21,7 @@ include:
   - path: [apps/afrinic/collector/docker-compose.yml, compose.wait-migrate/collector-afrinic.yml]
   - path: [apps/apnic/collector/docker-compose.yml, compose.wait-migrate/collector-apnic.yml]
   - path: [apps/arin/collector/docker-compose.yml, compose.wait-migrate/collector-arin.yml]
-  - path: [apps/asnames/collector/docker-compose.yml, compose.wait-migrate/collector-asnames.yml]
+  - path: [apps/ripe/asnames/collector/docker-compose.yml, compose.wait-migrate/collector-ripe-asnames.yml]
   - path: [apps/cgibr/collector/docker-compose.yml, compose.wait-migrate/collector-cgibr.yml]
   - path: [apps/iana/collector/docker-compose.yml, compose.wait-migrate/collector-iana.yml]
   - path: [apps/lacnic/collector/docker-compose.yml, compose.wait-migrate/collector-lacnic.yml]
@@ -33,7 +33,7 @@ include:
   - apps/anatel/pst/api/docker-compose.yml
   - apps/apnic/api/docker-compose.yml
   - apps/arin/api/docker-compose.yml
-  - apps/asnames/api/docker-compose.yml
+  - apps/ripe/asnames/api/docker-compose.yml
   - apps/cgibr/api/docker-compose.yml
   - apps/iana/api/docker-compose.yml
   - apps/lacnic/api/docker-compose.yml

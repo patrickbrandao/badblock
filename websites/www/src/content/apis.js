@@ -90,8 +90,8 @@ export const APIS = [
     ],
   },
   {
-    slug: 'asnames',
-    path: '/asnames',
+    slug: 'ripe/asnames',
+    path: '/ripe/asnames',
     name: 'Nomes de AS',
     group: 'rir',
     menuDesc: 'Nome e país de todos os ASNs alocados',
@@ -103,10 +103,10 @@ export const APIS = [
     data: ['Descrição de cada ASN, como publicada', 'Handle, nome e país derivados', 'Listas por país e por handle', 'Busca por texto'],
     source: 'https://ftp.ripe.net/ripe/asnames/asn.txt',
     routes: [
-      { path: '/asnames/asn/{asn}', desc: 'Descrição, handle, nome e país do ASN.', example: '/asnames/asn/15169' },
-      { path: '/asnames/country/{cc}', desc: 'Todos os ASNs de um país (código de duas letras).', example: '/asnames/country/BR' },
-      { path: '/asnames/handle/{handle}', desc: 'Os ASNs com esse handle (o handle não é único).', example: '/asnames/handle/google' },
-      { path: '/asnames/search?q={texto}', desc: 'Busca na descrição: termo de 3 a 100 caracteres, até 100 resultados.', example: '/asnames/search?q=google' },
+      { path: '/ripe/asnames/asn/{asn}', desc: 'Descrição, handle, nome e país do ASN.', example: '/ripe/asnames/asn/15169' },
+      { path: '/ripe/asnames/country/{cc}', desc: 'Todos os ASNs de um país (código de duas letras).', example: '/ripe/asnames/country/BR' },
+      { path: '/ripe/asnames/handle/{handle}', desc: 'Os ASNs com esse handle (o handle não é único).', example: '/ripe/asnames/handle/google' },
+      { path: '/ripe/asnames/search?q={texto}', desc: 'Busca na descrição: termo de 3 a 100 caracteres, até 100 resultados.', example: '/ripe/asnames/search?q=google' },
     ],
   },
   {

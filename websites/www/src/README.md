@@ -83,7 +83,7 @@ src/
     CyberOps é vermelho; `FLOW_SPLIT`: quantos grupos, do começo da lista,
     ficam à esquerda/em cima). O `tests/run.mjs` confere que todo item com
     slug é uma API de `apis.js`, que nenhuma API aparece em mais de um item
-    (/iana e /asnames ficam fora do quadro), que cores e colunas são válidas
+    (/iana e /ripe/asnames ficam fora do quadro), que cores e colunas são válidas
     e que os títulos e rótulos estão no bundle.
   - Node central: `FLOW_HUB_LABEL` ("BadBlock") no cabeçalho e `FLOW_HUB_ITEMS`
     no corpo (Collectors, Database, Cache, Webhook, API, MCP Server,

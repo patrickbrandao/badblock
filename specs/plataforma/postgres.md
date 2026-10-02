@@ -43,7 +43,7 @@ Projeto compose `badblock-postgres`; sobe sozinho a partir da pasta (com o
 - Ferramenta: **dbmate** (imagem `ghcr.io/amacneil/dbmate:2.36`), arquivos
   `AAAAMMDDHHMMSS_<descricao>.sql` com `-- migrate:up` e `-- migrate:down`
   **funcionais** (o down desfaz o up por inteiro). Única exceção: uma
-  extensão do Postgres (ex.: `pg_trgm`, do asnames) é criada com
+  extensão do Postgres (ex.: `pg_trgm`, do ripe/asnames) é criada com
   `CREATE EXTENSION IF NOT EXISTS` e **não** sai no down, porque é do banco
   inteiro e outras pastas podem usá-la.
 - Pastas: `central/` (função `set_updated_at()` e tabela `jobs`) e **uma pasta

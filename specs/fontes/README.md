@@ -14,7 +14,7 @@ pastas abaixo trazem só o que é de cada fonte.
 | `lacnic` | LACNIC | idem (é o modelo da família) | RIR | `/lacnic/` | 8105 | `lacnic_asn`, `lacnic_prefix`, `lacnic_run` | [lacnic/](lacnic/README.md) |
 | `ripencc` | RIPE NCC | idem | RIR | `/ripencc/` | 8106 | `ripencc_asn`, `ripencc_prefix`, `ripencc_run` | [ripencc/](ripencc/README.md) |
 | `iana` | IANA | blocos de ASN e IP por RIR, uso especial (bogons), bootstrap RDAP | — | `/iana/` | 8107 | `iana_asn_block`, `iana_prefix_block`, `iana_special_asn`, `iana_special_prefix`, `iana_rdap_service`, `iana_run` | [iana/](iana/README.md) |
-| `asnames` | RIPE NCC (`asn.txt`) | nome e país de todos os ASNs alocados | — | `/asnames/` | 8108 | `asnames_asn`, `asnames_run` | [asnames/](asnames/README.md) |
+| `ripe/asnames` | RIPE NCC (site [`ripe`](ripe/README.md), `asn.txt`) | nome e país de todos os ASNs alocados | — | `/ripe/asnames/` | 8108 | `ripe_asnames_asn`, `ripe_asnames_run` | [ripe/asnames/](ripe/asnames/README.md) |
 | `roothints` | InterNIC (`named.root`) | nomes e endereços IPv4/IPv6 dos 13 servidores raiz do DNS (root hints) | — | `/roothints/` | 8109 | `roothints_server`, `roothints_run` | [roothints/](roothints/README.md) |
 | `rootzone` | InterNIC (`root.zone`) | a zona raiz do DNS: TLDs delegados, servidores, glue e DS | — | `/rootzone/` | 8110 | `rootzone_tld`, `rootzone_record`, `rootzone_run` | [rootzone/](rootzone/README.md) |
 | `rootanchors` | IANA (`root-anchors.xml`) | âncoras de confiança DNSSEC da raiz (KSKs) | — | `/rootanchors/` | 8111 | `rootanchors_key`, `rootanchors_run` | [rootanchors/](rootanchors/README.md) |

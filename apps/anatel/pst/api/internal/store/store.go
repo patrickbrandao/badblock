@@ -131,7 +131,7 @@ func Open(ctx context.Context, url string, poolMax int) (*Store, error) {
 	// trocar para um plano genérico, que não vê o termo da busca nem o
 	// código do serviço: no ILIKE ele deixa de usar os índices trigram. As
 	// consultas daqui são baratas de planejar, então vale planejar sempre com
-	// os valores (como na api-asnames).
+	// os valores (como na api-ripe-asnames).
 	if cfg.ConnConfig.RuntimeParams["plan_cache_mode"] == "" {
 		cfg.ConnConfig.RuntimeParams["plan_cache_mode"] = "force_custom_plan"
 	}

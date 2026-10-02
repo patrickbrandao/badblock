@@ -111,7 +111,7 @@ try {
   const flowSlugs = FLOW_GROUPS.flatMap((g) => g.items.filter((it) => it.slug).map((it) => it.slug));
   for (const f of flowSlugs) check(slugs.includes(f), `content/datasources.js: o item ${f} é uma API de apis.js`);
   for (const f of new Set(flowSlugs)) check(flowSlugs.filter((x) => x === f).length === 1, `content/datasources.js: a API ${f} está em um item só`);
-  for (const s of ['iana', 'asnames']) check(!flowSlugs.includes(s), `content/datasources.js: /${s} fora do quadro`);
+  for (const s of ['iana', 'ripe/asnames']) check(!flowSlugs.includes(s), `content/datasources.js: /${s} fora do quadro`);
   const tones = ['pink', 'blue', 'cyan', 'green', 'yellow', 'orange', 'red', 'white'];
   const css = fs.readFileSync(path.join(root, 'src/styles/tokens.css'), 'utf8');
   for (const t of tones.filter((x) => x !== 'white')) check(css.includes(`--${t}-500:`), `tokens.css define --${t}-500`);

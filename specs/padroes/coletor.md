@@ -151,7 +151,7 @@ o hash ou serial e as contagens.
   em `error` (e o que se sabe do arquivo); as tabelas ficam como estavam; log
   `verificação falhou`. Se nem a linha de recusa puder ser gravada, o log diz
   `não consegui gravar a falha na tabela de execuções` (família RIR) ou
-  `não consegui gravar a falha em <fonte>_run` (cgibr, iana, asnames).
+  `não consegui gravar a falha em <fonte>_run` (cgibr, iana, ripe/asnames).
 - Falha **antes do download** (rede, fonte fora, banco fora): só log. A
   próxima tentativa vem em `RETRY_INTERVAL`.
 - Avisos do parser vão para `<fonte>_run.warnings` (jsonb, também nas

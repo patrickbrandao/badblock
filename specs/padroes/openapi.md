@@ -95,7 +95,7 @@ versionamento (`/<fonte>/v1/openapi.yaml` é 404) e listado no índice
 
 `internal/httpapi/openapi_test.go` lê o manifesto linha a linha (sem
 biblioteca de YAML). O teste completo, abaixo, é o da família RIR (o da
-`api-lacnic` e dos quatro clones); cgibr, iana e asnames conferem um
+`api-lacnic` e dos quatro clones); cgibr, iana e ripe/asnames conferem um
 subconjunto e fixam a porta no próprio teste — o que falta a cada um está na
 spec da fonte, como pendência. O teste completo falha se:
 

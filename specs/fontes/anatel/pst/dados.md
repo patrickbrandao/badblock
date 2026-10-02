@@ -9,7 +9,7 @@ implementa este arquivo (tabela de controle `anatel_pst_schema_migrations`).
 Ela depende da pasta `central/`, que cria a função `set_updated_at()` e a
 tabela `jobs` ([../../../plataforma/postgres.md](../../../plataforma/postgres.md#tabela-jobs)),
 e da extensão `pg_trgm` (criada com `IF NOT EXISTS` e não removida no down,
-como no `asnames`). Estilo:
+como no `ripe/asnames`). Estilo:
 [../../../plataforma/postgres.md](../../../plataforma/postgres.md#estilo-das-tabelas).
 
 ## Tabelas

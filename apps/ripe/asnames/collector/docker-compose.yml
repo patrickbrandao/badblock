@@ -1,0 +1,46 @@
+# collector-ripe-asnames: importa periodicamente o arquivo de nomes de AS do RIPE
+# NCC (asn.txt, todos os ASNs alocados) para as tabelas ripe_asnames_* do
+# PostgreSQL.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não tem porta nem
+# API HTTP: o estado fica nas tabelas ripe_asnames_run e jobs, e nos logs.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-ripe-asnames
+
+services:
+  collector-ripe-asnames:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-ripe-asnames:${COLLECTOR_RIPE_ASNAMES_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_RIPE_ASNAMES_TAG:-dev}
+    container_name: badblock-collector-ripe-asnames
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senha só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      SYNC_INTERVAL: ${COLLECTOR_RIPE_ASNAMES_SYNC_INTERVAL:-1h}
+      RETRY_INTERVAL: ${COLLECTOR_RIPE_ASNAMES_RETRY_INTERVAL:-5m}
+      SOURCE_URL: ${COLLECTOR_RIPE_ASNAMES_SOURCE_URL:-https://ftp.ripe.net/ripe/asnames/asn.txt}
+      MIN_ASNS: ${COLLECTOR_RIPE_ASNAMES_MIN_ASNS:-100000}
+      REMOVAL_THRESHOLD: ${COLLECTOR_RIPE_ASNAMES_REMOVAL_THRESHOLD:-0.05}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true
