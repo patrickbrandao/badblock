@@ -132,7 +132,7 @@ Toda rota de dados passa por `serveCached(chave, build)`:
    ETag atual (com ou sem `W/`, numa lista, ou `*`) → **304** sem corpo e sem
    consultar nada.
 3. Chave no Valkey: `badblock:api-<fonte>:<versão>:<chave>`, com a consulta
-   **normalizada** (a fonte lista as suas; ex.: `asn:61613` sem o `AS`, IP
+   **normalizada** (a fonte lista as suas; ex.: `asn:61610` sem o `AS`, IP
    mapeado vira IPv4, bits de host do prefixo zerados). Rotas com e sem `/v1`
    usam a mesma chave e o mesmo ETag.
 4. Achou → corpo do cache (`X-Cache: HIT`).

@@ -288,7 +288,7 @@ Os do manifesto, com as mensagens reais (conferidas em 2026-09-29):
 | `/apnic/ip/x` | 400 | `bad_request` | `endereço IP inválido` |
 | `/apnic/prefix/1.1.1.0/33` | 400 | `bad_request` | `tamanho de prefixo inválido` |
 | `/apnic/holder/nao%20existe` | 400 | `bad_request` | `opaque_id inválido: use de 1 a 128 letras, dígitos, ponto, hífen ou sublinhado` |
-| `/apnic/asn/61613` (ASN da LACNIC; o exemplo do manifesto) | 404 | `not_found` | `AS61613 não consta no arquivo do RIR APNIC` |
+| `/apnic/asn/61610` (ASN da LACNIC; o exemplo do manifesto) | 404 | `not_found` | `AS61610 não consta no arquivo do RIR APNIC` |
 | `/apnic/asn/1` (ASN da ARIN) | 404 | `not_found` | `AS1 não consta no arquivo do RIR APNIC` |
 | `/apnic/ip/8.8.8.8` | 404 | `not_found` | `8.8.8.8 não pertence a nenhum bloco no arquivo do RIR APNIC` |
 | `/apnic/prefix/8.8.8.0/24` | 404 | `not_found` | `8.8.8.0/24 não está contido em nenhum bloco no arquivo do RIR APNIC` |
@@ -337,7 +337,7 @@ servidores locais na porta 8103 e os exemplos desta página.
   e `ipv6` (`2001:dc0:abcd::/48`, citado também na descrição da rota);
   `/holder`, o de `A91DC5BE`; `/meta`, `carregado` e `vazio`; saúde com o
   `timestamp` `2026-09-29T01:09:57Z`. Nos erros, `len` com
-  `/prefix/1.1.1.0/33` e os 404 `/asn/61613 (ASN de outro RIR)`,
+  `/prefix/1.1.1.0/33` e os 404 `/asn/61610 (ASN de outro RIR)`,
   `/ip/8.8.8.8`, `/prefix/8.8.8.0/24` e `/holder/NAOEXISTE`.
 - Descrições com a particularidade da APNIC (o texto, em markdown como no
   manifesto):

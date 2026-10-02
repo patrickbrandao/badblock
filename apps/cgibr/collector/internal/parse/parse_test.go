@@ -32,21 +32,21 @@ func TestParseSample(t *testing.T) {
 	for _, a := range d.ASNs {
 		byNum[a.Number] = a
 	}
-	tm := byNum[61613]
-	if tm.Name != "TMSoft Solucoes em Informatica Ltda" || tm.Document != "08.030.063/0001-00" {
-		t.Errorf("AS61613 = %+v", tm)
+	tm := byNum[61610]
+	if tm.Name != "ELEA DATA CENTERS" || tm.Document != "35.980.592/0001-30" {
+		t.Errorf("AS61610 = %+v", tm)
 	}
 	want := []netip.Prefix{
-		netip.MustParsePrefix("45.171.60.0/22"),
-		netip.MustParsePrefix("2804:5964::/32"),
-		netip.MustParsePrefix("200.192.152.0/22"),
+		netip.MustParsePrefix("187.87.28.0/22"),
+		netip.MustParsePrefix("2804:8ae0::/32"),
+		netip.MustParsePrefix("200.225.48.0/21"),
 	}
 	if len(tm.Prefixes) != len(want) {
-		t.Fatalf("AS61613 blocos = %v", tm.Prefixes)
+		t.Fatalf("AS61610 blocos = %v", tm.Prefixes)
 	}
 	for i := range want {
 		if tm.Prefixes[i] != want[i] {
-			t.Errorf("AS61613 bloco %d = %s, quero %s", i, tm.Prefixes[i], want[i])
+			t.Errorf("AS61610 bloco %d = %s, quero %s", i, tm.Prefixes[i], want[i])
 		}
 	}
 	if a := byNum[6125]; len(a.Prefixes) != 0 {

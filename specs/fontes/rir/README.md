@@ -107,7 +107,7 @@ conferidos em 2026-09-29. O que cada constante faz está em
 | `afrinic` | `AFRINIC` | `https://ftp.afrinic.net/pub/stats/afrinic/delegated-afrinic-extended-latest` | `false` | 8102 | 37100 |
 | `apnic` | `APNIC` | `https://ftp.apnic.net/stats/apnic/delegated-apnic-extended-latest` (sem `/pub`) | `false` | 8103 | 4608 |
 | `arin` | `ARIN` | `https://ftp.arin.net/pub/stats/arin/delegated-arin-extended-latest` | `false` | 8104 | 7018 |
-| `lacnic` (modelo) | `LACNIC` | `https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-extended-latest` | `false` | 8105 | 61613 |
+| `lacnic` (modelo) | `LACNIC` | `https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-extended-latest` | `false` | 8105 | 61610 |
 | `ripencc` | `RIPE NCC` | `https://ftp.ripe.net/pub/stats/ripencc/delegated-ripencc-extended-latest` | `true` | 8106 | 3333 |
 
 Nos cinco, `Source` é o nome da fonte (primeira coluna), `App` é

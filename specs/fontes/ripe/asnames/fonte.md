@@ -261,7 +261,7 @@ os dois caracteres de controle C1, bytes `C2 80 C2 93`):
 37622 Mahanagar Telephone (Mauritius) Ltd - Mahanagar Telephone (Mauritius) Ltd, MU
 56122 VALE-SA-AP - Avenida GraÃƒÂ§a Aranha, 26 Castelo, SG
 59265 CT-CNGI - China telecom â<U+0080><U+0093> China Next Generation Internet, CN
-61613 AS61613 - TMSoft Solucoes em Informatica Ltda, BR
+61610 AS61610 - ELEA DATA CENTERS, BR
 136209 CYBERFORESTLLC-AS-AP - CyberForest LLC., AP
 139247 PPPWAW-AS-AP - pppwaw, AP
 262287 AS262287 - Latitude.sh LTDA, BR
@@ -274,7 +274,7 @@ os dois caracteres de controle C1, bytes `C2 80 C2 93`):
 
 | Caso | ASNs |
 |---|---|
-| Regra 3 (`handle - nome`), inclusive vírgulas e ` - ` no nome | 1, 2, 15169, 16509, 28000, 61613, 262287, 263009, 399999, 403009 |
+| Regra 3 (`handle - nome`), inclusive vírgulas e ` - ` no nome | 1, 2, 15169, 16509, 28000, 61610, 262287, 263009, 399999, 403009 |
 | Regra 3 com nome vazio / com handle e nome vazios | 4745 / 7901 |
 | Regra 2 (`X - X`), inclusive X com espaços e com ` - ` dentro | 248, 5536, 29571, 30619, 33764, 37622, 327710, 328289 |
 | Regra 4 sem separador / só o handle | 28 / 2799, 3256 |
@@ -284,7 +284,7 @@ os dois caracteres de controle C1, bytes `C2 80 C2 93`):
 | Não-ASCII | 29571 e 327710 (a mesma descrição em dois ASNs), 30619 |
 | Mojibake (conversão dupla / controles C1) | 56122 / 59265 |
 | ASN de 32 bits, até o maior do arquivo | 136209, 139247, 262287, 263009, 327710, 328289, 399999, 403009 |
-| País `BR` (consulta por país nos testes) | 61613, 262287, 263009 |
+| País `BR` (consulta por país nos testes) | 61610, 262287, 263009 |
 
 Os testes contam com estas 37 linhas ([collector.md](collector.md#testes)).
 Para refazer a fixture a partir de um arquivo novo, pegue as mesmas linhas

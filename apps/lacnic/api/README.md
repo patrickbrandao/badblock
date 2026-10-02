@@ -7,9 +7,9 @@ um IP ou prefixo e os recursos de um titular, abaixo de `/lacnic`. Faz par com
 dos outros RIRs.
 
 ```bash
-curl https://api.badblock.net.br/lacnic/asn/61613
-curl https://api.badblock.net.br/lacnic/v1/ip/45.171.61.10
-curl https://api.badblock.net.br/lacnic/prefix/2804:5964::/32
+curl https://api.badblock.net.br/lacnic/asn/61610
+curl https://api.badblock.net.br/lacnic/v1/ip/187.87.29.10
+curl https://api.badblock.net.br/lacnic/prefix/2804:8ae0::/32
 curl https://api.badblock.net.br/lacnic/holder/258500
 ```
 

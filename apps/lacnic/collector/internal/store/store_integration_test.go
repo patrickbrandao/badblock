@@ -172,8 +172,8 @@ func TestApplyLifecycle(t *testing.T) {
 	var pfx netip.Prefix
 	var opaque string
 	err = admin.QueryRow(ctx, `SELECT prefix, opaque_id FROM lacnic_prefix
-		WHERE prefix >>= $1::inet ORDER BY masklen(prefix) DESC LIMIT 1`, "45.171.61.10").Scan(&pfx, &opaque)
-	if err != nil || pfx.String() != "45.171.60.0/22" || opaque != "258500" {
+		WHERE prefix >>= $1::inet ORDER BY masklen(prefix) DESC LIMIT 1`, "187.87.29.10").Scan(&pfx, &opaque)
+	if err != nil || pfx.String() != "187.87.28.0/22" || opaque != "258500" {
 		t.Errorf("bloco do IP = %s %s, err = %v", pfx, opaque, err)
 	}
 	if n := count(t, admin, `SELECT (SELECT count(*) FROM lacnic_asn WHERE opaque_id = $1)

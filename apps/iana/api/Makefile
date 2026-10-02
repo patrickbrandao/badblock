@@ -89,7 +89,7 @@ logs: ## Acompanha os logs
 
 smoke: ## Consulta a API local (porta do loopback)
 	curl -fsS http://127.0.0.1:$${API_IANA_HOST_PORT:-8107}/iana/status && echo && \
-	curl -fsS http://127.0.0.1:$${API_IANA_HOST_PORT:-8107}/iana/asn/61613 && echo && \
+	curl -fsS http://127.0.0.1:$${API_IANA_HOST_PORT:-8107}/iana/asn/61610 && echo && \
 	curl -fsS http://127.0.0.1:$${API_IANA_HOST_PORT:-8107}/iana/ip/10.0.0.1 && echo && \
 	curl -fsS http://127.0.0.1:$${API_IANA_HOST_PORT:-8107}/iana/openapi.yaml >/dev/null
 

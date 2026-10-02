@@ -26,7 +26,7 @@
 37622 Mahanagar Telephone (Mauritius) Ltd - Mahanagar Telephone (Mauritius) Ltd, MU
 56122 VALE-SA-AP - Avenida GraÃƒÂ§a Aranha, 26 Castelo, SG
 59265 CT-CNGI - China telecom â China Next Generation Internet, CN
-61613 AS61613 - TMSoft Solucoes em Informatica Ltda, BR
+61610 AS61610 - ELEA DATA CENTERS, BR
 136209 CYBERFORESTLLC-AS-AP - CyberForest LLC., AP
 139247 PPPWAW-AS-AP - pppwaw, AP
 262287 AS262287 - Latitude.sh LTDA, BR

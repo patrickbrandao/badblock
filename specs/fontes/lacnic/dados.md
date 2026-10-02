@@ -41,6 +41,6 @@ integração confere, [fonte.md](fonte.md#recorte-testdatadelegated-extended-sam
 | Consulta | Resultado |
 |---|---|
 | ASN 28004 | registro 28003–28005, available |
-| IP `45.171.61.10` | `45.171.60.0/22`, titular `258500` |
-| titular `258500` | 4 recursos: AS61613, `45.171.60.0/22`, `200.192.152.0/22`, `2804:5964::/32` |
+| IP `187.87.29.10` | `187.87.28.0/22`, titular `258500` |
+| titular `258500` | 4 recursos: AS61610, `187.87.28.0/22`, `200.225.48.0/21`, `2804:8ae0::/32` |
 | blocos reserved com `cc`, `reg_date` e `opaque_id` NULL | 2 (`45.68.105.0/24`, `2001:12b8::/32`) |

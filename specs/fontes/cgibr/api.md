@@ -23,7 +23,7 @@ reais: [api-rotas.md](api-rotas.md). Tabelas e consultas SQL:
 | Nomes nas conexões | `application_name=api-cgibr` no Postgres (se a URL não define outro); `ClientName` `badblock-api-cgibr` no Valkey |
 | Cabeçalho `Server` | `badblock-api-cgibr/<versão>` |
 | Descrição da imagem | `API HTTP dos ASNs e blocos IP brasileiros do NIC.br, do BadBlock` (`org.opencontainers.image.description`) |
-| Exemplo das specs | AS61613 (TMSoft, documento `08.030.063/0001-00`), também na [fixture do coletor](fonte.md#fixture-testdatanicbr-asn-blk-sampletxt) |
+| Exemplo das specs | AS61610 (ELEA, documento `35.980.592/0001-30`), também na [fixture do coletor](fonte.md#fixture-testdatanicbr-asn-blk-sampletxt) |
 
 ## Rotas
 
@@ -33,10 +33,10 @@ em `/cgibr/v1/...`; saúde, `ping` e o manifesto existem só sem versão
 
 | Rota | `operationId` | Tag | Chave de cache (exemplo) |
 |---|---|---|---|
-| `GET /cgibr/asn/{asn}` | `getASN` | `dados` | `asn:61613` |
-| `GET /cgibr/ip/{ip}` | `getIP` | `dados` | `ip:45.171.61.10`, `ip:2804:5964::1` |
-| `GET /cgibr/prefix/{ip}/{len}` | `getPrefix` | `dados` | `prefix:200.192.152.0/24` |
-| `GET /cgibr/document/{doc}` | `getDocument` | `dados` | `doc:08030063000100` |
+| `GET /cgibr/asn/{asn}` | `getASN` | `dados` | `asn:61610` |
+| `GET /cgibr/ip/{ip}` | `getIP` | `dados` | `ip:187.87.29.10`, `ip:2804:8ae0::1` |
+| `GET /cgibr/prefix/{ip}/{len}` | `getPrefix` | `dados` | `prefix:200.225.48.0/24` |
+| `GET /cgibr/document/{doc}` | `getDocument` | `dados` | `doc:35980592000130` |
 | `GET /cgibr/asns` | `listASNs` | `dados` | `asns` |
 | `GET /cgibr/meta` | `getMeta` | `meta` | — (sem cache) |
 | `GET /cgibr/` | `getIndex` | `meta` | — |
@@ -46,7 +46,7 @@ em `/cgibr/v1/...`; saúde, `ping` e o manifesto existem só sem versão
 | `GET /cgibr/openapi.yaml` | `getOpenAPI` | `meta` | — |
 
 Chave completa, por exemplo:
-`badblock:api-cgibr:01a0eb55-1a1c-7bdb-915a-e885abbaaf72:asn:61613`. Como
+`badblock:api-cgibr:01a0eb55-1a1c-7bdb-915a-e885abbaaf72:asn:61610`. Como
 cada consulta é normalizada: [api-rotas.md](api-rotas.md).
 
 ## Manifesto
@@ -76,10 +76,10 @@ derivado destas specs. O que é desta API:
 - `paths`: um por rota, com o `operationId`, a tag, as respostas e os
   exemplos de [api-rotas.md](api-rotas.md).
 - `components.parameters`: `ASN` (texto, `pattern: '^([Aa][Ss])?[0-9]+$'`,
-  exemplo `AS61613`), `IP` e `PrefixIP` (texto, `anyOf` de `format: ipv4` e
-  `format: ipv6`; exemplos `45.171.61.10` e `200.192.152.9`), `PrefixLength`
+  exemplo `AS61610`), `IP` e `PrefixIP` (texto, `anyOf` de `format: ipv4` e
+  `format: ipv6`; exemplos `187.87.29.10` e `200.225.48.9`), `PrefixLength`
   (inteiro de 0 a 128, exemplo `24`), `Document` (texto, exemplo
-  `'08030063000100'`) e `IfNoneMatch` (cabeçalho).
+  `'35980592000130'`) e `IfNoneMatch` (cabeçalho).
 - `components.headers`: `ETag`, `CacheControlPublic`
   (`const: public, max-age=300`), `CacheControlNoStore` (`const: no-store`),
   `XCache` (`enum: [HIT, MISS, BYPASS]`; o 304 sai sempre com `HIT`) e
@@ -102,7 +102,7 @@ derivado destas specs. O que é desta API:
   `pattern: '^([0-9]{8}|[0-9]{14})$'`.
 - Exemplos: os de [api-rotas.md](api-rotas.md#exemplos); `XDatasetVersion`
   usa `01a0ea50-add2-7bcf-998a-a2e3b04b8cdc`; o de `ETag` e de `IfNoneMatch` é
-  `W/"a344bf03cbbadb4a"`, o ETag de `/cgibr/document/08030063000100` no
+  `W/"a344bf03cbbadb4a"`, o ETag de `/cgibr/document/35980592000130` no
   dataset `01a0eb55-…`.
 
 ETags reais (`etagFor` em `internal/httpapi/server.go`) no dataset
@@ -110,10 +110,10 @@ ETags reais (`etagFor` em `internal/httpapi/server.go`) no dataset
 
 | Consulta | ETag |
 |---|---|
-| `asn:61613` | `W/"95b0ac1a4da4653c"` |
-| `ip:45.171.61.10` | `W/"1469e8c53664ae70"` |
-| `prefix:200.192.152.0/24` | `W/"53a5a111c8334474"` |
-| `doc:08030063000100` | `W/"a344bf03cbbadb4a"` |
+| `asn:61610` | `W/"95b0ac1a4da4653c"` |
+| `ip:187.87.29.10` | `W/"1469e8c53664ae70"` |
+| `prefix:200.225.48.0/24` | `W/"53a5a111c8334474"` |
+| `doc:35980592000130` | `W/"a344bf03cbbadb4a"` |
 | `asns` | `W/"e7b073256f3130d0"` |
 
 ## Opções
@@ -129,8 +129,8 @@ viram `/cgibr`; `/x/y/` vira `/x/y`).
 api-cgibr — API HTTP dos ASNs e blocos IP brasileiros do NIC.br (registro.br).
 
 Lê as tabelas cgibr_* mantidas pelo collector-cgibr, com cache opcional no
-Valkey. Responde tudo abaixo de BASE_PATH (/cgibr): /cgibr/asn/61613 é a versão
-atual e /cgibr/v1/asn/61613 fixa a v1.
+Valkey. Responde tudo abaixo de BASE_PATH (/cgibr): /cgibr/asn/61610 é a versão
+atual e /cgibr/v1/asn/61610 fixa a v1.
 
 Uso:
   api-cgibr [opções]
@@ -221,15 +221,15 @@ não passam pelo compose (valem os padrões do app). **Pendente**: o
 
 ```bash
 curl http://127.0.0.1:8101/cgibr/status          # sem Traefik, pela porta do loopback
-curl https://api.badblock.net.br/cgibr/asn/61613
+curl https://api.badblock.net.br/cgibr/asn/61610
 make -C apps/cgibr/api smoke                      # com o stack no ar (make up na raiz)
 make -C apps/cgibr/api logs
 ```
 
-`make smoke` faz `curl -fsS` em `/cgibr/status`, `/cgibr/asn/61613` e
+`make smoke` faz `curl -fsS` em `/cgibr/status`, `/cgibr/asn/61610` e
 `/cgibr/openapi.yaml` na porta `${API_CGIBR_HOST_PORT:-8101}`. **Pendente**
 (o [padrão](../../plataforma/docker.md#makefile-dos-apps) pede): o `Makefile`
-não tem `SOURCE`, `PORT` nem `SMOKE_ASN` (o AS61613 está fixo no alvo) e o
+não tem `SOURCE`, `PORT` nem `SMOKE_ASN` (o AS61610 está fixo no alvo) e o
 `smoke` não consulta `/cgibr/meta`.
 
 Logs (JSON, `app=api-cgibr` em toda linha):
@@ -271,15 +271,15 @@ descartável: o app não tem `make test-real`.
 ## Testes específicos
 
 Unitários (`make test`), com o store falso de `internal/httpapi/httpapi_test.go`
-(AS61613 com os três blocos; AS275689 com `10996639`; versão `0192-v1`;
+(AS61610 com os três blocos; AS275689 com `10996639`; versão `0192-v1`;
 `BASE_PATH` `/cgibr/`, que vira `/cgibr`):
 
 | Pacote | Teste | Confere |
 |---|---|---|
-| `httpapi` | `TestASN` | `61613`, `/v1`, `AS61613` e `as61613`: 200, `cnpj`, 2 + 1 blocos, `dataset.version` |
+| `httpapi` | `TestASN` | `61610`, `/v1`, `AS61610` e `as61610`: 200, `cnpj`, 2 + 1 blocos, `dataset.version` |
 | `httpapi` | `TestErrors` | 404 (`AS1`, `8.8.8.8`, `11111111`, `/cgibr/v2/...`, `/cgibr/nada`, fora do caminho de base) e 400 (`abc`, `4294967296`, `999.1.1.1`, `/33`, `123`), sempre JSON |
-| `httpapi` | `TestIPAndPrefix` | IPv4 e IPv6; bits de host zerados (`45.171.61.1/24` → `45.171.61.0/24`); `exact` falso e verdadeiro |
-| `httpapi` | `TestDocumentAcceptsFormatted` | só dígitos e `08.030.063%2F0001-00` |
+| `httpapi` | `TestIPAndPrefix` | IPv4 e IPv6; bits de host zerados (`187.87.29.1/24` → `187.87.29.0/24`); `exact` falso e verdadeiro |
+| `httpapi` | `TestDocumentAcceptsFormatted` | só dígitos e `35.980.592%2F0001-30` |
 | `httpapi` | `TestASNsList` | `count` 2 e `foreign` para 8 dígitos |
 | `httpapi` | `TestCacheAndETag` | `MISS` e depois `HIT` pela `/v1` (uma consulta só, uma chave com o prefixo `badblock:api-cgibr:0192-v1:`), `X-Dataset-Version`, 304 com `If-None-Match` |
 | `httpapi` | `TestNotReady` | 503 `dataset_not_ready` e `/status` `starting` |
@@ -292,12 +292,12 @@ Unitários (`make test`), com o store falso de `internal/httpapi/httpapi_test.go
 
 Integração (`make test-int`): `TestQueries` em `internal/store`, num
 `postgres:18-trixie` descartável (banco `badblock`, usuário `postgres`, senha
-`pg`) com só o `migrate:up` de `central/` e `cgibr/` e esta carga: AS61613
-(3 blocos), AS262287 (`45.171.62.0/24`, dentro do `/22` do AS61613), AS275689
+`pg`) com só o `migrate:up` de `central/` e `cgibr/` e esta carga: AS61610
+(3 blocos), AS262287 (`187.87.30.0/24`, dentro do `/22` do AS61610), AS275689
 e AS275690 (`10996639`), uma execução recusada e uma aplicada, e a linha de
 `jobs`. Confere a execução aplicada (a recusada não conta), `jobs`, os blocos
-do AS61613 em ordem (`45.171.60.0/22`, `200.192.152.0/22`, `2804:5964::/32`),
-o bloco mais específico (`45.171.62.10/32` → AS262287), IPv6, IP fora
+do AS61610 em ordem (`187.87.28.0/22`, `200.225.48.0/21`, `2804:8ae0::/32`),
+o bloco mais específico (`187.87.30.10/32` → AS262287), IPv6, IP fora
 (`8.8.8.8`), os dois ASNs do `10996639` e a lista inteira em ordem.
 
 **Pendente** — o que o [padrão](../../padroes/api.md#testes) pede e ainda

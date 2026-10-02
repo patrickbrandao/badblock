@@ -284,7 +284,7 @@ Os do manifesto, com as mensagens reais:
 | `/ripencc/ip/x` | 400 | `bad_request` | `endereço IP inválido` |
 | `/ripencc/prefix/193.0.0.0/33` | 400 | `bad_request` | `tamanho de prefixo inválido` |
 | `/ripencc/holder/nao%20existe` | 400 | `bad_request` | `opaque_id inválido: use de 1 a 128 letras, dígitos, ponto, hífen ou sublinhado` |
-| `/ripencc/asn/61613` (ASN da LACNIC) | 404 | `not_found` | `AS61613 não consta no arquivo do RIR RIPE NCC` |
+| `/ripencc/asn/61610` (ASN da LACNIC) | 404 | `not_found` | `AS61610 não consta no arquivo do RIR RIPE NCC` |
 | `/ripencc/ip/192.0.2.1` | 404 | `not_found` | `192.0.2.1 não pertence a nenhum bloco no arquivo do RIR RIPE NCC` |
 | `/ripencc/prefix/192.0.2.0/24` | 404 | `not_found` | `192.0.2.0/24 não está contido em nenhum bloco no arquivo do RIR RIPE NCC` |
 | `/ripencc/holder/87debb42-f92a-447a-ae52-ae9ff30e6f5b` (opaque-id da véspera) | 404 | `not_found` | `o titular 87debb42-f92a-447a-ae52-ae9ff30e6f5b não consta no arquivo do RIR RIPE NCC; o RIPE NCC gera opaque_id novos a cada arquivo diário: consulte /ripencc/ip/{ip} ou /ripencc/asn/{asn} para obter o atual` |
@@ -335,7 +335,7 @@ exemplos desta página e, no RIPE NCC:
 | `externalDocs.url`, `servers` | `https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/ripencc`; servidores locais na porta 8106 |
 | parâmetros | `asn` `'3333'` (a descrição cita `3333`, `AS3333` e `as3333`); `ip` `193.0.6.139`; `ip` e `len` do prefixo `193.0.6.0` e `24` (a descrição cita `193.0.6.139/24` consulta `193.0.6.0/24`); `opaque_id` `'c949c45e-fcab-480a-ba5b-804b0addae55'` |
 | cabeçalhos | `IfNoneMatch` e `ETag` com `W/"8d75bf38e0721bd"` (a descrição do `ETag` cita `/ripencc/asn/3333` e `/ripencc/v1/asn/AS3333`); `X-Dataset-Version` com a versão dos exemplos |
-| exemplos | `/asn`: `asn` (`ASN alocado (/asn/3333)`) e `disponivel` (`ASN disponível (/asn/1877)`); `/ip`: `ipv4` (`IPv4 (/ip/193.0.6.139)`), `ipv6` (`IPv6 (/ip/2001:67c:2e8::1)`) e `nao_cidr`; `/prefix`: `contido` (`Prefixo contido num bloco maior (/prefix/193.0.6.0/24)`) e `exato` (`O próprio bloco (/prefix/193.0.0.0/20)`); `/meta`: `carregado` e `vazio`; `BadRequest` `len`: `/prefix/193.0.0.0/33`; `NotFound` `asn`: `/asn/61613 (um ASN da LACNIC)`; `NotFound` `holder`: `/holder/87debb42-f92a-447a-ae52-ae9ff30e6f5b (opaque_id do AS3333 no arquivo da véspera)`; `StatusOK` e `StatusError`: `timestamp` `2026-09-29T01:11:59Z` |
+| exemplos | `/asn`: `asn` (`ASN alocado (/asn/3333)`) e `disponivel` (`ASN disponível (/asn/1877)`); `/ip`: `ipv4` (`IPv4 (/ip/193.0.6.139)`), `ipv6` (`IPv6 (/ip/2001:67c:2e8::1)`) e `nao_cidr`; `/prefix`: `contido` (`Prefixo contido num bloco maior (/prefix/193.0.6.0/24)`) e `exato` (`O próprio bloco (/prefix/193.0.0.0/20)`); `/meta`: `carregado` e `vazio`; `BadRequest` `len`: `/prefix/193.0.0.0/33`; `NotFound` `asn`: `/asn/61610 (um ASN da LACNIC)`; `NotFound` `holder`: `/holder/87debb42-f92a-447a-ae52-ae9ff30e6f5b (opaque_id do AS3333 no arquivo da véspera)`; `StatusOK` e `StatusError`: `timestamp` `2026-09-29T01:11:59Z` |
 | `info.summary` | `Delegações de ASNs e blocos IP do RIPE NCC, do BadBlock.` |
 | `info.description`, 1º parágrafo | o do modelo, com "do RIPE NCC" no lugar de "do RIR <Title>" |
 | `info.description`, 2º parágrafo (antes dos itens) | **O opaque_id do RIPE NCC muda todo dia.** O RIPE NCC gera um UUID novo para cada titular a cada arquivo diário, então `/holder/{opaque_id}` só vale dentro do dataset atual: um opaque_id de ontem dá 404 hoje. Não o guarde como identificador do titular; guarde um ASN ou IP dele e obtenha o opaque_id atual por `/asn/{asn}` ou `/ip/{ip}`. |
@@ -404,7 +404,7 @@ Os do modelo, sem nada do RIPE NCC além do que sai de `rir.go`:
 [../rir/api.md](../rir/api.md#testes). O store falso e o seed do teste de
 integração usam os registros do
 [recorte do modelo](../lacnic/fonte.md#recorte-testdatadelegated-extended-sampletxt)
-(AS61613, AS28003–AS28005, titulares `258500` e `130343`), iguais nos cinco;
+(AS61610, AS28003–AS28005, titulares `258500` e `130343`), iguais nos cinco;
 o recorte do RIPE NCC é só do coletor. Com `OpaqueIDChangesDaily` `true`, o
 `TestErrors` exige o aviso no 404 do titular (`/ripencc/holder/999999` cita
 `/ripencc/ip/{ip}` e `/ripencc/asn/{asn}`), e o `openapi_test.go` confere a

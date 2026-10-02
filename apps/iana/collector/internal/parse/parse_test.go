@@ -76,13 +76,13 @@ func TestParseFixtures(t *testing.T) {
 	want := map[string][2]int{ // arquivo → {linhas, registros}
 		source.ASNumbers1:  {11, 11},
 		source.ASNumbers2:  {10, 10}, // "See Sub-registry" ignorada
-		source.IPv4Space:   {16, 16},
+		source.IPv4Space:   {17, 17},
 		source.IPv6Unicast: {14, 14},
 		source.SpecialIPv4: {8, 9}, // "192.0.0.170/32, 192.0.0.171/32" vira duas
 		source.SpecialIPv6: {8, 8},
 		source.SpecialASN:  {5, 5},
 		source.RDAPASN:     {15, 15},
-		source.RDAPIPv4:    {15, 15},
+		source.RDAPIPv4:    {16, 16},
 		source.RDAPIPv6:    {13, 13},
 	}
 	for name, w := range want {
@@ -91,8 +91,8 @@ func TestParseFixtures(t *testing.T) {
 			t.Errorf("%s = %+v, quero %d linhas / %d registros", name, st, w[0], w[1])
 		}
 	}
-	if len(d.ASNBlocks) != 21 || len(d.PrefixBlocks) != 30 || len(d.SpecialPrefixes) != 17 ||
-		len(d.SpecialASNs) != 5 || len(d.RDAPServices) != 43 {
+	if len(d.ASNBlocks) != 21 || len(d.PrefixBlocks) != 31 || len(d.SpecialPrefixes) != 17 ||
+		len(d.SpecialASNs) != 5 || len(d.RDAPServices) != 44 {
 		t.Errorf("totais = %d/%d/%d/%d/%d", len(d.ASNBlocks), len(d.PrefixBlocks), len(d.SpecialPrefixes),
 			len(d.SpecialASNs), len(d.RDAPServices))
 	}
@@ -148,6 +148,10 @@ func TestParsePrefixBlocks(t *testing.T) {
 	}
 	if b, _ := prefixBlock(d, "45.0.0.0/8"); b.Designation != "Administered by ARIN" || b.Registry != "arin" || b.Status != "LEGACY" {
 		t.Errorf("045/8 = %+v", b)
+	}
+	if b, _ := prefixBlock(d, "187.0.0.0/8"); b.Designation != "LACNIC" || b.Registry != "lacnic" || b.Status != "ALLOCATED" ||
+		b.AllocationDate != "2007-09" || !slices.Equal(b.RDAPURLs, []string{"https://rdap.lacnic.net/rdap/"}) {
+		t.Errorf("187/8 = %+v", b)
 	}
 	// Legado com titular: o RIR sai do WHOIS.
 	if b, _ := prefixBlock(d, "53.0.0.0/8"); b.Designation != "Daimler AG" || b.Registry != "ripencc" {
@@ -241,6 +245,9 @@ func TestParseSpecialASNsAndRDAP(t *testing.T) {
 	}
 	if s := byKey["ipv4 41.0.0.0/8"]; s.Registry != "afrinic" || s.Prefix.String() != "41.0.0.0/8" {
 		t.Errorf("rdap ipv4 = %+v", s)
+	}
+	if s := byKey["ipv4 187.0.0.0/8"]; s.Registry != "lacnic" || !slices.Equal(s.URLs, []string{"https://rdap.lacnic.net/rdap/"}) {
+		t.Errorf("rdap ipv4 187/8 = %+v", s)
 	}
 	if s := byKey["ipv6 2800::/12"]; s.Registry != "lacnic" || s.Kind != KindIPv6 {
 		t.Errorf("rdap ipv6 = %+v", s)

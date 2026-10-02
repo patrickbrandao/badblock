@@ -140,8 +140,8 @@ func PrintHelp(w io.Writer) {
 	fmt.Fprint(w, `api-cgibr — API HTTP dos ASNs e blocos IP brasileiros do NIC.br (registro.br).
 
 Lê as tabelas cgibr_* mantidas pelo collector-cgibr, com cache opcional no
-Valkey. Responde tudo abaixo de BASE_PATH (/cgibr): /cgibr/asn/61613 é a versão
-atual e /cgibr/v1/asn/61613 fixa a v1.
+Valkey. Responde tudo abaixo de BASE_PATH (/cgibr): /cgibr/asn/61610 é a versão
+atual e /cgibr/v1/asn/61610 fixa a v1.
 
 Uso:
   api-cgibr [opções]

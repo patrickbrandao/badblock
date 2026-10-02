@@ -861,11 +861,11 @@ components:
             $ref: '#/components/schemas/Error'
           examples:
             asn:
-              summary: /asn/61613 (ASN de outro RIR)
+              summary: /asn/61610 (ASN de outro RIR)
               value:
                 error:
                   code: not_found
-                  message: AS61613 não consta no arquivo do RIR APNIC
+                  message: AS61610 não consta no arquivo do RIR APNIC
             ip:
               summary: /ip/8.8.8.8
               value:

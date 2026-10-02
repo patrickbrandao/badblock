@@ -133,8 +133,8 @@ func TestApplyLifecycle(t *testing.T) {
 		t.Errorf("família = %d/%d", v4, v6)
 	}
 	var digits string
-	_ = admin.QueryRow(ctx, "SELECT document_digits FROM cgibr_asn WHERE asn = 61613").Scan(&digits)
-	if digits != "08030063000100" {
+	_ = admin.QueryRow(ctx, "SELECT document_digits FROM cgibr_asn WHERE asn = 61610").Scan(&digits)
+	if digits != "35980592000130" {
 		t.Errorf("document_digits = %q", digits)
 	}
 
@@ -156,14 +156,14 @@ func TestApplyLifecycle(t *testing.T) {
 	// 3) Mudanças: nome novo, bloco trocando de ASN, ASN removido, ASN novo.
 	ds = sample(t)
 	var kept []parse.ASN
-	moved := netip.MustParsePrefix("45.171.60.0/22")
+	moved := netip.MustParsePrefix("187.87.28.0/22")
 	for _, a := range ds.ASNs {
 		switch a.Number {
 		case 6505: // sai da fonte
 			continue
-		case 61613:
-			a.Name = "TMSoft Nova"
-			a.Prefixes = a.Prefixes[1:] // 45.171.60.0/22 vai para o AS64500
+		case 61610:
+			a.Name = "ELEA Nova"
+			a.Prefixes = a.Prefixes[1:] // 187.87.28.0/22 vai para o AS64500
 		}
 		kept = append(kept, a)
 	}
@@ -183,7 +183,7 @@ func TestApplyLifecycle(t *testing.T) {
 	}
 	var owner int64
 	_ = admin.QueryRow(ctx, `SELECT a.asn FROM cgibr_prefix p JOIN cgibr_asn a ON a.uuid = p.asn_uuid
-		WHERE p.prefix = '45.171.60.0/22'`).Scan(&owner)
+		WHERE p.prefix = '187.87.28.0/22'`).Scan(&owner)
 	if owner != 64500 {
 		t.Errorf("dono do bloco movido = AS%d", owner)
 	}

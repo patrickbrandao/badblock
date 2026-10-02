@@ -326,7 +326,7 @@ IANA:
 | `internal/parse` | contagens de cada recorte e zero avisos; faixas de ASN, blocos, especiais, RDAP; URLs coladas; campos (blocos, faixas, datas, flags, RIR); recusas (arquivo ausente, coluna obrigatória, sem linhas, JSON inválido ou sem `services`, linha ruim em arquivo pequeno, status vazio); 0,5% de linhas ruins passa; colunas fora de ordem e campos irreconhecíveis viram aviso; faixa repetida entre os arquivos; `Check` com os recortes (relaxado passa, `DefaultLimits` falha) e com um dataset completo quebrado de cada jeito |
 | `internal/fetch` | condicional por `ETag` e só por `Last-Modified`, 3 tentativas em `5xx`, `404` sem repetição, limite de tamanho |
 | `internal/config` | padrões, precedência, bases sem a barra final, `--force` implica `--once`, `--version` sem Postgres, valores inválidos, `--help` com todas as opções, `Redact` |
-| `internal/store` (`make test-int`) | PG18 com as migrations de `central/` e `iana/`: carga inicial dos recortes (116 linhas, colunas calculadas, NULLs), reaplicação sem mudança (versão nova, `consolidated` continua 1), mudanças (inseridas, atualizadas, apagadas; trigger), remoção de 2 linhas passa e de 11 em 21 trava, `--force`, recusa sem virar versão, `TouchCheck`, `ErrBusy` com o advisory lock tomado |
+| `internal/store` (`make test-int`) | PG18 com as migrations de `central/` e `iana/`: carga inicial dos recortes (118 linhas, colunas calculadas, NULLs; `45.0.0.1` no `45/8` LEGACY da ARIN, `187.87.28.1` no `187/8` da LACNIC e no RDAP dela), reaplicação sem mudança (versão nova, `consolidated` continua 1), mudanças (inseridas, atualizadas, apagadas; trigger), remoção de 2 linhas passa e de 11 em 21 trava, `--force`, recusa sem virar versão, `TouchCheck`, `ErrBusy` com o advisory lock tomado |
 
 `make test-real` (difere do padrão, que pede `FILE=...`): baixa os 10
 arquivos com `curl` para uma pasta temporária, ou usa
@@ -337,8 +337,8 @@ download), e roda `go test -count=1 -tags integration -run 'Real' -v` em
 - `TestRealFiles`: parser e `DefaultLimits` nos arquivos inteiros, com
   **zero** linhas descartadas e **zero** avisos;
 - `TestRealFilesApply`: aplica, reaplica (zero mudanças) e roda as consultas
-  da API: AS61613 → `lacnic`, `2804:5964::1` → `lacnic`, RDAP de
-  `45.171.60.1` → `arin`, `100.64.1.1` (CGNAT) especial com
+  da API: AS61610 → `lacnic`, `2804:8ae0::1` → `lacnic`, RDAP de
+  `187.87.28.1` → `lacnic`, `100.64.1.1` (CGNAT) especial com
   `globally_reachable = false`, 4200000001 em `iana_special_asn`.
 
 Precisa de rede (os arquivos da IANA) e de Docker.

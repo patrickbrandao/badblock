@@ -399,7 +399,7 @@ Os do modelo, sem nada da ARIN: [../rir/api.md](../rir/api.md#testes)
 nome trocado, e o app não tem `testdata/`). O store falso e o seed do teste de
 integração usam os registros do
 [recorte da LACNIC](../lacnic/fonte.md#recorte-testdatadelegated-extended-sampletxt)
-(AS61613, AS28003–AS28005, titulares `258500` e `130343`), iguais nos cinco —
+(AS61610, AS28003–AS28005, titulares `258500` e `130343`), iguais nos cinco —
 não os da ARIN. Com o arquivo da ARIN, o `make test-real`
 ([Operação](#operação)) tem pedaços de registro dividido para a amostra de
 `/ip`, e o maior titular que ele confere contra 1/10 dos 8 MiB do cache é o

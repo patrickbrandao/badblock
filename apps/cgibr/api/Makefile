@@ -68,6 +68,6 @@ logs: ## Acompanha os logs
 
 smoke: ## Consulta a API local (porta do loopback)
 	curl -fsS http://127.0.0.1:$${API_CGIBR_HOST_PORT:-8101}/cgibr/status && echo && \
-	curl -fsS http://127.0.0.1:$${API_CGIBR_HOST_PORT:-8101}/cgibr/asn/61613 && echo && \
+	curl -fsS http://127.0.0.1:$${API_CGIBR_HOST_PORT:-8101}/cgibr/asn/61610 && echo && \
 	curl -fsS http://127.0.0.1:$${API_CGIBR_HOST_PORT:-8101}/cgibr/openapi.yaml >/dev/null
 

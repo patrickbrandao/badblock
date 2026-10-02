@@ -13,7 +13,7 @@ respostas reais e as medições da LACNIC. Dono: sub-agente `api-lacnic`.
 | `internal/rir/rir.go` | `Source` `lacnic`, `Title` `LACNIC`, `SourceURL` `https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-extended-latest`, `OpaqueIDChangesDaily` `false` |
 | Caminho | `BASE_PATH` `/lacnic`; em produção, `https://api.badblock.net.br/lacnic/` |
 | Porta no loopback | 8105 (`API_LACNIC_HOST_PORT`, `PORT` do `Makefile`): `http://127.0.0.1:8105/lacnic/` |
-| `SMOKE_ASN` | 61613 (BR, allocated, titular `258500`) |
+| `SMOKE_ASN` | 61610 (BR, allocated, titular `258500`) |
 | Tabelas lidas | `lacnic_run`, `lacnic_asn` e `lacnic_prefix` ([dados.md](dados.md)) e a linha `collector-lacnic` de `jobs` |
 | `.env` | `API_LACNIC_TAG=latest`, `API_LACNIC_HOST_PORT=8105`, `API_LACNIC_CACHE_TTL=3600`; opcionais `API_LACNIC_CACHE_ENABLED` (`true`), `API_LACNIC_DB_POOL_MAX` (`10`) e `API_LACNIC_REDIS_URL` |
 | Imagem e container | `tmsoftbrasil/badblock-api-lacnic`, label `description` `API HTTP das delegações de ASNs e blocos IP do RIR LACNIC (delegated-extended), do BadBlock`; `badblock-api-lacnic` |
@@ -30,14 +30,14 @@ que cada campo quer dizer está em [../rir/api.md](../rir/api.md).
 
 ### ASN
 
-`/lacnic/asn/61613` (o mesmo em `/lacnic/v1/asn/AS61613`):
+`/lacnic/asn/61610` (o mesmo em `/lacnic/v1/asn/AS61610`):
 
 ```json
 {
-  "asn": 61613,
-  "range": {"start": 61613, "end": 61613, "count": 1},
+  "asn": 61610,
+  "range": {"start": 61610, "end": 61610, "count": 1},
   "cc": "BR",
-  "reg_date": "2023-05-05",
+  "reg_date": "2023-02-27",
   "status": "allocated",
   "opaque_id": "258500",
   "first_seen": "2026-09-29T00:53:49Z",
@@ -61,29 +61,29 @@ mais de um ASN só existem em available, [fonte.md](fonte.md#fatos-medidos-arqui
 
 ### IP
 
-`/lacnic/ip/45.171.61.10`:
+`/lacnic/ip/187.87.29.10`:
 
 ```json
 {
-  "ip": "45.171.61.10",
-  "prefix": "45.171.60.0/22",
+  "ip": "187.87.29.10",
+  "prefix": "187.87.28.0/22",
   "cc": "BR",
   "reg_date": "2019-02-11",
   "status": "allocated",
   "opaque_id": "258500",
-  "record": {"start": "45.171.60.0", "value": 1024},
+  "record": {"start": "187.87.28.0", "value": 1024},
   "dataset": {"version": "01a0eaa7-…", "updated_at": "2026-09-29T00:53:49Z"}
 }
 ```
 
-`/lacnic/ip/2804:5964::1`:
+`/lacnic/ip/2804:8ae0::1`:
 
 ```json
 {
-  "ip": "2804:5964::1",
-  "prefix": "2804:5964::/32",
+  "ip": "2804:8ae0::1",
+  "prefix": "2804:8ae0::/32",
   "cc": "BR", "reg_date": "2019-02-11", "status": "allocated", "opaque_id": "258500",
-  "record": {"start": "2804:5964::", "value": 32},
+  "record": {"start": "2804:8ae0::", "value": 32},
   "dataset": {"version": "01a0eaa7-…", "updated_at": "2026-09-29T00:53:49Z"}
 }
 ```
@@ -94,26 +94,26 @@ Na LACNIC todo registro IPv4 forma um CIDR (de `/11` a `/24`), então
 
 ### Prefixo
 
-`/lacnic/prefix/45.171.61.0/24` (e `/lacnic/prefix/45.171.61.9/24`, que
-consulta o mesmo `45.171.61.0/24`):
+`/lacnic/prefix/187.87.29.0/24` (e `/lacnic/prefix/187.87.29.9/24`, que
+consulta o mesmo `187.87.29.0/24`):
 
 ```json
 {
-  "query": "45.171.61.0/24",
-  "prefix": "45.171.60.0/22",
+  "query": "187.87.29.0/24",
+  "prefix": "187.87.28.0/22",
   "exact": false,
   "cc": "BR",
   "reg_date": "2019-02-11",
   "status": "allocated",
   "opaque_id": "258500",
-  "record": {"start": "45.171.60.0", "value": 1024},
+  "record": {"start": "187.87.28.0", "value": 1024},
   "dataset": {"version": "01a0eaa7-…", "updated_at": "2026-09-29T00:53:49Z"}
 }
 ```
 
-`/lacnic/prefix/45.171.60.0/22` responde o mesmo bloco com
-`"query": "45.171.60.0/22"` e `"exact": true`; em IPv6,
-`/lacnic/prefix/2804:5964::/32` também funciona.
+`/lacnic/prefix/187.87.28.0/22` responde o mesmo bloco com
+`"query": "187.87.28.0/22"` e `"exact": true`; em IPv6,
+`/lacnic/prefix/2804:8ae0::/32` também funciona.
 
 ### Titular
 
@@ -126,15 +126,15 @@ consulta o mesmo `45.171.61.0/24`):
   "ccs": ["BR"],
   "counts": {"asns": 1, "ipv4": 2, "ipv6": 1},
   "asns": [
-    {"start": 61613, "end": 61613, "count": 1, "cc": "BR", "status": "allocated", "reg_date": "2023-05-05"}
+    {"start": 61610, "end": 61610, "count": 1, "cc": "BR", "status": "allocated", "reg_date": "2023-02-27"}
   ],
   "prefixes": {
     "ipv4": [
-      {"prefix": "45.171.60.0/22", "cc": "BR", "status": "allocated", "reg_date": "2019-02-11"},
-      {"prefix": "200.192.152.0/22", "cc": "BR", "status": "allocated", "reg_date": "2003-11-25"}
+      {"prefix": "187.87.28.0/22", "cc": "BR", "status": "allocated", "reg_date": "2019-02-11"},
+      {"prefix": "200.225.48.0/21", "cc": "BR", "status": "allocated", "reg_date": "2003-11-25"}
     ],
     "ipv6": [
-      {"prefix": "2804:5964::/32", "cc": "BR", "status": "allocated", "reg_date": "2019-02-11"}
+      {"prefix": "2804:8ae0::/32", "cc": "BR", "status": "allocated", "reg_date": "2019-02-11"}
     ]
   },
   "dataset": {"version": "01a0eaa7-…", "updated_at": "2026-09-29T00:53:49Z"}
@@ -226,7 +226,7 @@ Os do manifesto, com as mensagens reais:
 |---|---|---|---|
 | `/lacnic/asn/abc` | 400 | `bad_request` | `ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS` |
 | `/lacnic/ip/x` | 400 | `bad_request` | `endereço IP inválido` |
-| `/lacnic/prefix/45.171.60.0/33` | 400 | `bad_request` | `tamanho de prefixo inválido` |
+| `/lacnic/prefix/187.87.28.0/33` | 400 | `bad_request` | `tamanho de prefixo inválido` |
 | `/lacnic/holder/nao%20existe` | 400 | `bad_request` | `opaque_id inválido: use de 1 a 128 letras, dígitos, ponto, hífen ou sublinhado` |
 | `/lacnic/asn/1` (ASN da ARIN) | 404 | `not_found` | `AS1 não consta no arquivo do RIR LACNIC` |
 | `/lacnic/ip/192.0.2.1` | 404 | `not_found` | `192.0.2.1 não pertence a nenhum bloco no arquivo do RIR LACNIC` |
@@ -243,12 +243,12 @@ calculados por `etagFor` em 2026-09-29:
 
 | Pedido | Consulta | ETag |
 |---|---|---|
-| `/lacnic/asn/61613`, `/lacnic/v1/asn/AS61613` | `asn:61613` | `W/"4492aae57a0d5aa4"` (o exemplo do manifesto) |
+| `/lacnic/asn/61610`, `/lacnic/v1/asn/AS61610` | `asn:61610` | `W/"4492aae57a0d5aa4"` (o exemplo do manifesto) |
 | `/lacnic/asn/28004` | `asn:28004` | `W/"60c2f584abe16a37"` |
-| `/lacnic/ip/45.171.61.10`, `/lacnic/ip/::ffff:45.171.61.10` | `ip:45.171.61.10` | `W/"4544c907eb832188"` |
-| `/lacnic/ip/2804:5964::1` | `ip:2804:5964::1` | `W/"cc077ca539d61e63"` |
-| `/lacnic/prefix/45.171.61.9/24`, `/lacnic/prefix/45.171.61.0/24` | `prefix:45.171.61.0/24` | `W/"a718a3b530004b1"` (15 dígitos: sem zeros à esquerda) |
-| `/lacnic/prefix/45.171.60.0/22` | `prefix:45.171.60.0/22` | `W/"117d810f267381d6"` |
+| `/lacnic/ip/187.87.29.10`, `/lacnic/ip/::ffff:187.87.29.10` | `ip:187.87.29.10` | `W/"4544c907eb832188"` |
+| `/lacnic/ip/2804:8ae0::1` | `ip:2804:8ae0::1` | `W/"cc077ca539d61e63"` |
+| `/lacnic/prefix/187.87.29.9/24`, `/lacnic/prefix/187.87.29.0/24` | `prefix:187.87.29.0/24` | `W/"a718a3b530004b1"` (15 dígitos: sem zeros à esquerda) |
+| `/lacnic/prefix/187.87.28.0/22` | `prefix:187.87.28.0/22` | `W/"117d810f267381d6"` |
 | `/lacnic/holder/258500` | `holder:258500` | `W/"2cbfe580cc52909f"` |
 
 ## Manifesto
@@ -258,10 +258,10 @@ O do [modelo](../rir/api.md#manifesto), sem particularidades
 `externalDocs.url`
 `https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/lacnic`,
 servidores locais na porta 8105 e os exemplos desta página. Nos parâmetros:
-`asn` `'61613'`, `ip` `45.171.61.10`, `ip` e `len` do prefixo `45.171.61.0` e
+`asn` `'61610'`, `ip` `187.87.29.10`, `ip` e `len` do prefixo `187.87.29.0` e
 `24`, `opaque_id` `'258500'`; `IfNoneMatch` e `ETag` com `W/"4492aae57a0d5aa4"`
 e `X-Dataset-Version` com a versão dos exemplos. `/asn` tem os exemplos `asn`
-(61613) e `faixa` (28004); `/ip`, `ipv4` e `ipv6`; `/prefix`, `contido` e
+(61610) e `faixa` (28004); `/ip`, `ipv4` e `ipv6`; `/prefix`, `contido` e
 `exato`; `/meta`, `carregado` e `vazio`.
 
 ## `--help`
@@ -323,8 +323,8 @@ Num clone, mudam `api-<rir>`, `RIR <Title>`, `<rir>_*`, `collector-<rir>` e
 
 ```bash
 curl http://127.0.0.1:8105/lacnic/status          # sem Traefik, pela porta do loopback
-curl http://127.0.0.1:8105/lacnic/asn/61613
-make -C apps/lacnic/api smoke                      # /status, /meta, /asn/61613 e /openapi.yaml
+curl http://127.0.0.1:8105/lacnic/asn/61610
+make -C apps/lacnic/api smoke                      # /status, /meta, /asn/61610 e /openapi.yaml
 make -C apps/lacnic/api logs
 ```
 
@@ -359,4 +359,4 @@ dois voltam sozinhos.
 Os do modelo, sem nada da LACNIC além dos dados:
 [../rir/api.md](../rir/api.md#testes). O store falso e o seed do teste de
 integração usam registros do [recorte](fonte.md#recorte-testdatadelegated-extended-sampletxt)
-(AS61613, AS28003–AS28005, titulares `258500` e `130343`), iguais nos clones.
+(AS61610, AS28003–AS28005, titulares `258500` e `130343`), iguais nos clones.

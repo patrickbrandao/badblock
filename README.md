@@ -23,8 +23,8 @@ caminho próprio no host da API.
 | Anatel — prestadoras de serviços de telecomunicações (CNPJ) e serviços notificados (SCM, STFC, SMP…) | [`collector-anatel-pst`](apps/anatel/pst/collector/) | [`api-anatel-pst`](apps/anatel/pst/api/) em `/anatel/pst/` |
 
 ```bash
-curl https://api.badblock.net.br/cgibr/asn/61613
-curl https://api.badblock.net.br/lacnic/ip/45.171.61.10
+curl https://api.badblock.net.br/cgibr/asn/61610
+curl https://api.badblock.net.br/lacnic/ip/187.87.29.10
 curl https://api.badblock.net.br/arin/asn/7018
 curl https://api.badblock.net.br/ripencc/prefix/193.0.0.0/21
 curl https://api.badblock.net.br/iana/ip/10.0.0.1

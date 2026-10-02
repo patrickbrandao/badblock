@@ -15,8 +15,8 @@ SELECT 'INSERT INTO iana_special_asn (asn_start, asn_end, reason, reference) VAL
 SELECT 'INSERT INTO iana_prefix_block (prefix, designation, registry, whois, rdap_urls, status, allocation_date, note, source_file) VALUES' || E'\n' ||
   string_agg(format('    (%L, %L, %L, %L, %L, %L, %L, %L, %L)', prefix, designation, registry, whois, rdap_urls, status, allocation_date, note, source_file), E',\n' ORDER BY family, prefix) || ';'
   FROM iana_prefix_block
- WHERE prefix = ANY (ARRAY['0.0.0.0/8', '8.0.0.0/8', '10.0.0.0/8', '45.0.0.0/8', '100.0.0.0/8', '127.0.0.0/8',
-                           '192.0.0.0/8', '224.0.0.0/8', '240.0.0.0/8',
+ WHERE prefix = ANY (ARRAY['0.0.0.0/8', '8.0.0.0/8', '10.0.0.0/8', '100.0.0.0/8', '127.0.0.0/8',
+                           '187.0.0.0/8', '192.0.0.0/8', '224.0.0.0/8', '240.0.0.0/8',
                            '2001::/23', '2001:c00::/23', '2002::/16', '2800::/12', '3ffe::/16', '3fff::/20']::cidr[]);
 
 SELECT 'INSERT INTO iana_special_prefix (prefix, name, rfc, allocation_date, termination_date, source, destination, forwardable, globally_reachable, reserved_by_protocol) VALUES' || E'\n' ||
@@ -29,7 +29,7 @@ SELECT 'INSERT INTO iana_rdap_service (kind, resource, asn_start, asn_end, prefi
              ORDER BY kind, asn_start, prefix) || ';'
   FROM iana_rdap_service
  WHERE (kind = 'asn' AND resource IN ('1-1876', '61440-61951', '262144-263167'))
-    OR (kind <> 'asn' AND prefix = ANY (ARRAY['8.0.0.0/8', '45.0.0.0/8', '100.0.0.0/8', '192.0.0.0/8', '2001:c00::/23', '2800::/12']::cidr[]));
+    OR (kind <> 'asn' AND prefix = ANY (ARRAY['8.0.0.0/8', '100.0.0.0/8', '187.0.0.0/8', '192.0.0.0/8', '2001:c00::/23', '2800::/12']::cidr[]));
 
 SELECT format(E'INSERT INTO iana_run (uuid, status, forced, sha256, files, changes, warnings, error, started_at, created_at) VALUES\n    (%L, %s, %L, %L, %L, %L, %L, %L, %L, %L);',
               uuid, status, forced, sha256, files, changes, warnings, error, started_at, created_at)

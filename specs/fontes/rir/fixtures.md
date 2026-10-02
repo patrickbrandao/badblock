@@ -109,17 +109,17 @@ lacnic|*|ipv4|*|2|summary
 lacnic|*|ipv6|*|2|summary
 lacnic|*|asn|*|2|summary
 lacnic||ipv4|45.68.105.0|256||reserved|
-lacnic|BR|ipv4|45.171.60.0|1024|20190211|allocated|258500
+lacnic|BR|ipv4|187.87.28.0|1024|20190211|allocated|258500
 lacnic||ipv6|2001:1201:20::|43||available
-lacnic|BR|ipv6|2804:5964::|32|20190211|allocated|258500
+lacnic|BR|ipv6|2804:8ae0::|32|20190211|allocated|258500
 lacnic||asn|28003|3||available
-lacnic|BR|asn|61613|1|20230505|allocated|258500
+lacnic|BR|asn|61610|1|20230227|allocated|258500
 ```
 
 Variantes:
 
 - `collector-afrinic`: acrescenta o registro `lacnic||asn|6065|1||reserved|`
-  entre a linha do `2804:5964::` e a faixa `28003` e, por isso, o cabeçalho
+  entre a linha do `2804:8ae0::` e a faixa `28003` e, por isso, o cabeçalho
   diz `7` registros e o resumo de ASN, `3`.
 - `collector-arin`: a faixa available é `lacnic||asn|26596|2||available` em vez
   de `lacnic||asn|28003|3||available`.

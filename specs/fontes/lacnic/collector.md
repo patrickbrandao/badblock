@@ -59,9 +59,9 @@ Os números do recorte ([fonte.md](fonte.md#recorte-testdatadelegated-extended-s
 que os testes citam — são os que um clone troca pelos do seu recorte:
 
 - `TestParseSample`: cabeçalho `2.3`, `lacnic`, 21 registros; 7 asn, 8 ipv4
-  e 6 ipv6; 8 + 6 blocos; nenhum aviso. AS61613 (BR, allocated, `258500`,
-  2023-05-05); AS28003 + 3 = AS28005 (available, sem país, data nem titular);
-  AS6065 (reserved, opaque-id vazio no fim da linha); `45.171.60.0/22`
+  e 6 ipv6; 8 + 6 blocos; nenhum aviso. AS61610 (BR, allocated, `258500`,
+  2023-02-27); AS28003 + 3 = AS28005 (available, sem país, data nem titular);
+  AS6065 (reserved, opaque-id vazio no fim da linha); `187.87.28.0/22`
   (`258500`, `record_value` 1024); `187.192.0.0/11` (MX, 2097152);
   `45.68.105.0/24` (reserved, vazios); `2001:1201:20::/43` (available, 43);
   `2001:12f8::/48` (assigned, `114721`).

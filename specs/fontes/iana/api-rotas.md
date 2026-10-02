@@ -135,10 +135,10 @@ do `/rdap` (`iana_rdap_service`):
 | `special` | lista de ASN especial | faixas de `special-purpose-as-numbers` que contêm o ASN, em ordem de início |
 | `rdap` | serviço RDAP ou `null` | entrada de `asn.json` que contém o ASN (faixas reservadas e não alocadas não têm) |
 
-`GET /iana/asn/61613`:
+`GET /iana/asn/61610`:
 
 ```json
-{"asn": 61613,
+{"asn": 61610,
  "block": {"start": 61440, "end": 61951, "description": "Assigned by LACNIC", "registry": "lacnic",
            "whois": "whois.lacnic.net", "rdap_urls": ["https://rdap.lacnic.net/rdap/"], "reference": null,
            "registration_date": "2013-06-11"},

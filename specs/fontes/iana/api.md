@@ -132,10 +132,10 @@ Resultados com o dataset real de 2026-09-28, testados em `internal/store`
 | `100.64.0.1` | true | special `100.64.0.0/10` Shared Address Space (o `/8` é ALLOCATED ARIN) |
 | `192.0.2.1` | true | special `192.0.2.0/24` Documentation (TEST-NET-1) |
 | `8.8.8.8` | false | nenhum special; `8.0.0.0/8` LEGACY |
-| `45.171.61.10` | false | nenhum special; `45.0.0.0/8` LEGACY |
+| `187.87.29.10` | false | nenhum special; `187.0.0.0/8` ALLOCATED LACNIC |
 | `2001:db8::1` | true | special `2001:db8::/32` Documentation (bloco `2001:c00::/23` APNIC) |
 | `fe80::1` | true | special `fe80::/10` Link-Local Unicast |
-| `2804:5964::1` | false | nenhum special; `2800::/12` ALLOCATED LACNIC |
+| `2804:8ae0::1` | false | nenhum special; `2800::/12` ALLOCATED LACNIC |
 | `::1` | true | special `::1/128` Loopback Address |
 | `240.0.0.1` | true | special `240.0.0.0/4` Reserved (e `/8` RESERVED) |
 | `0.0.0.1` | true | special `0.0.0.0/8` "This network" |
@@ -159,7 +159,7 @@ dataset do dia.
 
 | Parâmetro | Regra (código) | Normalização | Inválido → 400 `bad_request` |
 |---|---|---|---|
-| `{asn}` | prefixo `AS` opcional, em qualquer caixa (`strings.ToUpper` + `CutPrefix`); o resto em `strconv.ParseUint(…, 10, 32)`: só dígitos decimais, de 0 a 4294967295 | sem `AS` e sem zeros à esquerda (`as061613` → `61613`) | `ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS` (`abc`, `-1`, `+1`, `1.0`, `4294967296`, `AS`, `ASAS1`) |
+| `{asn}` | prefixo `AS` opcional, em qualquer caixa (`strings.ToUpper` + `CutPrefix`); o resto em `strconv.ParseUint(…, 10, 32)`: só dígitos decimais, de 0 a 4294967295 | sem `AS` e sem zeros à esquerda (`as061610` → `61610`) | `ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS` (`abc`, `-1`, `+1`, `1.0`, `4294967296`, `AS`, `ASAS1`) |
 | `{ip}` (`/ip` e `/prefix`) | `netip.ParseAddr`, sem zona | IPv4 mapeado em IPv6 vira IPv4 (`Unmap`); forma canônica (`2001:DB8::1` → `2001:db8::1`) | `endereço IP inválido` (`999.1.1.1`, `010.0.0.1`, `fe80::1%eth0`, `10.0.0.0%2F8`, `x`) |
 | `{len}` (`/prefix`) | `strconv.Atoi` (aceita `08` e `+8`), de 0 ao tamanho do endereço **já convertido**: 32 ou 128 | bits de host zerados (`Masked`: `10.1.2.3/16` → `10.1.0.0/16`) | `tamanho de prefixo inválido` (`/33` no IPv4, `/129`, `/-1`, `::ffff:10.0.0.0/104`) |
 
@@ -172,7 +172,7 @@ Roteamento (conferido em 2026-09-29):
 
 - Caminho exato: barra no fim (`/iana/ip/10.0.0.1/`, `/iana/special/`),
   parâmetro vazio (`/iana/asn/`) ou segmento a mais → 404.
-- Método que a rota não aceita (`POST /iana/asn/61613`, `POST /iana/ping`,
+- Método que a rota não aceita (`POST /iana/asn/61610`, `POST /iana/ping`,
   `POST /iana/meta`, `PUT`, `DELETE`) → 404 JSON, nunca 405: o catch-all
   `/` responde qualquer método.
 - `/iana` → 301 para `/iana/` (rota própria). `/iana/v1` (sem a barra) →
@@ -203,7 +203,7 @@ consultas normalizadas e os ETags reais da versão
 
 | Rota | `<consulta>` | ETag |
 |---|---|---|
-| `/asn/61613`, `/asn/AS61613`, `/asn/as061613` | `asn:61613` | `W/"3db9c99d25843e9a"` (o exemplo do manifesto) |
+| `/asn/61610`, `/asn/AS61610`, `/asn/as061610` | `asn:61610` | `W/"3db9c89d25843ce7"` (o exemplo do manifesto) |
 | `/asn/AS23456` | `asn:23456` | `W/"db00d0d5ed53d15"` |
 | `/ip/192.0.0.9` | `ip:192.0.0.9` | `W/"5ab563c8b8887ceb"` |
 | `/ip/10.0.0.1`, `/ip/::ffff:10.0.0.1` | `ip:10.0.0.1` | `W/"3f7421dde56f0402"` |
@@ -229,7 +229,7 @@ dois no mesmo trabalho); os exemplos são os de lá. O que é da IANA:
 | `info` | `title: api-iana`, `version: 0.1.0`, licença MIT; `description` com o que a API serve (tabelas `iana_*`, bogon, RDAP, fonte `https://www.iana.org/numbers`), as versões (servidores com e sem `/v1`; saúde e manifesto fora do versionamento), `HEAD`, `OPTIONS` (204), o 301 de `/iana`, o 404 `not_found` para outro caminho ou método, os cabeçalhos de toda resposta, o formato dos erros e o rate limit do Traefik |
 | `servers` | porta 8107, com as descrições `Produção, versão atual (hoje v1)`, `Produção, v1 fixa (só o índice, as rotas de dados e o /meta)`, `Desenvolvimento local, versão atual (porta API_IANA_HOST_PORT no loopback)` e `Desenvolvimento local, v1 fixa`; nos paths sem `/v1`, `Produção` e `Desenvolvimento local` |
 | `tags` | `dados` (consultas e listas, com ETag, `X-Cache` e cache no Valkey), `meta` (índice, `/meta` e o manifesto), `saúde` (healthchecks, fora do versionamento e sem cache) |
-| `parameters` | `ASN` (texto, `pattern: '^([Aa][Ss])?[0-9]+$'`, exemplo `AS61613`), `IP` (`anyOf` `ipv4`/`ipv6`, exemplo `192.0.0.9`), `PrefixAddress` (idem, exemplo `2001:db8::`), `PrefixLength` (inteiro 0–128, exemplo 48), `IfNoneMatch` (exemplo `W/"3db9c99d25843e9a"`) |
+| `parameters` | `ASN` (texto, `pattern: '^([Aa][Ss])?[0-9]+$'`, exemplo `AS61610`), `IP` (`anyOf` `ipv4`/`ipv6`, exemplo `192.0.0.9`), `PrefixAddress` (idem, exemplo `2001:db8::`), `PrefixLength` (inteiro 0–128, exemplo 48), `IfNoneMatch` (exemplo `W/"3db9c89d25843ce7"`) |
 | `headers` | `ETag`, `CacheControlPublic`, `CacheControlNoStore`, `XCache` (`HIT` também no 304), `XDatasetVersion` |
 | `responses` | `NotModified`; `BadRequest` (exemplos `asn`, `ip` e `len`, com as três mensagens); `NotFound` (definido, sem uso nas operações); `DatasetUnavailable` (o 503 das rotas de dados: `dataset_not_ready` e `database_unavailable`); `DatabaseUnavailable` (o 503 do `/meta`); `Timeout`; `InternalError`; `StatusOK`; `StatusUnavailable` (`status: error`, `PostgreSQL indisponível`) |
 | `schemas` | `Registry` (os 5 RIRs ou `null`), `IANADate` (`^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$` ou `null`), `Dataset`, os objetos e as respostas de [api-rotas.md](api-rotas.md) (com os nomes dos tipos de `types.go`), `Status`, `StatusChecks` e `Error` (`code` com os 6 códigos) |
@@ -289,7 +289,7 @@ Traefik e `LOG_LEVEL=info`.
 
 ```bash
 make up                        # na raiz: stack completo; a API fica em 127.0.0.1:8107
-make -C apps/iana/api smoke    # /status, /asn/61613, /ip/10.0.0.1 e /openapi.yaml
+make -C apps/iana/api smoke    # /status, /asn/61610, /ip/10.0.0.1 e /openapi.yaml
 make -C apps/iana/api logs
 curl http://127.0.0.1:8107/iana/ip/10.0.0.1
 ```
@@ -328,10 +328,10 @@ ar. O que é da IANA:
 
 | Onde | O quê |
 |---|---|
-| `internal/httpapi` (`httpapi_test.go`) | store falso que aplica em Go as regras das consultas SQL sobre linhas reais de 2026-09-28 (22 especiais, 39 `/8` — com 224–255 inteiros — e 6 blocos IPv6, 6 faixas de ASN, 4 ASNs especiais, 4 entradas RDAP): `TestASN` (as 4 formas, `special: []`, AS23456, AS4294967295, ASN sem faixa → `block: null`), `TestIPBogon` (os 20 IPs da tabela de bogon, `0.0.0.0` e `3fff::1`), `TestIPDetails` (ordem dos aninhados, IPv4 mapeado, `[]`, `globally_reachable: null`, `fe80::1` sem bloco nem RDAP), `TestPrefix` (10 prefixos), `TestLists`, `TestErrors` (17 caminhos), `TestHead`, `TestCacheAndETag` (MISS → HIT com `/v1` e IPv4 mapeado, uma consulta só, chave, `If-None-Match` nas 4 formas), `TestNotReady`, `TestDatabaseErrors`, `TestStatus`, `TestCORSAndHeaders`, `TestIndexMetaAndRedirect` |
+| `internal/httpapi` (`httpapi_test.go`) | store falso que aplica em Go as regras das consultas SQL sobre linhas reais de 2026-09-28 (22 especiais, 39 `/8` — com 224–255 inteiros — e 6 blocos IPv6, 6 faixas de ASN, 4 ASNs especiais, 4 entradas RDAP): `TestASN` (as 4 formas, `special: []`, AS23456, AS4294967295, ASN sem faixa → `block: null`), `TestIPBogon` (os 20 IPs da tabela de bogon, `0.0.0.0` e `3fff::1`), `TestIPDetails` (ordem dos aninhados, IPv4 mapeado, `8.8.8.8` LEGACY ARIN e `187.87.29.10` ALLOCATED LACNIC, `[]`, `globally_reachable: null`, `fe80::1` sem bloco nem RDAP), `TestPrefix` (10 prefixos), `TestLists`, `TestErrors` (17 caminhos), `TestHead`, `TestCacheAndETag` (MISS → HIT com `/v1` e IPv4 mapeado, uma consulta só, chave, `If-None-Match` nas 4 formas), `TestNotReady`, `TestDatabaseErrors`, `TestStatus`, `TestCORSAndHeaders`, `TestIndexMetaAndRedirect` |
 | `internal/httpapi` (`openapi_test.go`) | o do [padrão](../../padroes/openapi.md#teste), com as URLs dos `servers` (porta 8107) fixas no teste |
 | `internal/store` (`bogon_test.go`) | `TestBogonRule`: a regra isolada, 11 casos, sem banco |
-| `internal/store` (`store_integration_test.go`, tag `integration`) | `postgres:18-trixie` (banco `badblock`, usuário `postgres`, senha `pg`) com o `migrate:up` de `central/` e `iana/`, `Store` com 4 conexões. `TestQueries`, sobre o `seed.sql`: a versão é a última aplicada (nem a recusada mais nova nem a aplicada mais antiga), `files` (10, `rows`, `etag` ausente nos CSVs, `W/"1138-65336a3cb9688-br"` no `rdap-asn`, `publication`), `Job`, os 34 `ipCases` (a tabela de bogon, aninhamentos, N/A, encerrados, 7 prefixos) e os 13 `asnCases` (bloco, especiais e RDAP), colunas de `45.0.0.0/8`, AS61613, TEREDO e 6to4 relay, e as listas do recorte com a ordem (13 faixas, 9 + 6 blocos, 51 + 9 especiais, 9 RDAP). `TestEmptyDatabase`: banco sem carga, `Dataset`/`Job` `nil` e consultas vazias sem erro |
+| `internal/store` (`store_integration_test.go`, tag `integration`) | `postgres:18-trixie` (banco `badblock`, usuário `postgres`, senha `pg`) com o `migrate:up` de `central/` e `iana/`, `Store` com 4 conexões. `TestQueries`, sobre o `seed.sql`: a versão é a última aplicada (nem a recusada mais nova nem a aplicada mais antiga), `files` (10, `rows`, `etag` ausente nos CSVs, `W/"1138-65336a3cb9688-br"` no `rdap-asn`, `publication`), `Job`, os 34 `ipCases` (a tabela de bogon, aninhamentos, N/A, encerrados, 7 prefixos) e os 13 `asnCases` (bloco, especiais e RDAP), colunas de `187.0.0.0/8` (ALLOCATED LACNIC) e de `8.0.0.0/8` (LEGACY ARIN), AS61610, TEREDO e 6to4 relay, e as listas do recorte com a ordem (13 faixas, 9 + 6 blocos, 51 + 9 especiais, 9 RDAP). `TestEmptyDatabase`: banco sem carga, `Dataset`/`Job` `nil` e consultas vazias sem erro |
 
 ### `testdata/seed.sql`
 
@@ -341,13 +341,13 @@ Recorte **real** das tabelas `iana_*`: cópias exatas das linhas que o
 
 - `iana_asn_block`: 13 faixas (as de início 0, 1, 23456, 61440, 64496,
   64512, 65535, 65536, 65552, 262144, 275869, 4200000000 e 4294967295);
-- `iana_prefix_block`: 9 `/8` (`0`, `8`, `10`, `45`, `100`, `127`, `192`,
+- `iana_prefix_block`: 9 `/8` (`0`, `8`, `10`, `100`, `127`, `187`, `192`,
   `224`, `240`) e 6 blocos IPv6 (`2001::/23`, `2001:c00::/23`, `2002::/16`,
   `2800::/12`, `3ffe::/16`, `3fff::/20`);
 - `iana_special_prefix` (51) e `iana_special_asn` (9) **inteiras**: a regra
   de bogon depende do aninhamento entre elas;
 - `iana_rdap_service`: 9 entradas (`1-1876`, `61440-61951`,
-  `262144-263167`, `8/8`, `45/8`, `100/8`, `192/8`, `2001:c00::/23`,
+  `262144-263167`, `8/8`, `100/8`, `187/8`, `192/8`, `2001:c00::/23`,
   `2800::/12`);
 - `iana_run`: a execução real aplicada (`01a0eaa2-…`, com os 10 `files`) e
   duas sintéticas, escritas à mão, que testam a escolha da versão — uma

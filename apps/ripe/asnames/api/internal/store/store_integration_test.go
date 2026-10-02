@@ -23,7 +23,7 @@ INSERT INTO ripe_asnames_asn (asn, description, handle, name, country) VALUES
     (15169,  'GOOGLE - Google LLC, US',                                        'GOOGLE',      'Google LLC',                                        'US'),
     (16509,  'AMAZON-02 - Amazon.com, Inc., US',                               'AMAZON-02',   'Amazon.com, Inc.',                                  'US'),
     (29571,  'Orange Côte d''Ivoire - Orange Côte d''Ivoire, CI',              'Orange Côte d''Ivoire', 'Orange Côte d''Ivoire',                   'CI'),
-    (61613,  'AS61613 - TMSoft Solucoes em Informatica Ltda, BR',              'AS61613',     'TMSoft Solucoes em Informatica Ltda',               'BR'),
+    (61610,  'AS61610 - ELEA DATA CENTERS, BR',                                'AS61610',     'ELEA DATA CENTERS',                                 'BR'),
     (327710, 'Orange Côte d''Ivoire - Orange Côte d''Ivoire, CI',              'ORANGE CÔTE D''IVOIRE', 'Orange Côte d''Ivoire',                   'CI'),
     (403009, 'LOREM-IPSUM - Lorem, US',                                        'LOREM-IPSUM', 'Lorem',                                             'US'),
     (64500,  'TEST-PCT - 100% Fibra, BR',                                      'TEST-PCT',    '100% Fibra',                                        'BR'),
@@ -155,7 +155,7 @@ func TestQueries(t *testing.T) {
 			"cern":                      {513, 1297},
 			"european organization for": {513, 1297},
 			"côte d'ivoire":             {29571, 327710},
-			"ltda":                      {61613, 64502, 64503, 64504, 64505},
+			"ltda":                      {64502, 64503, 64504, 64505},
 			// Curingas como texto literal.
 			"100%":        {64500},
 			"% fibra":     {64500},
@@ -179,10 +179,11 @@ func TestQueries(t *testing.T) {
 		}
 		// Limite e ordem.
 		list, err := st.Search(ctx, "ltda", 2)
-		if err != nil || !equal(asns(list, entryASN), []int64{61613, 64502}) {
+		if err != nil || !equal(asns(list, entryASN), []int64{64502, 64503}) {
 			t.Errorf("limite = %v, err = %v", asns(list, entryASN), err)
 		}
-		if list[0].Handle == nil || *list[0].Name != "TMSoft Solucoes em Informatica Ltda" || *list[0].Country != "BR" {
+		list, err = st.Search(ctx, "data centers", 101)
+		if err != nil || len(list) != 1 || list[0].Handle == nil || *list[0].Name != "ELEA DATA CENTERS" || *list[0].Country != "BR" {
 			t.Errorf("campos = %+v", list[0])
 		}
 	})

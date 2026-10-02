@@ -19,15 +19,15 @@ import (
 
 const seed = `
 INSERT INTO cgibr_asn (asn, name, document) VALUES
-    (61613,  'TMSoft Solucoes em Informatica Ltda', '08.030.063/0001-00'),
+    (61610,  'ELEA DATA CENTERS', '35.980.592/0001-30'),
     (262287, 'Latitude.sh LTDA',                    '06.043.809/0001-87'),
     (275689, 'Internet Systems Consortium',         '10996639'),
     (275690, 'Internet Systems Consortium',         '10996639');
 INSERT INTO cgibr_prefix (prefix, asn_uuid)
-    SELECT p::cidr, (SELECT uuid FROM cgibr_asn WHERE asn = 61613)
-      FROM unnest(ARRAY['45.171.60.0/22', '200.192.152.0/22', '2804:5964::/32']) AS p;
+    SELECT p::cidr, (SELECT uuid FROM cgibr_asn WHERE asn = 61610)
+      FROM unnest(ARRAY['187.87.28.0/22', '200.225.48.0/21', '2804:8ae0::/32']) AS p;
 INSERT INTO cgibr_prefix (prefix, asn_uuid)
-    SELECT '45.171.62.0/24', uuid FROM cgibr_asn WHERE asn = 262287;
+    SELECT '187.87.30.0/24', uuid FROM cgibr_asn WHERE asn = 262287;
 INSERT INTO cgibr_run (status, url, sha256, asns, prefixes_v4, prefixes_v6, started_at)
     VALUES (0, 'https://x/f.txt', NULL, NULL, NULL, NULL, NOW() - interval '2 hours'),
            (1, 'https://x/f.txt', repeat('a', 64), 4, 3, 1, NOW() - interval '1 hour');
@@ -100,7 +100,7 @@ func TestQueries(t *testing.T) {
 		t.Errorf("Job = %+v, err = %v", j, err)
 	}
 
-	a, err := st.ASN(ctx, 61613)
+	a, err := st.ASN(ctx, 61610)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,19 +108,19 @@ func TestQueries(t *testing.T) {
 	for _, p := range a.Prefixes {
 		got = append(got, p.String())
 	}
-	if strings.Join(got, ",") != "45.171.60.0/22,200.192.152.0/22,2804:5964::/32" || a.DocumentDigits != "08030063000100" {
+	if strings.Join(got, ",") != "187.87.28.0/22,200.225.48.0/21,2804:8ae0::/32" || a.DocumentDigits != "35980592000130" {
 		t.Errorf("ASN = %+v, blocos %v", a, got)
 	}
 	if _, err := st.ASN(ctx, 1); !errors.Is(err, ErrNotFound) {
 		t.Errorf("ASN inexistente: %v", err)
 	}
 
-	// O /24 do AS262287 está dentro do /22 do AS61613: vale o mais específico.
+	// O /24 do AS262287 está dentro do /22 do AS61610: vale o mais específico.
 	for q, want := range map[string]string{
-		"45.171.62.10/32":    "45.171.62.0/24 AS262287",
-		"45.171.61.1/32":     "45.171.60.0/22 AS61613",
-		"45.171.60.0/23":     "45.171.60.0/22 AS61613",
-		"2804:5964:1::1/128": "2804:5964::/32 AS61613",
+		"187.87.30.10/32":    "187.87.30.0/24 AS262287",
+		"187.87.29.1/32":     "187.87.28.0/22 AS61610",
+		"187.87.28.0/23":     "187.87.28.0/22 AS61610",
+		"2804:8ae0:1::1/128": "2804:8ae0::/32 AS61610",
 	} {
 		m, err := st.Covering(ctx, netip.MustParsePrefix(q))
 		if err != nil {
@@ -140,7 +140,7 @@ func TestQueries(t *testing.T) {
 		t.Errorf("ByDocument = %+v, err = %v", list, err)
 	}
 	all, err := st.ListASNs(ctx)
-	if err != nil || len(all) != 4 || all[0].ASN != 61613 {
+	if err != nil || len(all) != 4 || all[0].ASN != 61610 {
 		t.Errorf("ListASNs = %+v, err = %v", all, err)
 	}
 }

@@ -99,12 +99,12 @@ paths:
         required: true
         description: >-
           Número do ASN, de 0 a 4294967295, com ou sem o prefixo `AS` (em
-          qualquer caixa): `61613`, `AS61613` e `as61613` são a mesma consulta,
+          qualquer caixa): `61610`, `AS61610` e `as61610` são a mesma consulta,
           com a mesma chave de cache e o mesmo ETag.
         schema:
           type: string
           pattern: '^([Aa][Ss])?[0-9]+$'
-        example: '61613'
+        example: '61610'
       - $ref: '#/components/parameters/IfNoneMatch'
     get:
       operationId: getASN
@@ -132,15 +132,15 @@ paths:
                 $ref: '#/components/schemas/ASNResponse'
               examples:
                 asn:
-                  summary: Registro de um ASN só (/asn/61613)
+                  summary: Registro de um ASN só (/asn/61610)
                   value:
-                    asn: 61613
+                    asn: 61610
                     range:
-                      start: 61613
-                      end: 61613
+                      start: 61610
+                      end: 61610
                       count: 1
                     cc: BR
-                    reg_date: '2023-05-05'
+                    reg_date: '2023-02-27'
                     status: allocated
                     opaque_id: '258500'
                     first_seen: '2026-09-29T00:53:49Z'
@@ -190,7 +190,7 @@ paths:
           (`::ffff:a.b.c.d`) vira IPv4.
         schema:
           type: string
-        example: 45.171.61.10
+        example: 187.87.29.10
       - $ref: '#/components/parameters/IfNoneMatch'
     get:
       operationId: getIP
@@ -217,31 +217,31 @@ paths:
                 $ref: '#/components/schemas/IPResponse'
               examples:
                 ipv4:
-                  summary: IPv4 (/ip/45.171.61.10)
+                  summary: IPv4 (/ip/187.87.29.10)
                   value:
-                    ip: 45.171.61.10
-                    prefix: 45.171.60.0/22
+                    ip: 187.87.29.10
+                    prefix: 187.87.28.0/22
                     cc: BR
                     reg_date: '2019-02-11'
                     status: allocated
                     opaque_id: '258500'
                     record:
-                      start: 45.171.60.0
+                      start: 187.87.28.0
                       value: 1024
                     dataset:
                       version: '01a0eaa7-5807-78bb-993d-2ccb16b3c106'
                       updated_at: '2026-09-29T00:53:49Z'
                 ipv6:
-                  summary: IPv6 (/ip/2804:5964::1)
+                  summary: IPv6 (/ip/2804:8ae0::1)
                   value:
-                    ip: '2804:5964::1'
-                    prefix: '2804:5964::/32'
+                    ip: '2804:8ae0::1'
+                    prefix: '2804:8ae0::/32'
                     cc: BR
                     reg_date: '2019-02-11'
                     status: allocated
                     opaque_id: '258500'
                     record:
-                      start: '2804:5964::'
+                      start: '2804:8ae0::'
                       value: 32
                     dataset:
                       version: '01a0eaa7-5807-78bb-993d-2ccb16b3c106'
@@ -268,10 +268,10 @@ paths:
         required: true
         description: >-
           Endereço do prefixo, IPv4 ou IPv6, sem zona (IPv4 mapeado vira IPv4).
-          Bits de host são zerados: `45.171.61.9/24` consulta `45.171.61.0/24`.
+          Bits de host são zerados: `187.87.29.9/24` consulta `187.87.29.0/24`.
         schema:
           type: string
-        example: 45.171.61.0
+        example: 187.87.29.0
       - name: len
         in: path
         required: true
@@ -289,7 +289,7 @@ paths:
       description: >-
         Responde o bloco mais específico do arquivo do RIR que contém o
         prefixo pedido; `exact` diz se o bloco encontrado é o próprio prefixo.
-        IPv6 também funciona: `/prefix/2804:5964::/32`.
+        IPv6 também funciona: `/prefix/2804:8ae0::/32`.
       responses:
         '200':
           description: Bloco encontrado.
@@ -308,33 +308,33 @@ paths:
                 $ref: '#/components/schemas/PrefixResponse'
               examples:
                 contido:
-                  summary: Prefixo contido num bloco maior (/prefix/45.171.61.0/24)
+                  summary: Prefixo contido num bloco maior (/prefix/187.87.29.0/24)
                   value:
-                    query: 45.171.61.0/24
-                    prefix: 45.171.60.0/22
+                    query: 187.87.29.0/24
+                    prefix: 187.87.28.0/22
                     exact: false
                     cc: BR
                     reg_date: '2019-02-11'
                     status: allocated
                     opaque_id: '258500'
                     record:
-                      start: 45.171.60.0
+                      start: 187.87.28.0
                       value: 1024
                     dataset:
                       version: '01a0eaa7-5807-78bb-993d-2ccb16b3c106'
                       updated_at: '2026-09-29T00:53:49Z'
                 exato:
-                  summary: O próprio bloco (/prefix/45.171.60.0/22)
+                  summary: O próprio bloco (/prefix/187.87.28.0/22)
                   value:
-                    query: 45.171.60.0/22
-                    prefix: 45.171.60.0/22
+                    query: 187.87.28.0/22
+                    prefix: 187.87.28.0/22
                     exact: true
                     cc: BR
                     reg_date: '2019-02-11'
                     status: allocated
                     opaque_id: '258500'
                     record:
-                      start: 45.171.60.0
+                      start: 187.87.28.0
                       value: 1024
                     dataset:
                       version: '01a0eaa7-5807-78bb-993d-2ccb16b3c106'
@@ -412,24 +412,24 @@ paths:
                   ipv4: 2
                   ipv6: 1
                 asns:
-                  - start: 61613
-                    end: 61613
+                  - start: 61610
+                    end: 61610
                     count: 1
                     cc: BR
                     status: allocated
-                    reg_date: '2023-05-05'
+                    reg_date: '2023-02-27'
                 prefixes:
                   ipv4:
-                    - prefix: 45.171.60.0/22
+                    - prefix: 187.87.28.0/22
                       cc: BR
                       status: allocated
                       reg_date: '2019-02-11'
-                    - prefix: 200.192.152.0/22
+                    - prefix: 200.225.48.0/21
                       cc: BR
                       status: allocated
                       reg_date: '2003-11-25'
                   ipv6:
-                    - prefix: '2804:5964::/32'
+                    - prefix: '2804:8ae0::/32'
                       cc: BR
                       status: allocated
                       reg_date: '2019-02-11'
@@ -648,7 +648,7 @@ components:
     ETag:
       description: >-
         ETag fraco, `W/"<hash>"`, calculado só da versão do dataset e da
-        consulta normalizada: `/lacnic/asn/61613` e `/lacnic/v1/asn/AS61613` têm o mesmo.
+        consulta normalizada: `/lacnic/asn/61610` e `/lacnic/v1/asn/AS61610` têm o mesmo.
       schema:
         type: string
       example: 'W/"4492aae57a0d5aa4"'
@@ -713,7 +713,7 @@ components:
                   code: bad_request
                   message: endereço IP inválido
             len:
-              summary: /prefix/45.171.60.0/33
+              summary: /prefix/187.87.28.0/33
               value:
                 error:
                   code: bad_request
@@ -951,7 +951,7 @@ components:
         - format: ipv6
     IPPrefix:
       type: string
-      description: Bloco CIDR, IPv4 ou IPv6 (ex. `45.171.60.0/22`, `2804:5964::/32`).
+      description: Bloco CIDR, IPv4 ou IPv6 (ex. `187.87.28.0/22`, `2804:8ae0::/32`).
 
     Range:
       type: object

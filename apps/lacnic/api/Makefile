@@ -10,7 +10,7 @@
 APP        := api-lacnic
 SOURCE     := lacnic
 PORT       := $${API_LACNIC_HOST_PORT:-8105}
-SMOKE_ASN  ?= 61613
+SMOKE_ASN  ?= 61610
 MODULE     := github.com/patrickbrandao/badblock/apps/lacnic/api
 ROOT       := ../../..
 VERSION    ?= $(shell git describe --tags --match '$(APP)/v*' --abbrev=0 2>/dev/null | sed 's|$(APP)/v||' | grep . || echo dev)
@@ -74,7 +74,7 @@ down: ## Para só este serviço
 logs: ## Acompanha os logs
 	$(COMPOSE) logs -f
 
-smoke: ## Consulta a API local (porta do loopback; SMOKE_ASN=61613)
+smoke: ## Consulta a API local (porta do loopback; SMOKE_ASN=61610)
 	curl -fsS http://127.0.0.1:$(PORT)/$(SOURCE)/status && echo && \
 	curl -fsS http://127.0.0.1:$(PORT)/$(SOURCE)/meta && echo && \
 	curl -fsS http://127.0.0.1:$(PORT)/$(SOURCE)/asn/$(SMOKE_ASN) && echo && \

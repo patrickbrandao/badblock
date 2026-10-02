@@ -110,7 +110,7 @@ que os testes citam, e os casos que o clone tem a mais que o modelo:
 - `TestParseOtherRIRFormats`: `afrinic`, `apnic`, `lacnic` e `ripencc`, cada
   caso com o seu `enddate` (o do `lacnic.txt` é 20260925; o modelo fixa
   20260928 para todos). No `lacnic`: AS26596 + 2 (available, 7 campos, sem
-  país nem titular), AS61613 (BR, allocated, `258500`), `45.68.105.0/24`
+  país nem titular), AS61610 (BR, allocated, `258500`), `45.68.105.0/24`
   (reserved, opaque-id vazio) e `UTCOffset` `-0300`. `TestParseWrongRegistry`:
   `formats/lacnic.txt` lido com o registry `arin` → erro com
   `registry "lacnic"`.

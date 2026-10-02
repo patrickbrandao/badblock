@@ -849,11 +849,11 @@ components:
             $ref: '#/components/schemas/Error'
           examples:
             asn:
-              summary: /asn/61613 (um ASN da LACNIC)
+              summary: /asn/61610 (um ASN da LACNIC)
               value:
                 error:
                   code: not_found
-                  message: AS61613 não consta no arquivo do RIR RIPE NCC
+                  message: AS61610 não consta no arquivo do RIR RIPE NCC
             ip:
               summary: /ip/192.0.2.1
               value:

@@ -84,10 +84,10 @@ O nome da fonte é a chave de tudo: um token minúsculo, **sem hífen**
 | Tabelas | `<fonte>_<tabela>` | `cgibr_asn`, `cgibr_run` |
 | Migrations | `database/postgres/<fonte>/` (controle `<fonte>_schema_migrations`) | `database/postgres/cgibr/` |
 | Linha em `jobs` | `app = 'collector-<fonte>'` | `collector-cgibr` |
-| Caminho HTTP | `/<fonte>/` | `/cgibr/asn/61613` |
+| Caminho HTTP | `/<fonte>/` | `/cgibr/asn/61610` |
 | Variáveis no `.env` da raiz | `COLLECTOR_<FONTE>_*`, `API_<FONTE>_*` | `API_CGIBR_HOST_PORT` |
 | Porta no loopback | `81NN`, uma por API ([../fontes/README.md](../fontes/README.md)) | `8101` |
-| Chave de cache | `badblock:api-<fonte>:<versão>:<consulta>` | `badblock:api-cgibr:0190…:asn:61613` |
+| Chave de cache | `badblock:api-<fonte>:<versão>:<consulta>` | `badblock:api-cgibr:0190…:asn:61610` |
 | Traefik | router e serviço `badblock-api-<fonte>`, middleware `badblock-api-<fonte>-ratelimit` | |
 | User-Agent do coletor | `badblock-collector-<fonte>/<versão> (+https://github.com/patrickbrandao/badblock)` | |
 | Cabeçalho `Server` da API | `badblock-api-<fonte>/<versão>` | |

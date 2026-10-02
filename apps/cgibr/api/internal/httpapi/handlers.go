@@ -38,7 +38,7 @@ func (a *API) handleIndex(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// GET /asn/{asn} — aceita "61613" ou "AS61613".
+// GET /asn/{asn} — aceita "61610" ou "AS61610".
 func (a *API) handleASN(w http.ResponseWriter, r *http.Request) {
 	raw := r.PathValue("asn")
 	num, ok := strings.CutPrefix(strings.ToUpper(raw), "AS")

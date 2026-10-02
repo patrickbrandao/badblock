@@ -30,13 +30,13 @@ INSERT INTO ripencc_asn (asn_start, asn_count, cc, reg_date, status, opaque_id) 
     (6064,       1, NULL, NULL,         'available', NULL),
     (26596,      2, NULL, NULL,         'available', NULL),
     (28003,      3, NULL, NULL,         'available', NULL),
-    (61613,      1, 'BR', '2023-05-05', 'allocated', '258500'),
+    (61610,      1, 'BR', '2023-02-27', 'allocated', '258500'),
     (327680,     1, 'ZA', '2010-01-01', 'allocated', 'F367B216'),
     (4294967294, 2, 'ZZ', NULL,         'reserved',  NULL);
 INSERT INTO ripencc_prefix (prefix, cc, reg_date, status, opaque_id, record_start, record_value) VALUES
-    ('45.171.60.0/22',    'BR', '2019-02-11', 'allocated', '258500',   '45.171.60.0',    1024),
-    ('200.192.152.0/22',  'BR', '2003-11-25', 'allocated', '258500',   '200.192.152.0',  1024),
-    ('2804:5964::/32',    'BR', '2019-02-11', 'allocated', '258500',   '2804:5964::',    32),
+    ('187.87.28.0/22',    'BR', '2019-02-11', 'allocated', '258500',   '187.87.28.0',    1024),
+    ('200.225.48.0/21',  'BR', '2003-11-25', 'allocated', '258500',   '200.225.48.0',  2048),
+    ('2804:8ae0::/32',    'BR', '2019-02-11', 'allocated', '258500',   '2804:8ae0::',    32),
     ('150.165.0.0/16',    'BR', '1993-06-07', 'assigned',  '130343',   '150.165.0.0',    65536),
     ('150.165.10.0/24',   'BR', '2001-01-01', 'assigned',  '999',      '150.165.10.0',   256),
     ('2001:12f0::/32',    'BR', '2007-12-19', 'assigned',  '130343',   '2001:12f0::',    32),
@@ -143,7 +143,7 @@ func TestQueries(t *testing.T) {
 
 	t.Run("asn", func(t *testing.T) {
 		for asn, want := range map[int64]string{
-			61613:      "61613-61613 BR 2023-05-05 allocated 258500",
+			61610:      "61610-61610 BR 2023-02-27 allocated 258500",
 			28003:      "28003-28005 - - available -", // início da faixa
 			28004:      "28003-28005 - - available -", // meio
 			28005:      "28003-28005 - - available -", // fim
@@ -171,15 +171,15 @@ func TestQueries(t *testing.T) {
 
 	t.Run("covering", func(t *testing.T) {
 		for q, want := range map[string]string{
-			"45.171.61.10/32":       "45.171.60.0/22 BR 258500 45.171.60.0+1024",
-			"45.171.60.0/22":        "45.171.60.0/22 BR 258500 45.171.60.0+1024", // exato
-			"45.171.62.0/23":        "45.171.60.0/22 BR 258500 45.171.60.0+1024",
+			"187.87.29.10/32":       "187.87.28.0/22 BR 258500 187.87.28.0+1024",
+			"187.87.28.0/22":        "187.87.28.0/22 BR 258500 187.87.28.0+1024", // exato
+			"187.87.30.0/23":        "187.87.28.0/22 BR 258500 187.87.28.0+1024",
 			"150.165.10.5/32":       "150.165.10.0/24 BR 999 150.165.10.0+256", // aninhado: o mais específico
 			"150.165.11.1/32":       "150.165.0.0/16 BR 130343 150.165.0.0+65536",
 			"150.165.0.0/16":        "150.165.0.0/16 BR 130343 150.165.0.0+65536",
 			"62.122.212.9/32":       "62.122.212.0/24 ZZ - 62.122.208.0+1280", // registro dividido
 			"62.122.209.0/24":       "62.122.208.0/22 ZZ - 62.122.208.0+1280",
-			"2804:5964:1::1/128":    "2804:5964::/32 BR 258500 2804:5964::+32",
+			"2804:8ae0:1::1/128":    "2804:8ae0::/32 BR 258500 2804:8ae0::+32",
 			"2001:1201:3f::/48":     "2001:1201:20::/43 - - 2001:1201:20::+43",
 			"2001:12f0:abcd::1/128": "2001:12f0::/32 BR 130343 2001:12f0::+32",
 		} {
@@ -193,7 +193,7 @@ func TestQueries(t *testing.T) {
 				t.Errorf("%s → %s, quero %s", q, got, want)
 			}
 		}
-		for _, q := range []string{"8.8.8.8/32", "45.171.60.0/21", "2001:db8::1/128", "::/0"} {
+		for _, q := range []string{"8.8.8.8/32", "187.87.28.0/21", "2001:db8::1/128", "::/0"} {
 			if b, err := st.Covering(ctx, netip.MustParsePrefix(q)); !errors.Is(err, ErrNotFound) {
 				t.Errorf("%s fora: %+v, %v", q, b, err)
 			}
@@ -205,11 +205,11 @@ func TestQueries(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if h.OpaqueID != "258500" || len(h.ASNs) != 1 || h.ASNs[0].Start != 61613 ||
-			prefixes(h.Blocks) != "45.171.60.0/22,200.192.152.0/22,2804:5964::/32" {
+		if h.OpaqueID != "258500" || len(h.ASNs) != 1 || h.ASNs[0].Start != 61610 ||
+			prefixes(h.Blocks) != "187.87.28.0/22,200.225.48.0/21,2804:8ae0::/32" {
 			t.Errorf("258500 = %+v, blocos %s", h, prefixes(h.Blocks))
 		}
-		if b := h.Blocks[1]; date(b.Info.RegDate) != "2003-11-25" || b.RecordValue != 1024 || b.RecordStart.String() != "200.192.152.0" {
+		if b := h.Blocks[1]; date(b.Info.RegDate) != "2003-11-25" || b.RecordValue != 2048 || b.RecordStart.String() != "200.225.48.0" {
 			t.Errorf("bloco = %+v", b)
 		}
 
@@ -239,7 +239,7 @@ func TestQueries(t *testing.T) {
 	t.Run("canceled", func(t *testing.T) {
 		c, cancel := context.WithCancel(ctx)
 		cancel()
-		if _, err := st.ASN(c, 61613); err == nil || errors.Is(err, ErrNotFound) {
+		if _, err := st.ASN(c, 61610); err == nil || errors.Is(err, ErrNotFound) {
 			t.Errorf("contexto cancelado deveria falhar: %v", err)
 		}
 	})

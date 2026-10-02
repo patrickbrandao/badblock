@@ -68,9 +68,9 @@ var blocks = func() []store.PrefixBlock {
 		pblock("0.0.0.0/8", "IANA - Local Identification", "RESERVED", nil),
 		pblock("8.0.0.0/8", "Administered by ARIN", "LEGACY", arin),
 		pblock("10.0.0.0/8", "IANA - Private Use", "RESERVED", nil),
-		pblock("45.0.0.0/8", "Administered by ARIN", "LEGACY", arin),
 		pblock("100.0.0.0/8", "ARIN", "ALLOCATED", arin),
 		pblock("127.0.0.0/8", "IANA - Loopback", "RESERVED", nil),
+		pblock("187.0.0.0/8", "LACNIC", "ALLOCATED", lacnic),
 		pblock("192.0.0.0/8", "Administered by ARIN", "LEGACY", arin),
 	}
 	for i := 224; i <= 255; i++ {
@@ -96,7 +96,7 @@ var rdapPrefixes = []struct {
 	svc    store.RDAPService
 }{
 	{netip.MustParsePrefix("8.0.0.0/8"), store.RDAPService{Kind: "ipv4", Resource: "8.0.0.0/8", Registry: arin, URLs: arinURL}},
-	{netip.MustParsePrefix("45.0.0.0/8"), store.RDAPService{Kind: "ipv4", Resource: "45.0.0.0/8", Registry: arin, URLs: arinURL}},
+	{netip.MustParsePrefix("187.0.0.0/8"), store.RDAPService{Kind: "ipv4", Resource: "187.0.0.0/8", Registry: lacnic, URLs: []string{"https://rdap.lacnic.net/rdap/"}}},
 	{netip.MustParsePrefix("2800::/12"), store.RDAPService{Kind: "ipv6", Resource: "2800::/12", Registry: lacnic, URLs: []string{"https://rdap.lacnic.net/rdap/"}}},
 }
 
@@ -317,13 +317,13 @@ func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 
 func TestASN(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
-	for _, p := range []string{"/iana/asn/61613", "/iana/v1/asn/61613", "/iana/asn/AS61613", "/iana/asn/as61613"} {
+	for _, p := range []string{"/iana/asn/61610", "/iana/v1/asn/61610", "/iana/asn/AS61610", "/iana/asn/as61610"} {
 		rec := do(h, "GET", p)
 		if rec.Code != 200 {
 			t.Fatalf("%s: %d %s", p, rec.Code, rec.Body)
 		}
 		got := decode[ASNResponse](t, rec)
-		if got.ASN != 61613 || got.Block == nil || got.Block.Start != 61440 || *got.Block.Registry != "lacnic" ||
+		if got.ASN != 61610 || got.Block == nil || got.Block.Start != 61440 || *got.Block.Registry != "lacnic" ||
 			got.RDAP == nil || got.RDAP.Resource != "61440-61951" || got.Dataset.Version != version {
 			t.Errorf("%s: %+v", p, got)
 		}
@@ -362,10 +362,10 @@ func TestIPBogon(t *testing.T) {
 		{"100.64.0.1", "100.0.0.0/8", "100.64.0.0/10", true},
 		{"192.0.2.1", "192.0.0.0/8", "192.0.2.0/24", true},
 		{"8.8.8.8", "8.0.0.0/8", "", false},
-		{"45.171.61.10", "45.0.0.0/8", "", false},
+		{"187.87.29.10", "187.0.0.0/8", "", false},
 		{"2001:db8::1", "2001:c00::/23", "2001:db8::/32", true},
 		{"fe80::1", "", "fe80::/10", true},
-		{"2804:5964::1", "2800::/12", "", false},
+		{"2804:8ae0::1", "2800::/12", "", false},
 		{"::1", "", "::1/128", true},
 		{"240.0.0.1", "240.0.0.0/8", "240.0.0.0/4", true},
 		{"0.0.0.1", "0.0.0.0/8", "0.0.0.0/8", true},
@@ -416,11 +416,21 @@ func TestIPDetails(t *testing.T) {
 	if got.IP != "10.0.0.1" || !got.Bogon {
 		t.Errorf("mapeado = %+v", got)
 	}
-	rec := do(h, "GET", "/iana/ip/45.171.61.10")
+	// Bloco LEGACY administrado pela ARIN, RDAP com duas URLs.
+	rec := do(h, "GET", "/iana/ip/8.8.8.8")
 	got = decode[IPResponse](t, rec)
-	if got.RDAP == nil || got.RDAP.Resource != "45.0.0.0/8" || len(got.RDAP.URLs) != 2 || got.Block.Status != "LEGACY" ||
-		!strings.Contains(rec.Body.String(), `"special":[]`) || !strings.Contains(rec.Body.String(), `"rdap_urls":[]`) {
-		t.Errorf("45.171.61.10 = %s", rec.Body)
+	if got.RDAP == nil || got.RDAP.Resource != "8.0.0.0/8" || len(got.RDAP.URLs) != 2 || got.Block.Status != "LEGACY" ||
+		*got.Block.Registry != "arin" || !strings.Contains(rec.Body.String(), `"special":[]`) ||
+		!strings.Contains(rec.Body.String(), `"rdap_urls":[]`) {
+		t.Errorf("8.8.8.8 = %s", rec.Body)
+	}
+	// Bloco ALLOCATED à LACNIC (o ASN de exemplo), RDAP com uma URL.
+	rec = do(h, "GET", "/iana/ip/187.87.29.10")
+	got = decode[IPResponse](t, rec)
+	if got.RDAP == nil || got.RDAP.Resource != "187.0.0.0/8" || *got.RDAP.Registry != "lacnic" ||
+		strings.Join(got.RDAP.URLs, " ") != "https://rdap.lacnic.net/rdap/" || got.Block.Status != "ALLOCATED" ||
+		*got.Block.Registry != "lacnic" || !strings.Contains(rec.Body.String(), `"special":[]`) {
+		t.Errorf("187.87.29.10 = %s", rec.Body)
 	}
 	// TEREDO: globally_reachable N/A sai como null.
 	rec = do(h, "GET", "/iana/ip/2001::1")
@@ -442,11 +452,11 @@ func TestPrefix(t *testing.T) {
 	}{
 		{"/iana/prefix/10.1.2.3/16", "10.1.0.0/16", "10.0.0.0/8", "10.0.0.0/8", true},
 		{"/iana/v1/prefix/192.0.2.0/24", "192.0.2.0/24", "192.0.0.0/8", "192.0.2.0/24", true},
-		{"/iana/prefix/45.171.60.0/22", "45.171.60.0/22", "45.0.0.0/8", "", false},
+		{"/iana/prefix/187.87.28.0/22", "187.87.28.0/22", "187.0.0.0/8", "", false},
 		{"/iana/prefix/8.0.0.0/7", "8.0.0.0/7", "", "", false},                  // maior que um /8: há bloco não reservado dentro
 		{"/iana/prefix/224.0.0.0/4", "224.0.0.0/4", "", "", true},               // só blocos RESERVED
 		{"/iana/prefix/192.0.0.0/16", "192.0.0.0/16", "192.0.0.0/8", "", false}, // especiais dentro não contam
-		{"/iana/prefix/2804:5964::/32", "2804:5964::/32", "2800::/12", "", false},
+		{"/iana/prefix/2804:8ae0::/32", "2804:8ae0::/32", "2800::/12", "", false},
 		{"/iana/prefix/2001:db8::/48", "2001:db8::/48", "2001:c00::/23", "2001:db8::/32", true},
 		{"/iana/prefix/ff00::/8", "ff00::/8", "", "", true},
 		{"/iana/prefix/::/0", "::/0", "", "", false},
@@ -518,12 +528,12 @@ func TestErrors(t *testing.T) {
 		"/iana/prefix/10.0.0.0/-1":    400,
 		"/iana/prefix/2001:db8::/129": 400,
 		"/iana/prefix/x/8":            400,
-		"/iana/v2/asn/61613":          404,
+		"/iana/v2/asn/61610":          404,
 		"/iana/nada":                  404,
 		"/iana/asn":                   404,
 		"/iana/prefix/10.0.0.0":       404,
 		"/outra-coisa":                404,
-		"/asn/61613":                  404,
+		"/asn/61610":                  404,
 	}
 	for p, want := range cases {
 		rec := do(h, "GET", p)
@@ -538,14 +548,14 @@ func TestErrors(t *testing.T) {
 		}
 	}
 	// Métodos que não existem nas rotas de dados.
-	if rec := do(h, "POST", "/iana/asn/61613"); rec.Code != http.StatusMethodNotAllowed && rec.Code != 404 {
+	if rec := do(h, "POST", "/iana/asn/61610"); rec.Code != http.StatusMethodNotAllowed && rec.Code != 404 {
 		t.Errorf("POST em rota de dados = %d", rec.Code)
 	}
 }
 
 func TestHead(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
-	for _, p := range []string{"/iana/asn/61613", "/iana/v1/ip/10.0.0.1", "/iana/ipv4", "/iana/rdap"} {
+	for _, p := range []string{"/iana/asn/61610", "/iana/v1/ip/10.0.0.1", "/iana/ipv4", "/iana/rdap"} {
 		rec := do(h, "HEAD", p)
 		if rec.Code != 200 || rec.Header().Get("ETag") == "" || rec.Header().Get("X-Dataset-Version") != version {
 			t.Errorf("HEAD %s = %d %v", p, rec.Code, rec.Header())
@@ -600,7 +610,7 @@ func TestCacheAndETag(t *testing.T) {
 
 func TestNotReady(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, false)
-	for _, p := range []string{"/iana/asn/61613", "/iana/ip/10.0.0.1", "/iana/prefix/10.0.0.0/8", "/iana/asns",
+	for _, p := range []string{"/iana/asn/61610", "/iana/ip/10.0.0.1", "/iana/prefix/10.0.0.0/8", "/iana/asns",
 		"/iana/ipv4", "/iana/ipv6", "/iana/special", "/iana/v1/rdap"} {
 		rec := do(h, "GET", p)
 		if rec.Code != 503 || !strings.Contains(rec.Body.String(), "dataset_not_ready") {
@@ -616,7 +626,7 @@ func TestNotReady(t *testing.T) {
 func TestDatabaseErrors(t *testing.T) {
 	st := &fakeStore{err: errors.New("conexão recusada")}
 	h, c := newAPI(t, st, true)
-	for _, p := range []string{"/iana/asn/61613", "/iana/ip/10.0.0.1", "/iana/prefix/10.0.0.0/8", "/iana/asns",
+	for _, p := range []string{"/iana/asn/61610", "/iana/ip/10.0.0.1", "/iana/prefix/10.0.0.0/8", "/iana/asns",
 		"/iana/ipv4", "/iana/special", "/iana/rdap", "/iana/meta"} {
 		rec := do(h, "GET", p)
 		if rec.Code != 503 || !strings.Contains(rec.Body.String(), "database_unavailable") {
@@ -675,7 +685,7 @@ func TestCORSAndHeaders(t *testing.T) {
 		rec.Header().Get("Access-Control-Allow-Origin") != "*" {
 		t.Errorf("preflight = %d %v", rec.Code, rec.Header())
 	}
-	rec = do(h, "GET", "/iana/asn/61613")
+	rec = do(h, "GET", "/iana/asn/61610")
 	hd := rec.Header()
 	if hd.Get("Access-Control-Allow-Origin") != "*" || hd.Get("X-Content-Type-Options") != "nosniff" ||
 		hd.Get("Server") != "badblock-api-iana/test" || !strings.Contains(hd.Get("Access-Control-Expose-Headers"), "ETag") {

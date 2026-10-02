@@ -277,7 +277,7 @@ dados; o container e o pool somem no fim do teste. Sem nenhum `.sql` numa
 das pastas, falha com `nenhuma migration em database/postgres/<pasta>`.
 
 **`TestQueries`**: 10 ASNs reais (513, 1297, 4745, 7901, 15169, 16509, 29571,
-61613, 327710 — com o handle em maiúsculas, `ORANGE CÔTE D'IVOIRE` — e
+61610, 327710 — com o handle em maiúsculas, `ORANGE CÔTE D'IVOIRE` — e
 403009) e 6 artificiais (64500 a 64505) com `%`, `_` e `\` na
 `description` (`TEST-PCT - 100% Fibra, BR`, `TEST_UND - Under_score Ltda, BR`,
 `TEST-BS - Back\Slash Ltda, BR`…), mais três execuções: duas aplicadas e uma
@@ -319,7 +319,7 @@ Num PG18 do `testdb`, com o handler e o store reais e sem cache:
    `ripe_asnames_run` (URL, SHA-256, bytes e ASNs do arquivo), a linha de `jobs` e
    `ANALYZE`.
 2. Rotas pontuais: `/ripe/asnames/asn/15169` (`GOOGLE`, `US`),
-   `/ripe/asnames/v1/asn/AS61613`, `/ripe/asnames/asn/4294967295` (404),
+   `/ripe/asnames/v1/asn/AS61610`, `/ripe/asnames/asn/4294967295` (404),
    `/ripe/asnames/handle/google`, `VRSN-AC50-340`, `ICE%2FHT` e
    `orange%20c%C3%B4te%20d'ivoire`.
 3. Buscas, conferindo corte e ordem: `google`, `100%`, `côte d'ivoire`,

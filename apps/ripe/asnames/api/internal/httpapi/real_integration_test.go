@@ -99,7 +99,7 @@ func TestRealFile(t *testing.T) {
 	if asn.Handle == nil || *asn.Handle != "GOOGLE" || *asn.Country != "US" {
 		t.Errorf("AS15169 = %+v", asn)
 	}
-	get("/ripe/asnames/v1/asn/AS61613", 200)
+	get("/ripe/asnames/v1/asn/AS61610", 200)
 	get("/ripe/asnames/asn/4294967295", 404)
 	var hr HandleResponse
 	_ = json.Unmarshal(*get("/ripe/asnames/handle/google", 200), &hr)
