@@ -34,18 +34,18 @@ func dp(s string) *time.Time {
 
 var (
 	created = time.Date(2026, 9, 28, 23, 19, 10, 0, time.UTC)
-	tmsoft  = store.Info{CC: new("BR"), RegDate: dp("2019-02-11"), Status: "allocated", OpaqueID: new("258500")}
+	elea  = store.Info{CC: new("BR"), RegDate: dp("2019-02-11"), Status: "allocated", OpaqueID: new("258500")}
 	empty   = store.Info{Status: "available"}
 
 	asns = []store.ASNRange{
 		{Start: 28003, End: 28005, Count: 3, Info: empty, CreatedAt: created, UpdatedAt: created},
-		{Start: 61613, End: 61613, Count: 1, Info: store.Info{CC: new("BR"), RegDate: dp("2023-05-05"), Status: "allocated", OpaqueID: new("258500")},
+		{Start: 61610, End: 61610, Count: 1, Info: store.Info{CC: new("BR"), RegDate: dp("2023-02-27"), Status: "allocated", OpaqueID: new("258500")},
 			CreatedAt: created, UpdatedAt: created.Add(time.Hour)},
 	}
 	blocks = []store.Block{
-		block("45.171.60.0/22", tmsoft, "45.171.60.0", 1024),
-		block("200.192.152.0/22", tmsoft, "200.192.152.0", 1024),
-		block("2804:5964::/32", tmsoft, "2804:5964::", 32),
+		block("187.87.28.0/22", elea, "187.87.28.0", 1024),
+		block("200.225.48.0/21", elea, "200.225.48.0", 2048),
+		block("2804:8ae0::/32", elea, "2804:8ae0::", 32),
 		// Registro IPv4 que não forma CIDR (62.122.208.0 + 1280 = /22 + /24).
 		block("62.122.208.0/22", store.Info{CC: new("ZZ"), Status: "reserved"}, "62.122.208.0", 1280),
 		block("62.122.212.0/24", store.Info{CC: new("ZZ"), Status: "reserved"}, "62.122.208.0", 1280),
@@ -222,13 +222,13 @@ func decode[T any](t *testing.T, rec *httptest.ResponseRecorder) T {
 
 func TestASN(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
-	for _, p := range []string{"/asn/61613", "/v1/asn/61613", "/asn/AS61613", "/asn/as61613"} {
+	for _, p := range []string{"/asn/61610", "/v1/asn/61610", "/asn/AS61610", "/asn/as61610"} {
 		rec := do(h, "GET", base+p)
 		if rec.Code != 200 {
 			t.Fatalf("%s: %d %s", p, rec.Code, rec.Body)
 		}
 		got := decode[ASNResponse](t, rec)
-		if got.ASN != 61613 || got.Range != (Range{61613, 61613, 1}) || *got.CC != "BR" || *got.RegDate != "2023-05-05" ||
+		if got.ASN != 61610 || got.Range != (Range{61610, 61610, 1}) || *got.CC != "BR" || *got.RegDate != "2023-02-27" ||
 			got.Status != "allocated" || *got.OpaqueID != "258500" {
 			t.Errorf("%s: %+v", p, got)
 		}
@@ -263,15 +263,15 @@ func TestErrors(t *testing.T) {
 		"/ip/999.1.1.1":                       400,
 		"/ip/fe80::1%25eth0":                  400,
 		"/ip/8.8.8.8":                         404,
-		"/prefix/45.171.60.0/33":              400,
-		"/prefix/45.171.60.0/x":               400,
-		"/prefix/2804:5964::/129":             400,
+		"/prefix/187.87.28.0/33":              400,
+		"/prefix/187.87.28.0/x":               400,
+		"/prefix/2804:8ae0::/129":             400,
 		"/prefix/8.8.8.0/24":                  404,
 		"/holder/nao%20existe":                400,
 		"/holder/" + strings.Repeat("a", 129): 400,
 		"/holder/ção":                         400,
 		"/holder/999999":                      404,
-		"/v2/asn/61613":                       404,
+		"/v2/asn/61610":                       404,
 		"/nada":                               404,
 		"/v1/nada":                            404,
 	}
@@ -288,7 +288,7 @@ func TestErrors(t *testing.T) {
 			t.Errorf("%s: erro sem code/message: %s", p, rec.Body)
 		}
 	}
-	for _, p := range []string{"/outra-coisa", "/asn/61613", base + "x/asn/61613"} {
+	for _, p := range []string{"/outra-coisa", "/asn/61610", base + "x/asn/61610"} {
 		if rec := do(h, "GET", p); rec.Code != 404 {
 			t.Errorf("%s: %d", p, rec.Code)
 		}
@@ -309,17 +309,17 @@ func TestErrors(t *testing.T) {
 func TestIPAndPrefix(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
 
-	for _, q := range []string{"45.171.61.10", "::ffff:45.171.61.10"} {
+	for _, q := range []string{"187.87.29.10", "::ffff:187.87.29.10"} {
 		rec := do(h, "GET", base+"/ip/"+q)
 		ip := decode[IPResponse](t, rec)
-		if rec.Code != 200 || ip.IP != "45.171.61.10" || ip.Prefix != "45.171.60.0/22" || *ip.OpaqueID != "258500" ||
-			*ip.CC != "BR" || *ip.RegDate != "2019-02-11" || ip.Record != (Record{"45.171.60.0", 1024}) {
+		if rec.Code != 200 || ip.IP != "187.87.29.10" || ip.Prefix != "187.87.28.0/22" || *ip.OpaqueID != "258500" ||
+			*ip.CC != "BR" || *ip.RegDate != "2019-02-11" || ip.Record != (Record{"187.87.28.0", 1024}) {
 			t.Errorf("%s = %d %s", q, rec.Code, rec.Body)
 		}
 	}
-	rec := do(h, "GET", base+"/ip/2804:5964::1")
+	rec := do(h, "GET", base+"/ip/2804:8ae0::1")
 	ip := decode[IPResponse](t, rec)
-	if rec.Code != 200 || ip.Prefix != "2804:5964::/32" || ip.Record != (Record{"2804:5964::", 32}) {
+	if rec.Code != 200 || ip.Prefix != "2804:8ae0::/32" || ip.Record != (Record{"2804:8ae0::", 32}) {
 		t.Errorf("ipv6 = %d %s", rec.Code, rec.Body)
 	}
 	// Bloco dividido: o pedaço /24 aponta para o registro original.
@@ -329,19 +329,19 @@ func TestIPAndPrefix(t *testing.T) {
 		t.Errorf("bloco dividido = %d %s", rec.Code, rec.Body)
 	}
 
-	rec = do(h, "GET", base+"/prefix/45.171.61.1/24")
+	rec = do(h, "GET", base+"/prefix/187.87.29.1/24")
 	p := decode[PrefixResponse](t, rec)
-	if rec.Code != 200 || p.Query != "45.171.61.0/24" || p.Prefix != "45.171.60.0/22" || p.Exact || p.Status != "allocated" {
+	if rec.Code != 200 || p.Query != "187.87.29.0/24" || p.Prefix != "187.87.28.0/22" || p.Exact || p.Status != "allocated" {
 		t.Errorf("prefix = %d %s", rec.Code, rec.Body)
 	}
-	rec = do(h, "GET", base+"/v1/prefix/45.171.60.0/22")
+	rec = do(h, "GET", base+"/v1/prefix/187.87.28.0/22")
 	p = decode[PrefixResponse](t, rec)
-	if !p.Exact || p.Record != (Record{"45.171.60.0", 1024}) {
+	if !p.Exact || p.Record != (Record{"187.87.28.0", 1024}) {
 		t.Errorf("prefix exato = %s", rec.Body)
 	}
-	rec = do(h, "GET", base+"/prefix/2804:5964:ffff::/48")
+	rec = do(h, "GET", base+"/prefix/2804:8ae0:ffff::/48")
 	p = decode[PrefixResponse](t, rec)
-	if rec.Code != 200 || p.Prefix != "2804:5964::/32" || p.Exact {
+	if rec.Code != 200 || p.Prefix != "2804:8ae0::/32" || p.Exact {
 		t.Errorf("prefix ipv6 = %d %s", rec.Code, rec.Body)
 	}
 }
@@ -354,11 +354,11 @@ func TestHolder(t *testing.T) {
 		got.Counts != (HolderCounts{ASNs: 1, IPv4: 2, IPv6: 1}) {
 		t.Fatalf("holder = %d %s", rec.Code, rec.Body)
 	}
-	if got.ASNs[0] != (HolderASN{Start: 61613, End: 61613, Count: 1, CC: got.ASNs[0].CC, Status: "allocated", RegDate: got.ASNs[0].RegDate}) ||
-		*got.ASNs[0].RegDate != "2023-05-05" {
+	if got.ASNs[0] != (HolderASN{Start: 61610, End: 61610, Count: 1, CC: got.ASNs[0].CC, Status: "allocated", RegDate: got.ASNs[0].RegDate}) ||
+		*got.ASNs[0].RegDate != "2023-02-27" {
 		t.Errorf("asns = %+v", got.ASNs)
 	}
-	if got.Prefixes.IPv4[0].Prefix != "45.171.60.0/22" || got.Prefixes.IPv6[0].Prefix != "2804:5964::/32" || *got.Prefixes.IPv4[0].RegDate != "2019-02-11" {
+	if got.Prefixes.IPv4[0].Prefix != "187.87.28.0/22" || got.Prefixes.IPv6[0].Prefix != "2804:8ae0::/32" || *got.Prefixes.IPv4[0].RegDate != "2019-02-11" {
 		t.Errorf("prefixes = %+v", got.Prefixes)
 	}
 
@@ -394,7 +394,7 @@ func TestHead(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
 	srv := httptest.NewServer(h)
 	defer srv.Close()
-	for path, want := range map[string]int{base + "/asn/61613": 200, base + "/v1/holder/258500": 200, base + "/asn/1": 404} {
+	for path, want := range map[string]int{base + "/asn/61610": 200, base + "/v1/holder/258500": 200, base + "/asn/1": 404} {
 		resp, err := http.Head(srv.URL + path)
 		if err != nil {
 			t.Fatal(err)
@@ -414,16 +414,16 @@ func TestCacheAndETag(t *testing.T) {
 	st := &fakeStore{}
 	h, c := newAPI(t, st, true)
 
-	first := do(h, "GET", base+"/asn/61613")
+	first := do(h, "GET", base+"/asn/61610")
 	if first.Header().Get("X-Cache") != "MISS" {
 		t.Errorf("primeira = %s", first.Header().Get("X-Cache"))
 	}
 	// Versionada e sem versão compartilham o cache (mesmo conteúdo).
-	second := do(h, "GET", base+"/v1/asn/AS61613")
+	second := do(h, "GET", base+"/v1/asn/AS61610")
 	if second.Header().Get("X-Cache") != "HIT" || st.calls != 1 || second.Body.String() != first.Body.String() {
 		t.Errorf("segunda = %s, calls = %d", second.Header().Get("X-Cache"), st.calls)
 	}
-	want := "badblock:" + rir.App + ":0192-v1:asn:61613"
+	want := "badblock:" + rir.App + ":0192-v1:asn:61610"
 	if _, ok := c.m[want]; !ok || len(c.m) != 1 {
 		t.Errorf("chaves no cache = %v, quero %s", c.m, want)
 	}
@@ -433,7 +433,7 @@ func TestCacheAndETag(t *testing.T) {
 		t.Fatalf("cabeçalhos = %v / %v", first.Header(), second.Header())
 	}
 	for _, inm := range []string{etag, strings.TrimPrefix(etag, "W/"), `"x", ` + etag, "*"} {
-		rec := do(h, "GET", base+"/v1/asn/61613", "If-None-Match", inm)
+		rec := do(h, "GET", base+"/v1/asn/61610", "If-None-Match", inm)
 		if rec.Code != http.StatusNotModified || rec.Body.Len() != 0 || rec.Header().Get("ETag") != etag {
 			t.Errorf("If-None-Match %s = %d", inm, rec.Code)
 		}
@@ -441,11 +441,11 @@ func TestCacheAndETag(t *testing.T) {
 	if st.calls != 1 {
 		t.Errorf("304 não deveria consultar o banco (calls = %d)", st.calls)
 	}
-	if rec := do(h, "GET", base+"/asn/61613", "If-None-Match", `W/"outro"`); rec.Code != 200 {
+	if rec := do(h, "GET", base+"/asn/61610", "If-None-Match", `W/"outro"`); rec.Code != 200 {
 		t.Errorf("ETag diferente = %d", rec.Code)
 	}
 	// Outra consulta, outro ETag; 404 não entra no cache.
-	if rec := do(h, "GET", base+"/ip/45.171.61.10"); rec.Header().Get("ETag") == etag {
+	if rec := do(h, "GET", base+"/ip/187.87.29.10"); rec.Header().Get("ETag") == etag {
 		t.Error("ETag deveria depender da consulta")
 	}
 	do(h, "GET", base+"/asn/1")
@@ -466,7 +466,7 @@ func TestCacheDisabledBypass(t *testing.T) {
 func TestNotReady(t *testing.T) {
 	st := &fakeStore{}
 	h, _ := newAPI(t, st, false)
-	for _, p := range []string{"/asn/61613", "/ip/45.171.61.10", "/prefix/45.171.60.0/22", "/holder/258500"} {
+	for _, p := range []string{"/asn/61610", "/ip/187.87.29.10", "/prefix/187.87.28.0/22", "/holder/258500"} {
 		rec := do(h, "GET", base+p)
 		if rec.Code != 503 || !strings.Contains(rec.Body.String(), "dataset_not_ready") {
 			t.Errorf("%s sem dataset = %d %s", p, rec.Code, rec.Body)
@@ -489,7 +489,7 @@ func TestStoreFailures(t *testing.T) {
 	for _, c := range cases {
 		st := &fakeStore{err: c.err}
 		h, mc := newAPI(t, st, true)
-		for _, p := range []string{"/asn/61613", "/ip/45.171.61.10", "/prefix/45.171.60.0/22", "/holder/258500", "/meta"} {
+		for _, p := range []string{"/asn/61610", "/ip/187.87.29.10", "/prefix/187.87.28.0/22", "/holder/258500", "/meta"} {
 			rec := do(h, "GET", base+p)
 			if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.name) {
 				t.Errorf("%v %s = %d %s", c.err, p, rec.Code, rec.Body)
@@ -503,7 +503,7 @@ func TestStoreFailures(t *testing.T) {
 
 func TestPanicIsRecovered(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{panicMsg: "bug"}, true)
-	rec := do(h, "GET", base+"/asn/61613")
+	rec := do(h, "GET", base+"/asn/61610")
 	if rec.Code != 500 || !strings.Contains(rec.Body.String(), "internal_error") {
 		t.Errorf("panic = %d %s", rec.Code, rec.Body)
 	}
@@ -556,20 +556,20 @@ func TestStatus(t *testing.T) {
 
 func TestCORSAndHeaders(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
-	rec := do(h, "OPTIONS", base+"/asn/61613", "Origin", "https://x.example", "Access-Control-Request-Method", "GET")
+	rec := do(h, "OPTIONS", base+"/asn/61610", "Origin", "https://x.example", "Access-Control-Request-Method", "GET")
 	if rec.Code != http.StatusNoContent || rec.Header().Get("Access-Control-Allow-Origin") != "*" ||
 		!strings.Contains(rec.Header().Get("Access-Control-Allow-Methods"), "GET") ||
 		!strings.Contains(rec.Header().Get("Access-Control-Allow-Headers"), "If-None-Match") {
 		t.Errorf("preflight = %d %v", rec.Code, rec.Header())
 	}
-	rec = do(h, "GET", base+"/asn/61613")
+	rec = do(h, "GET", base+"/asn/61610")
 	hd := rec.Header()
 	if hd.Get("X-Content-Type-Options") != "nosniff" || hd.Get("Access-Control-Allow-Origin") != "*" ||
 		!strings.Contains(hd.Get("Access-Control-Expose-Headers"), "ETag") || hd.Get("Server") != "badblock-"+rir.App+"/test" ||
 		hd.Get("Referrer-Policy") != "no-referrer" {
 		t.Errorf("cabeçalhos = %v", hd)
 	}
-	if rec := do(h, "DELETE", base+"/asn/61613"); rec.Code == 200 {
+	if rec := do(h, "DELETE", base+"/asn/61610"); rec.Code == 200 {
 		t.Errorf("DELETE não deveria responder 200")
 	}
 }

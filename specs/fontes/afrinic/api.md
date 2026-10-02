@@ -393,7 +393,7 @@ Os do modelo, sem nada da AFRINIC além dos dados:
 [../rir/api.md](../rir/api.md#testes). O store falso e o seed do teste de
 integração usam registros do recorte do modelo
 ([../lacnic/fonte.md](../lacnic/fonte.md#recorte-testdatadelegated-extended-sampletxt):
-AS61613, AS28003–AS28005, titulares `258500` e `130343`), iguais nos clones —
+AS61610, AS28003–AS28005, titulares `258500` e `130343`), iguais nos clones —
 não o recorte da AFRINIC ([fonte.md](fonte.md#recorte-testdatadelegated-extended-sampletxt)),
 que é do coletor.
 

@@ -54,8 +54,8 @@ func TestParseSample(t *testing.T) {
 	for _, a := range d.ASNs {
 		asn[a.Start] = a
 	}
-	if a := asn[61613]; a.Count != 1 || a.CC != "BR" || a.Status != "allocated" || a.OpaqueID != "258500" || !a.Date.Equal(date("20230505")) {
-		t.Errorf("AS61613 = %+v", a)
+	if a := asn[61610]; a.Count != 1 || a.CC != "BR" || a.Status != "allocated" || a.OpaqueID != "258500" || !a.Date.Equal(date("20230227")) {
+		t.Errorf("AS61610 = %+v", a)
 	}
 	if a := asn[28003]; a.Count != 3 || a.End() != 28005 || a.Status != "available" || a.CC != "" || !a.Date.IsZero() || a.OpaqueID != "" {
 		t.Errorf("faixa available AS28003 = %+v", a)
@@ -68,8 +68,8 @@ func TestParseSample(t *testing.T) {
 	for _, p := range d.Prefixes {
 		pfx[p.Prefix.String()] = p
 	}
-	if p := pfx["45.171.60.0/22"]; p.OpaqueID != "258500" || p.RecordValue != 1024 || p.RecordStart.String() != "45.171.60.0" {
-		t.Errorf("45.171.60.0/22 = %+v", p)
+	if p := pfx["187.87.28.0/22"]; p.OpaqueID != "258500" || p.RecordValue != 1024 || p.RecordStart.String() != "187.87.28.0" {
+		t.Errorf("187.87.28.0/22 = %+v", p)
 	}
 	if p := pfx["187.192.0.0/11"]; p.CC != "MX" || p.RecordValue != 2097152 {
 		t.Errorf("/11 = %+v", p)

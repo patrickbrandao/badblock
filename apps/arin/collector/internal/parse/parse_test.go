@@ -155,7 +155,7 @@ func TestParseOtherRIRFormats(t *testing.T) {
 				t.Errorf("faixa available de 7 campos = %+v", a)
 			}
 			if a := d.ASNs[1]; a.OpaqueID != "258500" || a.CC != "BR" || a.Status != "allocated" {
-				t.Errorf("AS61613 = %+v", a)
+				t.Errorf("AS61610 = %+v", a)
 			}
 			if p := d.Prefixes[0]; p.Prefix.String() != "45.68.105.0/24" || p.Status != "reserved" || p.OpaqueID != "" {
 				t.Errorf("IPv4 reservado = %+v", p)

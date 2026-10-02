@@ -115,13 +115,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ASNResponse'
               example:
-                asn: 61613
-                name: TMSoft Solucoes em Informatica Ltda
-                document: 08.030.063/0001-00
+                asn: 61610
+                name: ELEA DATA CENTERS
+                document: 35.980.592/0001-30
                 document_type: cnpj
                 prefixes:
-                  ipv4: ['45.171.60.0/22', '200.192.152.0/22']
-                  ipv6: ['2804:5964::/32']
+                  ipv4: ['187.87.28.0/22', '200.225.48.0/21']
+                  ipv6: ['2804:8ae0::/32']
                 first_seen: '2026-09-28T23:19:10Z'
                 updated_at: '2026-09-28T23:19:10Z'
                 dataset:
@@ -167,12 +167,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/IPResponse'
               example:
-                ip: 45.171.61.10
-                prefix: 45.171.60.0/22
+                ip: 187.87.29.10
+                prefix: 187.87.28.0/22
                 asn:
-                  asn: 61613
-                  name: TMSoft Solucoes em Informatica Ltda
-                  document: 08.030.063/0001-00
+                  asn: 61610
+                  name: ELEA DATA CENTERS
+                  document: 35.980.592/0001-30
                   document_type: cnpj
                 dataset:
                   version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
@@ -196,7 +196,7 @@ paths:
       description: >-
         Bloco mais específico do arquivo do NIC.br que contém o prefixo
         pedido. Os bits de host são zerados antes da consulta
-        (`/prefix/200.192.152.9/24` consulta `200.192.152.0/24`); `exact`
+        (`/prefix/200.225.48.9/24` consulta `200.225.48.0/24`); `exact`
         diz se o bloco encontrado é o próprio prefixo pedido.
       tags: [dados]
       parameters:
@@ -220,13 +220,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/PrefixResponse'
               example:
-                query: 200.192.152.0/24
-                prefix: 200.192.152.0/22
+                query: 200.225.48.0/24
+                prefix: 200.225.48.0/21
                 exact: false
                 asn:
-                  asn: 61613
-                  name: TMSoft Solucoes em Informatica Ltda
-                  document: 08.030.063/0001-00
+                  asn: 61610
+                  name: ELEA DATA CENTERS
+                  document: 35.980.592/0001-30
                   document_type: cnpj
                 dataset:
                   version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
@@ -272,14 +272,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/DocumentResponse'
               example:
-                document: 08.030.063/0001-00
-                document_digits: '08030063000100'
+                document: 35.980.592/0001-30
+                document_digits: '35980592000130'
                 document_type: cnpj
-                name: TMSoft Solucoes em Informatica Ltda
+                name: ELEA DATA CENTERS
                 count: 1
                 asns:
-                  - asn: 61613
-                    name: TMSoft Solucoes em Informatica Ltda
+                  - asn: 61610
+                    name: ELEA DATA CENTERS
                 dataset:
                   version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
                   updated_at: '2026-09-28T23:19:10Z'
@@ -329,9 +329,9 @@ paths:
                     name: COGENT BRASIL TELECOMUNICAÇÕES LTDA.
                     document: 29.484.413/0001-70
                     document_type: cnpj
-                  - asn: 61613
-                    name: TMSoft Solucoes em Informatica Ltda
-                    document: 08.030.063/0001-00
+                  - asn: 61610
+                    name: ELEA DATA CENTERS
+                    document: 35.980.592/0001-30
                     document_type: cnpj
                 dataset:
                   version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
@@ -517,27 +517,27 @@ components:
       required: true
       description: >-
         Número do ASN, com ou sem o prefixo `AS` (maiúsculo ou minúsculo):
-        `61613`, `AS61613` ou `as61613`. O número vai de 0 a 4294967295
+        `61610`, `AS61610` ou `as61610`. O número vai de 0 a 4294967295
         (32 bits); fora dessa faixa, vazio ou com outro caractere, responde
         400.
       schema:
         type: string
         pattern: '^([Aa][Ss])?[0-9]+$'
-      example: AS61613
+      example: AS61610
     IP:
       name: ip
       in: path
       required: true
       description: >-
         Endereço IPv4 ou IPv6, sem zona (`fe80::1%eth0` é recusado). IPv4
-        mapeado em IPv6 (`::ffff:45.171.61.10`) é tratado como IPv4. Endereço
+        mapeado em IPv6 (`::ffff:187.87.29.10`) é tratado como IPv4. Endereço
         inválido responde 400.
       schema:
         type: string
         anyOf:
           - format: ipv4
           - format: ipv6
-      example: 45.171.61.10
+      example: 187.87.29.10
     PrefixIP:
       name: ip
       in: path
@@ -545,14 +545,14 @@ components:
       description: >-
         Endereço do prefixo, IPv4 ou IPv6, sem zona; IPv4 mapeado em IPv6 é
         tratado como IPv4. Os bits de host são zerados
-        (`200.192.152.9/24` vira `200.192.152.0/24`). Endereço inválido
+        (`200.225.48.9/24` vira `200.225.48.0/24`). Endereço inválido
         responde 400.
       schema:
         type: string
         anyOf:
           - format: ipv4
           - format: ipv6
-      example: 200.192.152.9
+      example: 200.225.48.9
     PrefixLength:
       name: len
       in: path
@@ -574,12 +574,12 @@ components:
         Documento do titular. Todo caractere que não é dígito é descartado; os
         dígitos que sobram decidem: 14 = CNPJ, 8 = identificador estrangeiro
         do NIC.br, qualquer outra quantidade responde 400. Aceita só dígitos
-        (`08030063000100`) ou o CNPJ formatado com a barra codificada como
-        `%2F` (`08.030.063%2F0001-00`); com a barra sem codificar o caminho
+        (`35980592000130`) ou o CNPJ formatado com a barra codificada como
+        `%2F` (`35.980.592%2F0001-30`); com a barra sem codificar o caminho
         ganha um segmento a mais e cai no 404 de rota inexistente.
       schema:
         type: string
-      example: '08030063000100'
+      example: '35980592000130'
     IfNoneMatch:
       name: If-None-Match
       in: header
@@ -861,17 +861,17 @@ components:
           minimum: 0
           maximum: 4294967295
           description: Número do ASN.
-          example: 61613
+          example: 61610
         name:
           type: string
           description: Nome do titular como está no arquivo do NIC.br.
-          example: TMSoft Solucoes em Informatica Ltda
+          example: ELEA DATA CENTERS
         document:
           type: string
           description: >-
             Documento do titular como está no arquivo: CNPJ formatado ou
             identificador estrangeiro de 8 dígitos.
-          example: 08.030.063/0001-00
+          example: 35.980.592/0001-30
         document_type:
           type: string
           enum: [cnpj, foreign]
@@ -890,11 +890,11 @@ components:
           minimum: 0
           maximum: 4294967295
           description: Número do ASN.
-          example: 61613
+          example: 61610
         name:
           type: string
           description: Nome do titular do ASN.
-          example: TMSoft Solucoes em Informatica Ltda
+          example: ELEA DATA CENTERS
     Prefixes:
       type: object
       description: Blocos do ASN separados por família, cada lista em ordem de endereço.
@@ -905,13 +905,13 @@ components:
           description: Blocos IPv4 em notação CIDR (lista vazia quando não há).
           items:
             type: string
-          example: ['45.171.60.0/22', '200.192.152.0/22']
+          example: ['187.87.28.0/22', '200.225.48.0/21']
         ipv6:
           type: array
           description: Blocos IPv6 em notação CIDR (lista vazia quando não há).
           items:
             type: string
-          example: ['2804:5964::/32']
+          example: ['2804:8ae0::/32']
     ASNResponse:
       description: Resposta de `GET /asn/{asn}`.
       allOf:
@@ -944,11 +944,11 @@ components:
             - format: ipv4
             - format: ipv6
           description: Endereço consultado, normalizado (IPv4 mapeado em IPv6 vira IPv4).
-          example: 45.171.61.10
+          example: 187.87.29.10
         prefix:
           type: string
           description: Bloco mais específico do arquivo que contém o IP, em CIDR.
-          example: 45.171.60.0/22
+          example: 187.87.28.0/22
         asn:
           $ref: '#/components/schemas/ASNRef'
         dataset:
@@ -961,11 +961,11 @@ components:
         query:
           type: string
           description: Prefixo consultado, em CIDR, com os bits de host zerados.
-          example: 200.192.152.0/24
+          example: 200.225.48.0/24
         prefix:
           type: string
           description: Bloco mais específico do arquivo que contém o prefixo, em CIDR.
-          example: 200.192.152.0/22
+          example: 200.225.48.0/21
         exact:
           type: boolean
           description: '`true` quando o bloco encontrado é o próprio prefixo consultado.'
@@ -982,12 +982,12 @@ components:
         document:
           type: string
           description: Documento como está no arquivo (do primeiro ASN da lista).
-          example: 08.030.063/0001-00
+          example: 35.980.592/0001-30
         document_digits:
           type: string
           pattern: '^([0-9]{8}|[0-9]{14})$'
           description: Só os dígitos do documento consultado.
-          example: '08030063000100'
+          example: '35980592000130'
         document_type:
           type: string
           enum: [cnpj, foreign]
@@ -996,7 +996,7 @@ components:
         name:
           type: string
           description: Nome do titular (do primeiro ASN da lista).
-          example: TMSoft Solucoes em Informatica Ltda
+          example: ELEA DATA CENTERS
         count:
           type: integer
           minimum: 1

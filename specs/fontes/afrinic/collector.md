@@ -132,7 +132,7 @@ que os testes citam, no lugar dos do modelo:
   caso com o seu `enddate`, conferido pelo valor (o do `lacnic.txt` é
   20260925; os outros, 20260928), e a `startdate` só pela presença. No
   `lacnic`: 3 asn (com o AS6065 a mais), 2 ipv4 e 2 ipv6; AS28003 + 3
-  (available, sem país nem titular), o titular numérico `258500` no AS61613
+  (available, sem país nem titular), o titular numérico `258500` no AS61610
   e em dois blocos, `2001:1201:20::/43` (available de 7 campos) e
   `UTCOffset` `-0300`. `TestParseWrongRegistry`: `formats/arin.txt` lido com
   o registry `ripencc`, como no modelo.

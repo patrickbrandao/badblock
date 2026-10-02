@@ -11,7 +11,7 @@ info:
     e o bootstrap RDAP (RFC 9224). Fonte: https://www.iana.org/numbers.
 
     Versões: os servidores sem `/v1` servem a versão atual (hoje v1); os
-    servidores com `/v1` fixam a v1 (`/iana/v1/asn/61613`), com o mesmo
+    servidores com `/v1` fixam a v1 (`/iana/v1/asn/61610`), com o mesmo
     conteúdo, a mesma chave de cache e o mesmo ETag. Cada rota aparece uma vez
     em `paths`, relativa ao servidor. Saúde (`/health`, `/status`, `/ping`) e
     este manifesto (`/openapi.yaml`) ficam fora do versionamento: sobrescrevem
@@ -121,9 +121,9 @@ paths:
                 $ref: '#/components/schemas/ASNResponse'
               examples:
                 lacnic:
-                  summary: GET /asn/61613
+                  summary: GET /asn/61610
                   value:
-                    asn: 61613
+                    asn: 61610
                     block:
                       start: 61440
                       end: 61951
@@ -857,7 +857,7 @@ components:
       schema:
         type: string
         pattern: '^([Aa][Ss])?[0-9]+$'
-      example: AS61613
+      example: AS61610
     IP:
       name: ip
       in: path
@@ -904,7 +904,7 @@ components:
         nada.
       schema:
         type: string
-      example: W/"3db9c99d25843e9a"
+      example: W/"3db9c89d25843ce7"
   headers:
     ETag:
       description: |
@@ -912,7 +912,7 @@ components:
         O mesmo com e sem `/v1`; muda quando a versão dos dados muda.
       schema:
         type: string
-      example: W/"3db9c99d25843e9a"
+      example: W/"3db9c89d25843ce7"
     CacheControlPublic:
       description: Cacheável por 5 minutos.
       schema:

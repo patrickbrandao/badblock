@@ -51,17 +51,20 @@ loopback do host, na porta da fonte:
 - Imagens no Docker Hub, conta `tmsoftbrasil`: `tmsoftbrasil/badblock-<app>`.
   Não há CI publicando: quem publica roda o script numa máquina autenticada
   (`docker login`).
-- Versão de cada app = tag git **`<app>/vX.Y.Z`** (SemVer, sufixo opcional
-  como `-rc.1`) apontando para o `HEAD`.
+- Versão = a do projeto, a última tag git **`vX.Y.Z`** (SemVer, sufixo
+  opcional como `-rc.1`), igual para todos os apps no `release-images.sh`
+  (`v0.0.1` → `:0.0.1`); `VERSION=X.Y.Z` no ambiente a troca. A tag da
+  imagem não depende do commit nem de haver alteração não commitada.
 - Cada imagem sai com duas tags: a versão e `latest`. Voltar atrás =
   `<APP>_TAG=<versão anterior>` no `.env` do servidor.
 
 ### `release-images.sh` (raiz, versionado)
 
 ```bash
-./release-images.sh                 # os apps com tag no HEAD
-./release-images.sh api-cgibr       # só os nomes passados (sem tag = erro)
+./release-images.sh                 # todos os apps, dos fontes do disco
+./release-images.sh api-cgibr       # só os nomes passados
 PLATFORMS=linux/amd64 ./release-images.sh   # uma arquitetura só
+VERSION=0.0.2 ./release-images.sh           # outra versão que a última tag
 ```
 
 1. `APPS` lista os 25 apps (24 de fontes + `website-www`); nome desconhecido
@@ -69,16 +72,17 @@ PLATFORMS=linux/amd64 ./release-images.sh   # uma arquitetura só
    `apps/<fonte>/collector` (numa fonte de dois níveis o `-` vira `/`:
    `collector-anatel-pst` → `apps/anatel/pst/collector`), `website-<site>` →
    `websites/<site>`.
-2. Resolve a seleção **antes** da confirmação: sem nomes, só os apps com tag
-   no `HEAD`; a versão tem de ser SemVer.
+2. Resolve a seleção **antes** da confirmação: sem nomes, todos os apps. A
+   versão é `VERSION` ou, sem ela, a última tag `vX.Y.Z` do projeto
+   (`git describe --tags --abbrev=0 --match 'v[0-9]*'`), sem o `v`; tem de
+   ser SemVer, e sem nenhuma das duas o script recusa.
 3. Exige `docker buildx` com um builder que conheça todas as `PLATFORMS`
    (padrão `linux/amd64,linux/arm64`), senão recusa antes do primeiro build.
-4. `COMMIT` = `git rev-parse HEAD`, com `-sujo` se a árvore tiver alteração
-   não commitada (o build sai do disco); `BUILD_DATE` em UTC.
-5. **Uma confirmação** (`[s/N]`) mostrando commit, plataformas e imagens, com
-   aviso de árvore suja.
+4. O build sai dos arquivos do disco; `BUILD_DATE` em UTC. Nem a tag nem os
+   labels da imagem levam o commit.
+5. **Uma confirmação** (`[s/N]`) mostrando versão, plataformas e imagens.
 6. Laço de build: `docker buildx build --platform ... --build-arg
-   VERSION/COMMIT/BUILD_DATE --label org.opencontainers.image.version/revision
+   VERSION/BUILD_DATE --label org.opencontainers.image.version
    -t <imagem>:<versão> --push apps/<fonte>/<tipo>` — só a tag de versão.
 7. Só depois de **todas** publicadas, a `latest` anda:
    `docker buildx imagetools create -t <imagem>:latest <imagem>:<versão>`

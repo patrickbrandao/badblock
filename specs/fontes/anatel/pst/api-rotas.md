@@ -242,8 +242,8 @@ As prestadoras cuja razão social **ou** nome fantasia contém o trecho `q`,
 sem diferenciar maiúsculas (`ILIKE`), em ordem de razão social e CNPJ (a
 collation do banco — [api.md](api.md#dados-servidos)), com no máximo
 `limit` itens, sem paginação. Não olha CNPJ, cidade nem serviço (para o
-CNPJ, use `/provider`). As regras de `q` são as da `/asnames/search`
-([asnames](../../asnames/api-rotas.md#get-asnamessearchqtexto)).
+CNPJ, use `/provider`). As regras de `q` são as da `/ripe/asnames/search`
+([ripe/asnames](../../ripe/asnames/api-rotas.md#get-asnamessearchqtexto)).
 
 - `q`: vale o primeiro, se vier repetido. A normalização vem antes de tudo,
   nesta ordem:

@@ -90,11 +90,11 @@ titular), das colunas de mesmo nome ([dados.md](dados.md#rir_asn)):
 `GET <b>/asn/{asn}`: o **registro** do arquivo que contém o ASN.
 
 - `asn`: número decimal de 0 a 4294967295, com ou sem o prefixo `AS` em
-  qualquer caixa (`61613`, `AS61613`, `as61613`, `As61613`); zeros à
-  esquerda valem (`061613`). Sinal, espaço, `AS` sozinho ou número acima do
+  qualquer caixa (`61610`, `AS61610`, `as61610`, `As61610`); zeros à
+  esquerda valem (`061610`). Sinal, espaço, `AS` sozinho ou número acima do
   limite: 400 `ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS`.
 - Chave `asn:<n>`, com o número sem o `AS` e sem zeros à esquerda:
-  `/asn/61613`, `/v1/asn/AS61613` e `/asn/061613` são a mesma consulta.
+  `/asn/61610`, `/v1/asn/AS61610` e `/asn/061610` são a mesma consulta.
 - O registro é o de maior `asn_start` ≤ ASN, se o `asn_end` dele for ≥ ASN
   (as faixas não se sobrepõem na fonte). Sem ele — ASN de outro RIR ou num
   buraco entre faixas —, 404 `AS<n> não consta no arquivo do RIR <Title>`.
@@ -113,11 +113,11 @@ titular), das colunas de mesmo nome ([dados.md](dados.md#rir_asn)):
 `GET <b>/ip/{ip}`: o bloco **mais específico** do arquivo que contém o IP.
 
 - `ip`: IPv4 ou IPv6 que `netip.ParseAddr` lê, sem zona (`fe80::1%25eth0`)
-  e, no IPv4, sem zeros à esquerda (`045.171.61.10`); fora disso, 400
+  e, no IPv4, sem zeros à esquerda (`187.087.29.10`); fora disso, 400
   `endereço IP inválido`. IPv4 mapeado em IPv6 (`::ffff:a.b.c.d`) vira IPv4.
 - Chave `ip:<ip>`, com o endereço normalizado: o IPv4 mapeado vira IPv4 e o
   IPv6 vai na forma canônica, em minúsculas e comprimida
-  (`/ip/2804:5964:0:0::1` → `ip:2804:5964::1`).
+  (`/ip/2804:8ae0:0:0::1` → `ip:2804:8ae0::1`).
 - Consulta: o bloco de maior máscara com `prefix >>= <ip>/32` (ou `/128`).
   Sem bloco: 404 `<ip> não pertence a nenhum bloco no arquivo do RIR <Title>`,
   com o IP normalizado.
@@ -148,11 +148,11 @@ prefixo pedido.
 
 - `ip`: como em [`/ip`](#ip), e o IPv4 mapeado vira IPv4 **antes** de conferir
   o tamanho. `len`: inteiro (o que `strconv.Atoi` lê: `+22` e `022` valem) de
-  0 a 32 no IPv4 e de 0 a 128 no IPv6 — `::ffff:45.171.60.0/22` consulta
-  `45.171.60.0/22`, e `::ffff:45.171.60.0/120` é 400. Mensagens:
+  0 a 32 no IPv4 e de 0 a 128 no IPv6 — `::ffff:187.87.28.0/22` consulta
+  `187.87.28.0/22`, e `::ffff:187.87.28.0/120` é 400. Mensagens:
   `endereço IP inválido` e `tamanho de prefixo inválido`.
-- Os bits de host são zerados (`/prefix/45.171.61.9/24` consulta
-  `45.171.61.0/24`); chave `prefix:<cidr>`, com o CIDR normalizado.
+- Os bits de host são zerados (`/prefix/187.87.29.9/24` consulta
+  `187.87.29.0/24`); chave `prefix:<cidr>`, com o CIDR normalizado.
 - Consulta: o bloco de maior máscara com `prefix >>= <cidr>` (um bloco menor
   que o pedido não conta). Sem bloco: 404
   `<cidr> não está contido em nenhum bloco no arquivo do RIR <Title>`, com o
@@ -314,7 +314,7 @@ iguais nos cinco — ou tirados do arquivo real.
 
 | Arquivo | Casos |
 |---|---|
-| `httpapi_test.go` | store falso com AS28003–AS28005 (available) e AS61613, `45.171.60.0/22`, `200.192.152.0/22` e `2804:5964::/32` do titular `258500`, mais o que nem todo RIR tem: `62.122.208.0` + 1280 em `/22` + `/24` (`ZZ`, reserved) e o titular `A92E1062` com três blocos (`HK`, `CN`, `CN`); versão `0192-v1`; `BASE_PATH` `rir.BasePath + "/"`. `TestASN` (as quatro formas, `/v1`, faixa, `null`s), `TestErrors` (400 e 404 de cada rota, `/v2`, rota inexistente, fora do caminho de base; o 404 cita `rir.Title` e traz o aviso do titular só com `OpaqueIDChangesDaily`), `TestIPAndPrefix` (IPv4, mapeado, IPv6, pedaço de registro dividido, bits de host, `exact`), `TestHolder` e `TestHolderCountryTie` (contagens, `[]`, dois países, empate `CA`/`US`, sem país), `TestHead` (servidor HTTP de verdade), `TestCacheAndETag` (`MISS` e `HIT` pela `/v1` com uma consulta só, chave `badblock:api-<rir>:0192-v1:asn:61613`, 304 com o ETag, sem `W/`, numa lista e `*` sem consultar, 404 fora do cache), `TestCacheDisabledBypass`, `TestNotReady`, `TestStoreFailures` (503 e 504 nas consultas e na meta, fora do cache), `TestPanicIsRecovered`, `TestStatus` (ok, sem cache, starting, degraded e error, GET e POST, `/health` e `/status`; `ping`; `/v1/ping` 404), `TestCORSAndHeaders`, `TestIndexMetaAndRedirect` (índice com e sem `/v1`, 301, meta com e sem dados) e `TestHolderAcceptsEveryRIRFormat` |
+| `httpapi_test.go` | store falso com AS28003–AS28005 (available) e AS61610, `187.87.28.0/22`, `200.225.48.0/21` e `2804:8ae0::/32` do titular `258500`, mais o que nem todo RIR tem: `62.122.208.0` + 1280 em `/22` + `/24` (`ZZ`, reserved) e o titular `A92E1062` com três blocos (`HK`, `CN`, `CN`); versão `0192-v1`; `BASE_PATH` `rir.BasePath + "/"`. `TestASN` (as quatro formas, `/v1`, faixa, `null`s), `TestErrors` (400 e 404 de cada rota, `/v2`, rota inexistente, fora do caminho de base; o 404 cita `rir.Title` e traz o aviso do titular só com `OpaqueIDChangesDaily`), `TestIPAndPrefix` (IPv4, mapeado, IPv6, pedaço de registro dividido, bits de host, `exact`), `TestHolder` e `TestHolderCountryTie` (contagens, `[]`, dois países, empate `CA`/`US`, sem país), `TestHead` (servidor HTTP de verdade), `TestCacheAndETag` (`MISS` e `HIT` pela `/v1` com uma consulta só, chave `badblock:api-<rir>:0192-v1:asn:61610`, 304 com o ETag, sem `W/`, numa lista e `*` sem consultar, 404 fora do cache), `TestCacheDisabledBypass`, `TestNotReady`, `TestStoreFailures` (503 e 504 nas consultas e na meta, fora do cache), `TestPanicIsRecovered`, `TestStatus` (ok, sem cache, starting, degraded e error, GET e POST, `/health` e `/status`; `ping`; `/v1/ping` 404), `TestCORSAndHeaders`, `TestIndexMetaAndRedirect` (índice com e sem `/v1`, 301, meta com e sem dados) e `TestHolderAcceptsEveryRIRFormat` |
 | `openapi_test.go` | `TestOpenAPIMatchesRoutes`, `TestOpenAPIDocument` e `TestOpenAPIRoute`, com as regras de [../../padroes/openapi.md](../../padroes/openapi.md#teste) (a porta vem do `PORT` do `Makefile`) |
 | `config_test.go`, `cache_test.go`, `dataset_test.go`, `realip_test.go` | padrões (`/<rir>`, 8080, 1 h, 50 ms), normalização do `BASE_PATH`, precedência, inválidos (sem `POSTGRES_URL`, `BASE_PATH=/`, porta 0, TTL −1, proxy `lixo`, formato `xml`), `--help` com toda opção e variável e sem `%!`; disjuntor (3 falhas no teste) e `Noop`; releitura da versão (erro mantém a conhecida) e `Run`; IP real (direto, via Traefik, `X-Forwarded-For` forjado à esquerda, `X-Real-IP`, inválido, mapeado; `/33` e `Forwarded` recusados) |
 | `store_integration_test.go` (`make test-int`) | PG18 (`postgres:18-trixie`, banco `badblock`, usuário `postgres`, senha `pg`) com o `migrate:up` de `central/` e `<rir>/` e um seed: o recorte do modelo (titulares `258500` e `130343`, faixas available), um registro dividido, um bloco aninhado (`150.165.10.0/24`, titular `999`, dentro de `150.165.0.0/16`), `ZZ`, a faixa `4294967294` + 2 e o hex maiúsculo `F367B216`; duas execuções aplicadas e uma recusada. `TestQueries`: sem carga (`nil`), `Dataset` (a última aplicada), `Job`, `ASN` (início, meio e fim de faixa; fora), `Covering` (exato, aninhado, dividido, IPv6, fora, `::/0`), `Holder` (ordem, só blocos, `F367B216`/`f367b216`/`F367b216`, inexistentes) e contexto cancelado |
@@ -346,7 +346,7 @@ saída 1. Com ele:
    cabe em 1/10 dos 8 MiB do cache.
 5. Média de 500 `/ip` e de 500 `/asn` aleatórios (ASN abaixo de 400.000), sem
    cache.
-6. `EXPLAIN` das consultas por ASN (com o AS61613 fixo; o plano não depende
+6. `EXPLAIN` das consultas por ASN (com o AS61610 fixo; o plano não depende
    dele), por IP e por titular nas duas tabelas: tem de usar índice (`Index`
    ou `Bitmap`).
 
@@ -400,12 +400,12 @@ prontos ([collector.md](collector.md#clonar-o-coletor-para-outro-rir)):
    (parâmetros, cabeçalhos e respostas) pelos mesmos, inclusive os erros (o
    404 de ASN com um ASN que não é do RIR: `AS1` existe na ARIN), o ETag de
    exemplo e os textos que citam um exemplo da LACNIC: as descrições dos
-   parâmetros `asn` (`61613`, `AS61613` e `as61613`) e `ip` do `/prefix`
-   (`45.171.61.9/24` consulta `45.171.61.0/24`), o fim da descrição do
-   `/prefix` (`/prefix/2804:5964::/32`), as do cabeçalho `ETag`
-   (`/lacnic/asn/61613` e `/lacnic/v1/asn/AS61613`) e do `IPPrefix`
-   (`45.171.60.0/22`, `2804:5964::/32`) e os `summary` dos exemplos, inclusive
-   o `len` do `BadRequest` (`/prefix/45.171.60.0/33`) e o `faixa`
+   parâmetros `asn` (`61610`, `AS61610` e `as61610`) e `ip` do `/prefix`
+   (`187.87.29.9/24` consulta `187.87.29.0/24`), o fim da descrição do
+   `/prefix` (`/prefix/2804:8ae0::/32`), as do cabeçalho `ETag`
+   (`/lacnic/asn/61610` e `/lacnic/v1/asn/AS61610`) e do `IPPrefix`
+   (`187.87.28.0/22`, `2804:8ae0::/32`) e os `summary` dos exemplos, inclusive
+   o `len` do `BadRequest` (`/prefix/187.87.28.0/33`) e o `faixa`
    (`/asn/28004`), que só vale num RIR com faixas.
 5. **Sub-agente** `.claude/agents/api-<rir>.md`, no molde do `api-lacnic`,
    sem a parte de modelo.

@@ -5,9 +5,9 @@ IP brasileiros que o NIC.br publica, servida abaixo de `/cgibr`. Faz par com
 [`collector-cgibr`](../collector/) na fonte `cgibr`.
 
 ```bash
-curl https://api.badblock.net.br/cgibr/asn/61613
-curl https://api.badblock.net.br/cgibr/v1/ip/45.171.61.10
-curl https://api.badblock.net.br/cgibr/document/08030063000100
+curl https://api.badblock.net.br/cgibr/asn/61610
+curl https://api.badblock.net.br/cgibr/v1/ip/187.87.29.10
+curl https://api.badblock.net.br/cgibr/document/35980592000130
 curl https://api.badblock.net.br/cgibr/openapi.yaml
 ```
 

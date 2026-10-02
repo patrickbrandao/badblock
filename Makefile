@@ -29,7 +29,7 @@ network: ## Cria as redes Docker externas (badblock e a do Traefik)
 
 up: env network ## Sobe o stack inteiro (compila as imagens locais)
 	$(COMPOSE) up -d --build
-	@for s in cgibr:8101 afrinic:8102 apnic:8103 arin:8104 lacnic:8105 ripencc:8106 iana:8107 asnames:8108 roothints:8109 rootzone:8110 rootanchors:8111 anatel/pst:8112; do \
+	@for s in cgibr:8101 afrinic:8102 apnic:8103 arin:8104 lacnic:8105 ripencc:8106 iana:8107 ripe/asnames:8108 roothints:8109 rootzone:8110 rootanchors:8111 anatel/pst:8112; do \
 		f=$${s%%:*}; p=$$(grep -s "^API_$$(echo $$f | tr a-z/ A-Z_)_HOST_PORT=" .env | cut -d= -f2 | grep . || echo $${s#*:}); \
 		printf '  api-%-11s http://127.0.0.1:%s/%s/\n' $$(echo $$f | tr / -) $$p $$f; done
 	@for s in www:8201; do \

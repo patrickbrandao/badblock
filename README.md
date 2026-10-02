@@ -16,19 +16,19 @@ caminho próprio no host da API.
 | LACNIC — delegações de ASNs e blocos (América Latina e Caribe) | [`collector-lacnic`](apps/lacnic/collector/) | [`api-lacnic`](apps/lacnic/api/) em `/lacnic/` |
 | RIPE NCC — delegações de ASNs e blocos (Europa, Oriente Médio, Ásia Central) | [`collector-ripencc`](apps/ripencc/collector/) | [`api-ripencc`](apps/ripencc/api/) em `/ripencc/` |
 | IANA — blocos por RIR, uso especial (bogons) e servidores RDAP | [`collector-iana`](apps/iana/collector/) | [`api-iana`](apps/iana/api/) em `/iana/` |
-| RIPE NCC `asn.txt` — nome e país de todos os ASNs alocados | [`collector-asnames`](apps/asnames/collector/) | [`api-asnames`](apps/asnames/api/) em `/asnames/` |
+| RIPE NCC `asn.txt` — nome e país de todos os ASNs alocados | [`collector-ripe-asnames`](apps/ripe/asnames/collector/) | [`api-ripe-asnames`](apps/ripe/asnames/api/) em `/ripe/asnames/` |
 | InterNIC `named.root` — nomes e endereços dos 13 servidores raiz do DNS | [`collector-roothints`](apps/roothints/collector/) | [`api-roothints`](apps/roothints/api/) em `/roothints/` |
 | InterNIC `root.zone` — a zona raiz do DNS: TLDs, servidores, glue e DS | [`collector-rootzone`](apps/rootzone/collector/) | [`api-rootzone`](apps/rootzone/api/) em `/rootzone/` |
 | IANA `root-anchors.xml` — âncoras de confiança DNSSEC da raiz | [`collector-rootanchors`](apps/rootanchors/collector/) | [`api-rootanchors`](apps/rootanchors/api/) em `/rootanchors/` |
 | Anatel — prestadoras de serviços de telecomunicações (CNPJ) e serviços notificados (SCM, STFC, SMP…) | [`collector-anatel-pst`](apps/anatel/pst/collector/) | [`api-anatel-pst`](apps/anatel/pst/api/) em `/anatel/pst/` |
 
 ```bash
-curl https://api.badblock.net.br/cgibr/asn/61613
-curl https://api.badblock.net.br/lacnic/ip/45.171.61.10
+curl https://api.badblock.net.br/cgibr/asn/61610
+curl https://api.badblock.net.br/lacnic/ip/187.87.29.10
 curl https://api.badblock.net.br/arin/asn/7018
 curl https://api.badblock.net.br/ripencc/prefix/193.0.0.0/21
 curl https://api.badblock.net.br/iana/ip/10.0.0.1
-curl https://api.badblock.net.br/asnames/asn/15169
+curl https://api.badblock.net.br/ripe/asnames/asn/15169
 curl https://api.badblock.net.br/roothints/server/K.ROOT-SERVERS.NET.
 curl https://api.badblock.net.br/rootzone/tld/br
 curl https://api.badblock.net.br/rootanchors/key/20326

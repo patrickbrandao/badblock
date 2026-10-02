@@ -159,8 +159,8 @@ valor:
 O SQL que [dados.md](dados.md#consultas-da-api-anatel-pst) lista (dono: o
 coletor) e o que é da API:
 
-- **`plan_cache_mode = force_custom_plan`** no pool, como na `api-asnames`
-  ([asnames](../../asnames/api.md#consultas-e-planos)) — difere do padrão,
+- **`plan_cache_mode = force_custom_plan`** no pool, como na `api-ripe-asnames`
+  ([ripe/asnames](../../ripe/asnames/api.md#consultas-e-planos)) — difere do padrão,
   que não mexe no planejador. O pgx prepara as consultas e, depois de 5
   execuções, o Postgres pode trocar para um plano genérico, que não vê o
   termo do `ILIKE` (deixaria de usar os índices trigram) nem o filtro de UF

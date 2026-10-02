@@ -34,6 +34,6 @@ A `api-lacnic` serve as tabelas `lacnic_*` abaixo de `/lacnic/`: registro que
 contém um ASN, bloco mais específico de um IP ou prefixo, recursos de um
 titular e o estado dos dados. É o modelo das APIs de RIR: rotas, validações,
 cache, manifesto, testes e a clonagem estão em [../rir/api.md](../rir/api.md);
-[api.md](api.md) traz os valores da LACNIC (porta 8105, `SMOKE_ASN` 61613),
+[api.md](api.md) traz os valores da LACNIC (porta 8105, `SMOKE_ASN` 61610),
 as respostas reais do arquivo de 2026-09-28, os ETags, o `--help` e as
 medições.

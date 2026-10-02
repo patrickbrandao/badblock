@@ -223,7 +223,7 @@ paths:
                       - name: c.dns.br
                         ttl: 172800
                         ipv4:
-                          - address: 200.192.233.10
+                          - address: 200.225.233.10
                             ttl: 172800
                         ipv6:
                           - address: '2001:12f8:a::10'

@@ -189,7 +189,7 @@ func TestRealFile(t *testing.T) {
 
 	// As consultas usam índice.
 	for _, q := range []string{
-		"EXPLAIN SELECT * FROM ripencc_asn WHERE asn_start <= 61613 ORDER BY asn_start DESC LIMIT 1",
+		"EXPLAIN SELECT * FROM ripencc_asn WHERE asn_start <= 61610 ORDER BY asn_start DESC LIMIT 1",
 		"EXPLAIN SELECT * FROM ripencc_prefix WHERE prefix >>= '" + ip4 + "'::cidr ORDER BY masklen(prefix) DESC LIMIT 1",
 		"EXPLAIN SELECT * FROM ripencc_asn WHERE opaque_id = '" + holder + "' ORDER BY asn_start",
 		"EXPLAIN SELECT * FROM ripencc_prefix WHERE opaque_id = '" + holder + "' ORDER BY family, prefix",

@@ -579,7 +579,7 @@ func TestErrors(t *testing.T) {
 		base + "/provider/00000000000000":              404,
 		base + "/provider/0255815700016":               400, // 13 dígitos
 		base + "/provider/025581570001620":             400, // 15 dígitos
-		base + "/provider/08030063":                    400, // 8 dígitos: não é CNPJ
+		base + "/provider/35980592":                    400, // 8 dígitos: não é CNPJ
 		base + "/provider/abc":                         400,
 		base + "/provider/02.558.157/0001-62":          404, // a barra sem %2F vira outro caminho
 		base + "/service/999":                          404,

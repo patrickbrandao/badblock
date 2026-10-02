@@ -57,7 +57,7 @@ export const APIS = [
   rir({
     slug: 'lacnic', name: 'LACNIC', region: 'América Latina e Caribe',
     file: 'https://ftp.lacnic.net/pub/stats/lacnic/delegated-lacnic-extended-latest',
-    ex: { asn: '61613', ip: '45.171.61.10', prefix: '45.171.61.0/24', holder: '258500' },
+    ex: { asn: '61605', ip: '179.63.179.10', prefix: '179.63.179.0/24', holder: '258500' },
   }),
   rir({
     slug: 'ripencc', name: 'RIPE NCC', region: 'Europa, Oriente Médio e Ásia Central',
@@ -79,7 +79,7 @@ export const APIS = [
     data: ['Faixas de ASN por RIR', 'Blocos IPv4 /8 e IPv6 unicast', 'Endereços e ASNs de uso especial (bogons)', 'Bootstrap RDAP'],
     source: 'https://www.iana.org/numbers',
     routes: [
-      { path: '/iana/asn/{asn}', desc: 'A faixa da IANA que contém o ASN, se é de uso especial e o servidor RDAP.', example: '/iana/asn/61613' },
+      { path: '/iana/asn/{asn}', desc: 'A faixa da IANA que contém o ASN, se é de uso especial e o servidor RDAP.', example: '/iana/asn/61605' },
       { path: '/iana/ip/{ip}', desc: 'O bloco que contém o endereço, os registros de uso especial, o RDAP e se é bogon.', example: '/iana/ip/10.0.0.1' },
       { path: '/iana/prefix/{ip}/{len}', desc: 'O mesmo para um prefixo.', example: '/iana/prefix/2001:db8::/48' },
       { path: '/iana/asns', desc: 'Todas as faixas de ASN.', example: '/iana/asns' },
@@ -90,8 +90,8 @@ export const APIS = [
     ],
   },
   {
-    slug: 'asnames',
-    path: '/asnames',
+    slug: 'ripe/asnames',
+    path: '/ripe/asnames',
     name: 'Nomes de AS',
     group: 'rir',
     menuDesc: 'Nome e país de todos os ASNs alocados',
@@ -103,10 +103,10 @@ export const APIS = [
     data: ['Descrição de cada ASN, como publicada', 'Handle, nome e país derivados', 'Listas por país e por handle', 'Busca por texto'],
     source: 'https://ftp.ripe.net/ripe/asnames/asn.txt',
     routes: [
-      { path: '/asnames/asn/{asn}', desc: 'Descrição, handle, nome e país do ASN.', example: '/asnames/asn/15169' },
-      { path: '/asnames/country/{cc}', desc: 'Todos os ASNs de um país (código de duas letras).', example: '/asnames/country/BR' },
-      { path: '/asnames/handle/{handle}', desc: 'Os ASNs com esse handle (o handle não é único).', example: '/asnames/handle/google' },
-      { path: '/asnames/search?q={texto}', desc: 'Busca na descrição: termo de 3 a 100 caracteres, até 100 resultados.', example: '/asnames/search?q=google' },
+      { path: '/ripe/asnames/asn/{asn}', desc: 'Descrição, handle, nome e país do ASN.', example: '/ripe/asnames/asn/15169' },
+      { path: '/ripe/asnames/country/{cc}', desc: 'Todos os ASNs de um país (código de duas letras).', example: '/ripe/asnames/country/BR' },
+      { path: '/ripe/asnames/handle/{handle}', desc: 'Os ASNs com esse handle (o handle não é único).', example: '/ripe/asnames/handle/google' },
+      { path: '/ripe/asnames/search?q={texto}', desc: 'Busca na descrição: termo de 3 a 100 caracteres, até 100 resultados.', example: '/ripe/asnames/search?q=google' },
     ],
   },
   {
@@ -123,10 +123,10 @@ export const APIS = [
     data: ['ASNs de titulares brasileiros', 'Blocos IPv4 e IPv6 de cada ASN', 'Nome e documento (CNPJ) do titular'],
     source: 'https://ftp.registro.br/pub/numeracao/origin/nicbr-asn-blk-latest.txt',
     routes: [
-      { path: '/cgibr/asn/{asn}', desc: 'O titular do ASN e os blocos dele.', example: '/cgibr/asn/61613' },
-      { path: '/cgibr/ip/{ip}', desc: 'O bloco que contém o endereço e o seu titular.', example: '/cgibr/ip/45.171.61.10' },
-      { path: '/cgibr/prefix/{ip}/{len}', desc: 'O bloco que contém o prefixo e o seu titular.', example: '/cgibr/prefix/200.192.152.0/24' },
-      { path: '/cgibr/document/{doc}', desc: 'Os ASNs e blocos de um documento (CNPJ).', example: '/cgibr/document/08030063000100' },
+      { path: '/cgibr/asn/{asn}', desc: 'O titular do ASN e os blocos dele.', example: '/cgibr/asn/61605' },
+      { path: '/cgibr/ip/{ip}', desc: 'O bloco que contém o endereço e o seu titular.', example: '/cgibr/ip/179.63.178.0' },
+      { path: '/cgibr/prefix/{ip}/{len}', desc: 'O bloco que contém o prefixo e o seu titular.', example: '/cgibr/prefix/179.63.179.0/24' },
+      { path: '/cgibr/document/{doc}', desc: 'Os ASNs e blocos de um documento (CNPJ).', example: '/cgibr/document/37927622000170' },
       { path: '/cgibr/asns', desc: 'A lista de todos os ASNs do arquivo.', example: '/cgibr/asns' },
     ],
   },

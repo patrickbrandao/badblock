@@ -62,7 +62,8 @@ bastam para reconstruir o projeto se o código for apagado
 | [fontes/lacnic/](fontes/lacnic/README.md) | LACNIC (RIR, modelo da família) |
 | [fontes/ripencc/](fontes/ripencc/README.md) | RIPE NCC (RIR) |
 | [fontes/iana/](fontes/iana/README.md) | IANA: blocos por RIR, uso especial, bootstrap RDAP |
-| [fontes/asnames/](fontes/asnames/README.md) | RIPE NCC `asn.txt`: nomes de AS |
+| [fontes/ripe/](fontes/ripe/README.md) | RIPE NCC (site): os conjuntos de dados dele fora da família RIR |
+| [fontes/ripe/asnames/](fontes/ripe/asnames/README.md) | RIPE NCC `asn.txt`: nomes de AS |
 | [fontes/roothints/](fontes/roothints/README.md) | InterNIC `named.root`: servidores raiz do DNS |
 | [fontes/rootzone/](fontes/rootzone/README.md) | InterNIC `root.zone`: zona raiz do DNS |
 | [fontes/rootanchors/](fontes/rootanchors/README.md) | IANA `root-anchors.xml`: âncoras DNSSEC da raiz |

@@ -19,8 +19,8 @@ import (
 	"github.com/patrickbrandao/badblock/apps/cgibr/api/internal/store"
 )
 
-var tmsoft = store.ASNBrief{ASN: 61613, Name: "TMSoft Solucoes em Informatica Ltda",
-	Document: "08.030.063/0001-00", DocumentDigits: "08030063000100"}
+var elea = store.ASNBrief{ASN: 61610, Name: "ELEA DATA CENTERS",
+	Document: "35.980.592/0001-30", DocumentDigits: "35980592000130"}
 
 type fakeStore struct {
 	mu      sync.Mutex
@@ -44,34 +44,34 @@ func (f *fakeStore) Job(context.Context) (*store.Job, error) {
 }
 func (f *fakeStore) ASN(_ context.Context, asn int64) (*store.ASN, error) {
 	f.count()
-	if asn != 61613 {
+	if asn != 61610 {
 		return nil, store.ErrNotFound
 	}
-	return &store.ASN{ASNBrief: tmsoft, Prefixes: []netip.Prefix{
-		netip.MustParsePrefix("45.171.60.0/22"), netip.MustParsePrefix("200.192.152.0/22"),
-		netip.MustParsePrefix("2804:5964::/32"),
+	return &store.ASN{ASNBrief: elea, Prefixes: []netip.Prefix{
+		netip.MustParsePrefix("187.87.28.0/22"), netip.MustParsePrefix("200.225.48.0/21"),
+		netip.MustParsePrefix("2804:8ae0::/32"),
 	}}, nil
 }
 func (f *fakeStore) Covering(_ context.Context, p netip.Prefix) (*store.Match, error) {
 	f.count()
-	for _, s := range []string{"45.171.60.0/22", "2804:5964::/32"} {
+	for _, s := range []string{"187.87.28.0/22", "2804:8ae0::/32"} {
 		reg := netip.MustParsePrefix(s)
 		if reg.Bits() <= p.Bits() && reg.Contains(p.Addr()) {
-			return &store.Match{Prefix: reg, ASN: tmsoft}, nil
+			return &store.Match{Prefix: reg, ASN: elea}, nil
 		}
 	}
 	return nil, store.ErrNotFound
 }
 func (f *fakeStore) ByDocument(_ context.Context, digits string) ([]store.ASNBrief, error) {
 	f.count()
-	if digits == tmsoft.DocumentDigits {
-		return []store.ASNBrief{tmsoft}, nil
+	if digits == elea.DocumentDigits {
+		return []store.ASNBrief{elea}, nil
 	}
 	return nil, nil
 }
 func (f *fakeStore) ListASNs(context.Context) ([]store.ASNBrief, error) {
 	f.count()
-	return []store.ASNBrief{tmsoft, {ASN: 275689, Name: "ISC", Document: "10996639", DocumentDigits: "10996639"}}, nil
+	return []store.ASNBrief{elea, {ASN: 275689, Name: "ISC", Document: "10996639", DocumentDigits: "10996639"}}, nil
 }
 
 type fixedView struct{ snap dataset.Snapshot }
@@ -126,7 +126,7 @@ func do(h http.Handler, method, path string, hdr ...string) *httptest.ResponseRe
 
 func TestASN(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
-	for _, p := range []string{"/cgibr/asn/61613", "/cgibr/v1/asn/61613", "/cgibr/asn/AS61613", "/cgibr/asn/as61613"} {
+	for _, p := range []string{"/cgibr/asn/61610", "/cgibr/v1/asn/61610", "/cgibr/asn/AS61610", "/cgibr/asn/as61610"} {
 		rec := do(h, "GET", p)
 		if rec.Code != 200 {
 			t.Fatalf("%s: %d %s", p, rec.Code, rec.Body)
@@ -135,7 +135,7 @@ func TestASN(t *testing.T) {
 		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 			t.Fatal(err)
 		}
-		if got.ASN != 61613 || got.DocumentType != "cnpj" || len(got.Prefixes.IPv4) != 2 || len(got.Prefixes.IPv6) != 1 {
+		if got.ASN != 61610 || got.DocumentType != "cnpj" || len(got.Prefixes.IPv4) != 2 || len(got.Prefixes.IPv6) != 1 {
 			t.Errorf("%s: %+v", p, got)
 		}
 		if got.Dataset.Version != "0192-v1" {
@@ -152,13 +152,13 @@ func TestErrors(t *testing.T) {
 		"/cgibr/asn/4294967296":        400,
 		"/cgibr/ip/999.1.1.1":          400,
 		"/cgibr/ip/8.8.8.8":            404,
-		"/cgibr/prefix/45.171.60.0/33": 400,
+		"/cgibr/prefix/187.87.28.0/33": 400,
 		"/cgibr/document/123":          400,
 		"/cgibr/document/11111111":     404,
-		"/cgibr/v2/asn/61613":          404,
+		"/cgibr/v2/asn/61610":          404,
 		"/cgibr/nada":                  404,
 		"/outra-coisa":                 404,
-		"/asn/61613":                   404,
+		"/asn/61610":                   404,
 	}
 	for p, want := range cases {
 		rec := do(h, "GET", p)
@@ -174,24 +174,24 @@ func TestErrors(t *testing.T) {
 func TestIPAndPrefix(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
 
-	rec := do(h, "GET", "/cgibr/ip/45.171.61.10")
+	rec := do(h, "GET", "/cgibr/ip/187.87.29.10")
 	var ip IPResponse
 	_ = json.Unmarshal(rec.Body.Bytes(), &ip)
-	if rec.Code != 200 || ip.Prefix != "45.171.60.0/22" || ip.ASN.ASN != 61613 {
+	if rec.Code != 200 || ip.Prefix != "187.87.28.0/22" || ip.ASN.ASN != 61610 {
 		t.Errorf("ip = %d %+v", rec.Code, ip)
 	}
-	rec = do(h, "GET", "/cgibr/ip/2804:5964::1")
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "2804:5964::/32") {
+	rec = do(h, "GET", "/cgibr/ip/2804:8ae0::1")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "2804:8ae0::/32") {
 		t.Errorf("ipv6 = %d %s", rec.Code, rec.Body)
 	}
 
-	rec = do(h, "GET", "/cgibr/prefix/45.171.61.1/24")
+	rec = do(h, "GET", "/cgibr/prefix/187.87.29.1/24")
 	var p PrefixResponse
 	_ = json.Unmarshal(rec.Body.Bytes(), &p)
-	if rec.Code != 200 || p.Query != "45.171.61.0/24" || p.Prefix != "45.171.60.0/22" || p.Exact {
+	if rec.Code != 200 || p.Query != "187.87.29.0/24" || p.Prefix != "187.87.28.0/22" || p.Exact {
 		t.Errorf("prefix = %d %+v", rec.Code, p)
 	}
-	rec = do(h, "GET", "/cgibr/v1/prefix/45.171.60.0/22")
+	rec = do(h, "GET", "/cgibr/v1/prefix/187.87.28.0/22")
 	_ = json.Unmarshal(rec.Body.Bytes(), &p)
 	if !p.Exact {
 		t.Errorf("prefix exato = %+v", p)
@@ -200,11 +200,11 @@ func TestIPAndPrefix(t *testing.T) {
 
 func TestDocumentAcceptsFormatted(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, true)
-	for _, p := range []string{"/cgibr/document/08030063000100", "/cgibr/document/08.030.063%2F0001-00"} {
+	for _, p := range []string{"/cgibr/document/35980592000130", "/cgibr/document/35.980.592%2F0001-30"} {
 		rec := do(h, "GET", p)
 		var d DocumentResponse
 		_ = json.Unmarshal(rec.Body.Bytes(), &d)
-		if rec.Code != 200 || d.Count != 1 || d.ASNs[0].ASN != 61613 || d.DocumentType != "cnpj" {
+		if rec.Code != 200 || d.Count != 1 || d.ASNs[0].ASN != 61610 || d.DocumentType != "cnpj" {
 			t.Errorf("%s: %d %s", p, rec.Code, rec.Body)
 		}
 	}
@@ -224,12 +224,12 @@ func TestCacheAndETag(t *testing.T) {
 	st := &fakeStore{}
 	h, c := newAPI(t, st, true)
 
-	first := do(h, "GET", "/cgibr/asn/61613")
+	first := do(h, "GET", "/cgibr/asn/61610")
 	if first.Header().Get("X-Cache") != "MISS" {
 		t.Errorf("primeira = %s", first.Header().Get("X-Cache"))
 	}
 	// Versionada e sem versão compartilham o cache (mesmo conteúdo).
-	second := do(h, "GET", "/cgibr/v1/asn/61613")
+	second := do(h, "GET", "/cgibr/v1/asn/61610")
 	if second.Header().Get("X-Cache") != "HIT" || st.calls != 1 {
 		t.Errorf("segunda = %s, calls = %d", second.Header().Get("X-Cache"), st.calls)
 	}
@@ -245,14 +245,14 @@ func TestCacheAndETag(t *testing.T) {
 	if etag == "" || first.Header().Get("X-Dataset-Version") != "0192-v1" {
 		t.Fatalf("cabeçalhos = %v", first.Header())
 	}
-	if rec := do(h, "GET", "/cgibr/asn/61613", "If-None-Match", etag); rec.Code != http.StatusNotModified {
+	if rec := do(h, "GET", "/cgibr/asn/61610", "If-None-Match", etag); rec.Code != http.StatusNotModified {
 		t.Errorf("If-None-Match = %d", rec.Code)
 	}
 }
 
 func TestNotReady(t *testing.T) {
 	h, _ := newAPI(t, &fakeStore{}, false)
-	rec := do(h, "GET", "/cgibr/asn/61613")
+	rec := do(h, "GET", "/cgibr/asn/61610")
 	if rec.Code != 503 || !strings.Contains(rec.Body.String(), "dataset_not_ready") {
 		t.Errorf("sem dataset = %d %s", rec.Code, rec.Body)
 	}

@@ -22,18 +22,18 @@ linha, com `\n` no fim). Vêm de dois datasets:
 `first_seen` e `updated_at` do ASN contam desde a primeira carga **do banco**
 ([dados.md](dados.md#tabelas)): o exemplo é de um banco carregado pela
 primeira vez em 2026-09-28T23:19:10Z; no stack local de 2026-09-29, cujo
-banco foi carregado em 2026-09-28T23:54:26Z, o mesmo AS61613 responde esse
+banco foi carregado em 2026-09-28T23:54:26Z, o mesmo AS61610 responde esse
 horário.
 
 ## ASN — `GET /cgibr/asn/{asn}`
 
 - `{asn}`: número decimal de 0 a 4294967295, com ou sem o prefixo `AS` em
-  qualquer caixa (`61613`, `AS61613`, `as61613`, `aS61613`); zeros à esquerda
-  valem (`061613` é o 61613). O código tira o `AS` depois de passar para
+  qualquer caixa (`61610`, `AS61610`, `as61610`, `aS61610`); zeros à esquerda
+  valem (`061610` é o 61610). O código tira o `AS` depois de passar para
   maiúsculas e lê com `strconv.ParseUint(…, 10, 32)`: sinal (`+1`, `-1`),
   espaço, `AS` sozinho, letra ou valor acima de 32 bits → 400
   `ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS`.
-- Chave: `asn:<número>` em decimal, sem zeros à esquerda (`asn:61613`).
+- Chave: `asn:<número>` em decimal, sem zeros à esquerda (`asn:61610`).
 - 404: `AS<número> não consta no arquivo do NIC.br` (ex.: `AS1 não consta no arquivo do NIC.br`).
 - Manifesto: `getASN`, tag `dados`; respostas 200, 304, 400, 404, 503, 504, 500.
 
@@ -53,13 +53,13 @@ que se repete em `/ip`, `/prefix` e `/asns`.
 
 ```json
 {
-  "asn": 61613,
-  "name": "TMSoft Solucoes em Informatica Ltda",
-  "document": "08.030.063/0001-00",
+  "asn": 61610,
+  "name": "ELEA DATA CENTERS",
+  "document": "35.980.592/0001-30",
   "document_type": "cnpj",
   "prefixes": {
-    "ipv4": ["45.171.60.0/22", "200.192.152.0/22"],
-    "ipv6": ["2804:5964::/32"]
+    "ipv4": ["187.87.28.0/22", "200.225.48.0/21"],
+    "ipv6": ["2804:8ae0::/32"]
   },
   "first_seen": "2026-09-28T23:19:10Z",
   "updated_at": "2026-09-28T23:19:10Z",
@@ -76,11 +76,11 @@ com o titular brasileiro dos blocos) respondia `prefixes.ipv4` `[]` e
 Bloco mais específico do arquivo que contém o endereço.
 
 - `{ip}`: IPv4 ou IPv6 que `netip.ParseAddr` aceita, sem zona. Zona
-  (`fe80::1%25eth0`), IPv4 com zero à esquerda (`045.171.61.10`) ou texto
+  (`fe80::1%25eth0`), IPv4 com zero à esquerda (`187.087.29.10`) ou texto
   qualquer → 400 `endereço IP inválido`. IPv4 mapeado em IPv6
-  (`::ffff:45.171.61.10`) vira IPv4.
+  (`::ffff:187.87.29.10`) vira IPv4.
 - Chave: `ip:<endereço normalizado>` — IPv4 com pontos, IPv6 na forma curta
-  em minúsculas (`2804:5964:0:0::1` → `ip:2804:5964::1`). O campo `ip` da
+  em minúsculas (`2804:8ae0:0:0::1` → `ip:2804:8ae0::1`). O campo `ip` da
   resposta sai na mesma forma.
 - Consulta: o endereço como `/32` ou `/128` ([dados.md](dados.md#consultas-da-api-cgibr)).
 - 404: `<ip> não pertence a nenhum bloco do arquivo do NIC.br` (ex.: `8.8.8.8 não pertence a nenhum bloco do arquivo do NIC.br`).
@@ -95,9 +95,9 @@ Bloco mais específico do arquivo que contém o endereço.
 
 ```json
 {
-  "ip": "45.171.61.10",
-  "prefix": "45.171.60.0/22",
-  "asn": {"asn": 61613, "name": "TMSoft Solucoes em Informatica Ltda", "document": "08.030.063/0001-00", "document_type": "cnpj"},
+  "ip": "187.87.29.10",
+  "prefix": "187.87.28.0/22",
+  "asn": {"asn": 61610, "name": "ELEA DATA CENTERS", "document": "35.980.592/0001-30", "document_type": "cnpj"},
   "dataset": {"version": "01a0ea50-add2-7bcf-998a-a2e3b04b8cdc", "updated_at": "2026-09-28T23:19:10Z"}
 }
 ```
@@ -109,11 +109,11 @@ Bloco mais específico que contém o prefixo pedido (o próprio bloco conta).
 - `{ip}`: como em `/ip`, validado primeiro, com a mesma mensagem.
 - `{len}`: lido com `strconv.Atoi` (aceita sinal: `+24` vale 24); de 0 a 32
   para IPv4 — inclusive o mapeado, cujo tamanho já é contado no IPv4
-  (`::ffff:200.192.152.9/120` é recusado) — e de 0 a 128 para IPv6. Fora
+  (`::ffff:200.225.48.9/120` é recusado) — e de 0 a 128 para IPv6. Fora
   disso, ou não numérico → 400 `tamanho de prefixo inválido`.
-- Bits de host são zerados antes da consulta: `/prefix/200.192.152.9/24`
-  consulta `200.192.152.0/24`.
-- Chave: `prefix:<prefixo já zerado>` (`prefix:200.192.152.0/24`).
+- Bits de host são zerados antes da consulta: `/prefix/200.225.48.9/24`
+  consulta `200.225.48.0/24`.
+- Chave: `prefix:<prefixo já zerado>` (`prefix:200.225.48.0/24`).
 - 404: `<prefixo> não está contido em nenhum bloco do arquivo do NIC.br` (ex.: `8.8.8.0/24 não está contido em nenhum bloco do arquivo do NIC.br`).
 - Manifesto: `getPrefix`, tag `dados`; respostas 200, 304, 400, 404, 503, 504, 500.
 
@@ -127,15 +127,15 @@ Bloco mais específico que contém o prefixo pedido (o próprio bloco conta).
 
 ```json
 {
-  "query": "200.192.152.0/24",
-  "prefix": "200.192.152.0/22",
+  "query": "200.225.48.0/24",
+  "prefix": "200.225.48.0/21",
   "exact": false,
-  "asn": {"asn": 61613, "name": "TMSoft Solucoes em Informatica Ltda", "document": "08.030.063/0001-00", "document_type": "cnpj"},
+  "asn": {"asn": 61610, "name": "ELEA DATA CENTERS", "document": "35.980.592/0001-30", "document_type": "cnpj"},
   "dataset": {"version": "01a0ea50-add2-7bcf-998a-a2e3b04b8cdc", "updated_at": "2026-09-28T23:19:10Z"}
 }
 ```
 
-`/cgibr/prefix/45.171.60.0/22` e `/cgibr/prefix/2804:5964::/32` respondem o
+`/cgibr/prefix/187.87.28.0/22` e `/cgibr/prefix/2804:8ae0::/32` respondem o
 próprio bloco com `exact: true`.
 
 ## Documento — `GET /cgibr/document/{doc}`
@@ -145,11 +145,11 @@ ASNs de um titular, pelo documento.
 - `{doc}`: todo caractere que não é dígito é descartado; sobram 14 dígitos
   (CNPJ) ou 8 (identificador estrangeiro do NIC.br), senão → 400
   `documento inválido: use o CNPJ (14 dígitos) ou o identificador estrangeiro (8 dígitos)`.
-  Aceita só dígitos (`08030063000100`) ou o CNPJ formatado com a barra
-  codificada (`08.030.063%2F0001-00`). Com a barra sem codificar, o caminho
+  Aceita só dígitos (`35980592000130`) ou o CNPJ formatado com a barra
+  codificada (`35.980.592%2F0001-30`). Com a barra sem codificar, o caminho
   ganha um segmento e cai no 404 `rota inexistente; veja /cgibr/`. Como os
-  não dígitos são descartados, `abc08030063000100` também vale.
-- Chave: `doc:<dígitos>` (`doc:08030063000100`).
+  não dígitos são descartados, `abc35980592000130` também vale.
+- Chave: `doc:<dígitos>` (`doc:35980592000130`).
 - Consulta: `document_digits` igual, em ordem de ASN.
 - 404 (nenhum ASN): `nenhum ASN com esse documento no arquivo do NIC.br`.
 - Manifesto: `getDocument`, tag `dados`; respostas 200, 304, 400, 404, 503, 504, 500.
@@ -166,12 +166,12 @@ ASNs de um titular, pelo documento.
 
 ```json
 {
-  "document": "08.030.063/0001-00",
-  "document_digits": "08030063000100",
+  "document": "35.980.592/0001-30",
+  "document_digits": "35980592000130",
   "document_type": "cnpj",
-  "name": "TMSoft Solucoes em Informatica Ltda",
+  "name": "ELEA DATA CENTERS",
   "count": 1,
-  "asns": [{"asn": 61613, "name": "TMSoft Solucoes em Informatica Ltda"}],
+  "asns": [{"asn": 61610, "name": "ELEA DATA CENTERS"}],
   "dataset": {"version": "01a0ea50-add2-7bcf-998a-a2e3b04b8cdc", "updated_at": "2026-09-28T23:19:10Z"}
 }
 ```
@@ -204,7 +204,7 @@ Recorte (a lista real traz os 9.134 ASNs):
   "count": 9134,
   "asns": [
     {"asn": 174, "name": "COGENT BRASIL TELECOMUNICAÇÕES LTDA.", "document": "29.484.413/0001-70", "document_type": "cnpj"},
-    {"asn": 61613, "name": "TMSoft Solucoes em Informatica Ltda", "document": "08.030.063/0001-00", "document_type": "cnpj"}
+    {"asn": 61610, "name": "ELEA DATA CENTERS", "document": "35.980.592/0001-30", "document_type": "cnpj"}
   ],
   "dataset": {"version": "01a0ea50-add2-7bcf-998a-a2e3b04b8cdc", "updated_at": "2026-09-28T23:19:10Z"}
 }
@@ -339,7 +339,7 @@ mensagens reais:
 | `/ip` | 404 | `not_found` | `<ip> não pertence a nenhum bloco do arquivo do NIC.br` |
 | `/prefix` | 404 | `not_found` | `<prefixo> não está contido em nenhum bloco do arquivo do NIC.br` |
 | `/document` | 404 | `not_found` | `nenhum ASN com esse documento no arquivo do NIC.br` |
-| caminho inexistente ou método que a rota não aceita (ex.: `POST /cgibr/asn/61613`, `/cgibr/v2/asn/61613`) | 404 | `not_found` | `rota inexistente; veja /cgibr/` |
+| caminho inexistente ou método que a rota não aceita (ex.: `POST /cgibr/asn/61610`, `/cgibr/v2/asn/61610`) | 404 | `not_found` | `rota inexistente; veja /cgibr/` |
 | rotas de dados, antes da primeira carga | 503 | `dataset_not_ready` | `a primeira sincronização do collector-cgibr ainda não terminou; tente em alguns minutos` |
 | rotas de dados e `/meta` | 503 | `database_unavailable` | `banco de dados indisponível` |
 | rotas de dados e `/meta` | 504 | `timeout` | `a consulta demorou demais` |

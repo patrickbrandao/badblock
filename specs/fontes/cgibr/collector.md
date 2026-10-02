@@ -334,7 +334,7 @@ Unitários (`make test`; `parse` e `collector` usam a fixture de
 
 | Pacote | Teste | Confere |
 |---|---|---|
-| `parse` | `TestParseSample` | 11 ASNs, 52/7 blocos, zero avisos e descartes; AS61613 (nome, documento, os 3 blocos na ordem do arquivo); AS6125 sem blocos; AS275689 com `10996639`; nome UTF-8 do AS174 |
+| `parse` | `TestParseSample` | 11 ASNs, 52/7 blocos, zero avisos e descartes; AS61610 (nome, documento, os 3 blocos na ordem do arquivo); AS6125 sem blocos; AS275689 com `10996639`; nome UTF-8 do AS174 |
 | `parse` | `TestParseEdgeCases` | BOM, comentário, CRLF, linha vazia; bits de host; bloco repetido na linha e em outro ASN; bloco inválido (`lixo`) e campo vazio; ASN repetido em minúsculas (`as1`) somando blocos com o nome da primeira ocorrência; 100 linhas do mesmo ASN |
 | `parse` | `TestParseRejectsBrokenFile` | recusa: só comentário; separador `;`; ASN sem `AS` |
 | `parse` | `TestParseToleratesFewBadLines` | 1 linha ruim em 201 (0,5%) passa, com `Skipped = 1` |
@@ -357,10 +357,10 @@ Integração (`make test-int`): `TestApplyLifecycle` em `internal/store`, num
 1. banco vazio: nenhuma execução aplicada;
 2. carga da fixture: 11 ASNs e 59 blocos inseridos (70 alterações), `jobs`
    com `last_sync_at`, `last_check_at` e `consolidated = 0`, 52/7 por
-   `family`, `document_digits` do AS61613 = `08030063000100`;
+   `family`, `document_digits` do AS61610 = `35980592000130`;
 3. `consolidated = 1` (como a fase 2) e a mesma carga de novo: 0 alterações,
    versão nova, `consolidated` continua `1`;
-4. o AS6505 sai, o AS61613 muda de nome e passa `45.171.60.0/22` para o novo
+4. o AS6505 sai, o AS61610 muda de nome e passa `187.87.28.0/22` para o novo
    AS64500 (que traz também `2001:db8::/32`), com limite `0.2` (1 de 11 ASNs =
    9,1%): 1 ASN inserido, 1 alterado e 1 apagado; 1 bloco inserido e 1
    trocado; `consolidated` volta a `0`; o dono do bloco é o AS64500;

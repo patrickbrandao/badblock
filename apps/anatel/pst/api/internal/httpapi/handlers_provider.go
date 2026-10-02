@@ -110,7 +110,7 @@ func (a *API) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 // normalizeQuery tira os espaços das pontas, colapsa os internos e passa para
 // minúsculas; recusa UTF-8 inválido, caracteres de controle e termos fora de
-// SearchMinLen..SearchMaxLen caracteres (a regra da api-asnames).
+// SearchMinLen..SearchMaxLen caracteres (a regra da api-ripe-asnames).
 func normalizeQuery(raw string) (string, bool) {
 	q := strings.Join(strings.Fields(raw), " ")
 	if !cleanText(q) {

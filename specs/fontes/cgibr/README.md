@@ -40,10 +40,10 @@ Este `README.md` é do `collector-cgibr`, menos a seção "API", que é da
 
 A `api-cgibr` serve estes dados por HTTP (JSON), só leitura, e é dona de tudo
 abaixo de `/cgibr` no host da API: o ASN com titular e blocos
-(`https://api.badblock.net.br/cgibr/asn/61613`), o bloco que contém um IP ou
-prefixo (`/cgibr/v1/ip/45.171.61.10`, `/cgibr/prefix/200.192.152.0/24`), os
+(`https://api.badblock.net.br/cgibr/asn/61610`), o bloco que contém um IP ou
+prefixo (`/cgibr/v1/ip/187.87.29.10`, `/cgibr/prefix/200.225.48.0/24`), os
 ASNs de um CNPJ ou identificador estrangeiro
-(`/cgibr/document/08030063000100`) e a lista de todos os ASNs
+(`/cgibr/document/35980592000130`) e a lista de todos os ASNs
 (`/cgibr/asns`). É pública e sem chave (rate limit por IP no Traefik), usa o
 Valkey como cache opcional e serve o manifesto OpenAPI 3.1 em
 `/cgibr/openapi.yaml`, fora do versionamento. Valores, opções, manifesto e

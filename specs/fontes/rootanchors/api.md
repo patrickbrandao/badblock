@@ -9,7 +9,7 @@ padrões. Cada rota, com validações, campos, exemplos reais e mensagens de
 erro: [api-rotas.md](api-rotas.md). Tabelas e o SQL das consultas:
 [dados.md](dados.md#consultas-da-api-rootanchors); de onde vêm os campos:
 [fonte.md](fonte.md). Dono: sub-agente `api-rootanchors`. O código partiu da
-`api-asnames` (fonte única), com o `Makefile` e o teste do manifesto da
+`api-ripe-asnames` (fonte única), com o `Makefile` e o teste do manifesto da
 família RIR (`PORT` lido do `Makefile`).
 
 ## Valores desta fonte
@@ -28,7 +28,7 @@ família RIR (`PORT` lido do `Makefile`).
 | Cliente do Valkey | `ClientName` = `badblock-api-rootanchors` |
 | Cabeçalho `Server` | `badblock-api-rootanchors/<versão>` |
 | Pool pgx | `application_name = api-rootanchors` quando a `POSTGRES_URL` não traz outro; sem outro parâmetro (as consultas não têm termo livre) |
-| Pacotes | os do padrão, mais `internal/testdb` (o PG18 descartável dos testes de integração, como na `api-asnames`) |
+| Pacotes | os do padrão, mais `internal/testdb` (o PG18 descartável dos testes de integração, como na `api-ripe-asnames`) |
 | Arquivo real nos testes | a fixture do coletor (`apps/rootanchors/collector/testdata/root-anchors.xml`, o arquivo real inteiro) no `make test-int`; outro arquivo com `make test-real FILE=...` |
 
 Em `internal/httpapi`: `server.go` (`Handler`, a lista `dataRoutes`,

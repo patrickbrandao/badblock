@@ -131,7 +131,7 @@ Prefix,Designation,Date,WHOIS,RDAP,Status [1],Note
   `Multicast`, `Future use`, `IANA - …` e 17 blocos legados com o nome do
   titular (`Apple Computer Inc.`, `US-DOD`, `Daimler AG`…). **O RIR de cada
   bloco sai da coluna WHOIS** (`whois.arin.net` → `arin`). `45/8` é
-  "Administered by ARIN", mas a LACNIC delega partes dele (`45.171.60.0/22`):
+  "Administered by ARIN", mas a LACNIC delega partes dele (`187.87.28.0/22`):
   o RIR daqui é o da IANA, não o do bloco menor.
 - Os 35 `RESERVED` não têm WHOIS nem RDAP.
 
@@ -372,7 +372,9 @@ Um recorte real de cada arquivo (de 2026-09-28), com o nome do servidor: as
 linhas escolhidas têm os mesmos bytes do original (`CRLF`, aspas e quebras
 de linha dentro das células preservadas), e os JSONs têm a estrutura inteira
 com as 3 primeiras entradas de cada serviço (todas, quando há menos), na
-ordem publicada. Juntos cobrem os casos esquisitos: URLs coladas,
+ordem publicada — mais `187.0.0.0/8` no serviço da LACNIC do `ipv4.json`,
+que cobre o exemplo `187.87.28.1` dos testes (o `187/8` também está no
+recorte do `ipv4-address-space.csv`). Juntos cobrem os casos esquisitos: URLs coladas,
 "See Sub-registry", `000/8`, notas de rodapé, `N/A`, flags vazias, célula com
 dois blocos, notas e RFC com quebra de linha, `2008-04` no IPv6.
 
@@ -380,19 +382,19 @@ dois blocos, notas e RFC com quebra de linha, `2008-04` no IPv6.
 |---|---|---|---|---|
 | `as-numbers-1.csv` | 818 | 12 | 11 | AS0, ARIN `1-1876` (URLs coladas), RIPE NCC, APNIC, AS_TRANS, LACNIC (`2002-11`), AFRINIC (URLs coladas, `2005-04`), APNIC `2016-05-25`, documentação, uso privado, 65535 |
 | `as-numbers-2.csv` | 900 | 12 | 10 | "See Sub-registry", documentação, `Reserved`, APNIC, LACNIC, AFRINIC e ARIN (estes dois com URLs coladas; um ARIN de `2026-03-14`), `Unallocated` `404381-4199999999`, uso privado, 4294967295 |
-| `ipv4-address-space.csv` | 1.293 | 17 | 16 | `000/8` (`[2][3]`), APNIC, RIPE NCC, `Administered by ARIN`, legados com titular (`006/8`, `053/8` Daimler AG), `010/8`, AFRINIC, `045/8`, `127/8`, LACNIC, `Administered by LACNIC`, multicast, `Future use` |
+| `ipv4-address-space.csv` | 1.373 | 18 | 17 | `000/8` (`[2][3]`), APNIC, RIPE NCC, `Administered by ARIN`, legados com titular (`006/8`, `053/8` Daimler AG), `010/8`, AFRINIC, `045/8`, `127/8`, LACNIC (`177/8`, `187/8`, `200/8`), `Administered by LACNIC`, multicast, `Future use` |
 | `ipv6-unicast-address-assignments.csv` | 2.141 | 19 (15 `CRLF`) | 14 | `2001::/23` (`whois.iana.org`), os 5 RIRs, nota com vírgulas, 6to4, 3 notas com quebra de linha, `2d00::/8`, `3ffe::/16` (`2008-04`), `3fff::/20` |
 | `iana-ipv4-special-registry-1.csv` | 919 | 10 (9 `CRLF`) | 8 (9 blocos) | `"""This network"""`, privados, loopback (`False [1]`), `192.0.0.0/24 [2]`, célula com dois blocos, `192.88.99.0/24` encerrado, RFC com quebra de linha |
 | `iana-ipv6-special-registry-1.csv` | 802 | 11 (9 `CRLF`) | 8 | `::1/128`, `2001::/23` e `2001::/32` (TEREDO, `N/A [2]`), ORCHID encerrado, documentação, `2002::/16 [3]`, `fc00::/7` (`False [4]`), link-local |
 | `special-purpose-as-numbers.csv` | 306 | 6 | 5 | 0, 23456, 64512–65534, 4200000000–4294967294, 4294967295 |
 | `asn.json` | 985 | 59 | 15 | 5 serviços × 3 entradas, com as duas URLs de ARIN e AFRINIC |
-| `ipv4.json` | 983 | 59 | 15 | 5 × 3 |
+| `ipv4.json` | 1.006 | 60 | 16 | 5 × 3, mais `187.0.0.0/8` na LACNIC |
 | `ipv6.json` | 980 | 57 | 13 | AFRINIC e LACNIC com 2 (todas), os outros com 3 |
 
-- Os recortes geram 21 faixas de ASN, 30 blocos IP, 17 blocos especiais, 5
-  ASNs especiais e 43 entradas RDAP (116 linhas), **sem nenhum aviso**.
+- Os recortes geram 21 faixas de ASN, 31 blocos IP, 17 blocos especiais, 5
+  ASNs especiais e 44 entradas RDAP (118 linhas), **sem nenhum aviso**.
 - Como são recortes, não passam na sanidade de produção (buracos nas faixas
-  de ASN, 16 de 256 `/8`, mínimos): os testes usam limites relaxados
+  de ASN, 17 de 256 `/8`, mínimos): os testes usam limites relaxados
   (`Complete = false`, `MinIPv6Blocks`, `MinSpecialIPv4`, `MinSpecialIPv6` e
   os três `MinRDAP*` = 5, `MinSpecialASNs` = 3) e conferem que, com
   `DefaultLimits`, eles são recusados.

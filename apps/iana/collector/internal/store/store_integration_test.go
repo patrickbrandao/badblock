@@ -144,12 +144,12 @@ func TestApplyLifecycle(t *testing.T) {
 	}
 	want := Changes{
 		"iana_asn_block":      {Inserted: 21},
-		"iana_prefix_block":   {Inserted: 30},
+		"iana_prefix_block":   {Inserted: 31},
 		"iana_special_prefix": {Inserted: 17},
 		"iana_special_asn":    {Inserted: 5},
-		"iana_rdap_service":   {Inserted: 43},
+		"iana_rdap_service":   {Inserted: 44},
 	}
-	if !equalChanges(ch, want) || ch.Total() != 116 {
+	if !equalChanges(ch, want) || ch.Total() != 118 {
 		t.Errorf("carga inicial = %+v", ch)
 	}
 	if j := readJob(t, admin); j.lastSync == nil || j.lastCheck == nil || j.consolidated != 0 {
@@ -161,11 +161,22 @@ func TestApplyLifecycle(t *testing.T) {
 	var family int
 	var urls []string
 	if err := admin.QueryRow(ctx, `SELECT registry, status, family, rdap_urls FROM iana_prefix_block
-		WHERE prefix >>= '45.171.60.1'::inet`).Scan(&registry, &status, &family, &urls); err != nil {
+		WHERE prefix >>= '45.0.0.1'::inet`).Scan(&registry, &status, &family, &urls); err != nil {
 		t.Fatal(err)
 	}
 	if registry != "arin" || status != "LEGACY" || family != 4 || len(urls) != 2 || urls[0] != "https://rdap.arin.net/registry" {
 		t.Errorf("45/8 = %s %s %d %v", registry, status, family, urls)
+	}
+	if err := admin.QueryRow(ctx, `SELECT registry, status, family, rdap_urls FROM iana_prefix_block
+		WHERE prefix >>= '187.87.28.1'::inet`).Scan(&registry, &status, &family, &urls); err != nil {
+		t.Fatal(err)
+	}
+	if registry != "lacnic" || status != "ALLOCATED" || family != 4 || len(urls) != 1 || urls[0] != "https://rdap.lacnic.net/rdap/" {
+		t.Errorf("187/8 = %s %s %d %v", registry, status, family, urls)
+	}
+	if err := admin.QueryRow(ctx, `SELECT registry FROM iana_rdap_service
+		WHERE kind = 'ipv4' AND prefix >>= '187.87.28.1'::inet`).Scan(&registry); err != nil || registry != "lacnic" {
+		t.Errorf("RDAP 187.87.28.1 = %s, %v", registry, err)
 	}
 	if err := admin.QueryRow(ctx, `SELECT note FROM iana_prefix_block WHERE prefix = '0.0.0.0/8'`).Scan(&note); err != nil || note != "[2][3]" {
 		t.Errorf("000/8 note = %q, %v", note, err)
@@ -357,16 +368,16 @@ func TestRealFilesApply(t *testing.T) {
 	// As consultas que a api-iana vai fazer.
 	var registry, desc string
 	if err := admin.QueryRow(ctx, `SELECT registry, description FROM iana_asn_block
-		WHERE asn_start <= 61613 ORDER BY asn_start DESC LIMIT 1`).Scan(&registry, &desc); err != nil || registry != "lacnic" {
-		t.Errorf("AS61613 → %s %q, %v", registry, desc, err)
+		WHERE asn_start <= 61610 ORDER BY asn_start DESC LIMIT 1`).Scan(&registry, &desc); err != nil || registry != "lacnic" {
+		t.Errorf("AS61610 → %s %q, %v", registry, desc, err)
 	}
 	if err := admin.QueryRow(ctx, `SELECT registry FROM iana_prefix_block
-		WHERE prefix >>= '2804:5964::1'::inet ORDER BY masklen(prefix) DESC LIMIT 1`).Scan(&registry); err != nil || registry != "lacnic" {
-		t.Errorf("2804:5964::1 → %s, %v", registry, err)
+		WHERE prefix >>= '2804:8ae0::1'::inet ORDER BY masklen(prefix) DESC LIMIT 1`).Scan(&registry); err != nil || registry != "lacnic" {
+		t.Errorf("2804:8ae0::1 → %s, %v", registry, err)
 	}
 	if err := admin.QueryRow(ctx, `SELECT registry FROM iana_rdap_service
-		WHERE kind = 'ipv4' AND prefix >>= '45.171.60.1'::inet ORDER BY masklen(prefix) DESC LIMIT 1`).Scan(&registry); err != nil || registry != "arin" {
-		t.Errorf("RDAP 45.171.60.1 → %s, %v", registry, err)
+		WHERE kind = 'ipv4' AND prefix >>= '187.87.28.1'::inet ORDER BY masklen(prefix) DESC LIMIT 1`).Scan(&registry); err != nil || registry != "lacnic" {
+		t.Errorf("RDAP 187.87.28.1 → %s, %v", registry, err)
 	}
 	if n := count(t, admin, `SELECT count(*) FROM iana_special_prefix WHERE prefix >>= '100.64.1.1'::inet AND globally_reachable = false`); n != 1 {
 		t.Errorf("CGNAT como bogon = %d", n)

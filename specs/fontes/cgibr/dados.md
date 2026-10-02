@@ -145,7 +145,7 @@ alterações nunca são NULL; `error` é NULL. O que cada coluna traz numa recus
 
 | Arquivo | Coluna | Como |
 |---|---|---|
-| campo 1 (`AS61613`) | `cgibr_asn.asn` | sem o `AS`, como número ([fonte.md](fonte.md#linha-descartada)) |
+| campo 1 (`AS61610`) | `cgibr_asn.asn` | sem o `AS`, como número ([fonte.md](fonte.md#linha-descartada)) |
 | campo 2 | `cgibr_asn.name` | sem os espaços das pontas |
 | campo 3 | `cgibr_asn.document` | sem os espaços das pontas; `document_digits` é calculado pelo banco |
 | campos 4… | `cgibr_prefix.prefix`, uma linha por bloco | forma canônica; `family` é calculado pelo banco; `asn_uuid` = `uuid` do ASN da linha |

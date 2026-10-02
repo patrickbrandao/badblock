@@ -200,7 +200,7 @@ ou `PG_PASSWORD=...`), com permissão 600. Cada seção abre com um comentário
 `# --- <nome> ---` e explica as variáveis que não são óbvias. As tags ficam em
 ordem alfabética de app; os blocos dos coletores, na ordem da
 [tabela das fontes](../fontes/README.md) (cgibr, afrinic, apnic, arin, lacnic,
-ripencc, iana, asnames, roothints, rootzone, rootanchors, anatel/pst), cada um com um comentário de uma linha dizendo o que
+ripencc, iana, ripe/asnames, roothints, rootzone, rootanchors, anatel/pst), cada um com um comentário de uma linha dizendo o que
 a fonte traz e o padrão das opções vazias. Seções, nesta ordem:
 
 | Seção | Variáveis |
@@ -230,7 +230,7 @@ ainda `SOURCE := <fonte>`, `PORT := $${API_<FONTE>_HOST_PORT:-<porta>}` (o
 teste do manifesto lê este `PORT`) e `SMOKE_ASN ?= <ASN de exemplo>`; as de
 roothints, rootzone, rootanchors e anatel/pst também, com `SMOKE_SERVER`,
 `SMOKE_TLD`, `SMOKE_KEY_TAG` e `SMOKE_CNPJ` no lugar de `SMOKE_ASN` (na
-anatel/pst, `SOURCE := anatel/pst`); as de cgibr, iana e asnames ainda
+anatel/pst, `SOURCE := anatel/pst`); as de cgibr, iana e ripe/asnames ainda
 não (a porta está fixa no `smoke` e no teste — pendência registrada na spec
 de cada uma).
 
@@ -252,7 +252,7 @@ comentários.
 | `push` | ✓ | ✓ | `docker buildx build --platform $(PLATFORMS) ... --push` (recusa `VERSION=dev`) |
 | `up`, `down`, `logs` | ✓ | ✓ | o compose do app com o `.env` da raiz |
 | `once`, `force` | ✓ | — | `docker exec badblock-<app> /<app> --once` / `--force` |
-| `smoke` | — | ✓ | `curl -fsS` pela porta do loopback: RIRs em `/status`, `/meta`, `/asn/$(SMOKE_ASN)` e `/openapi.yaml`; roothints, rootzone e rootanchors em `/status`, `/meta`, a lista, um item (`$(SMOKE_SERVER)`, `$(SMOKE_TLD)`, `$(SMOKE_KEY_TAG)`) e `/openapi.yaml`; cgibr, iana e asnames em `/status`, uma consulta fixa e `/openapi.yaml` (sem `/meta`) |
+| `smoke` | — | ✓ | `curl -fsS` pela porta do loopback: RIRs em `/status`, `/meta`, `/asn/$(SMOKE_ASN)` e `/openapi.yaml`; roothints, rootzone e rootanchors em `/status`, `/meta`, a lista, um item (`$(SMOKE_SERVER)`, `$(SMOKE_TLD)`, `$(SMOKE_KEY_TAG)`) e `/openapi.yaml`; cgibr, iana e ripe/asnames em `/status`, uma consulta fixa e `/openapi.yaml` (sem `/meta`) |
 
 ## Makefile da raiz
 
@@ -261,7 +261,7 @@ comentários.
 | `help` | lista os alvos (padrão) |
 | `env` | gera o `.env` a partir do `.env.example` (não sobrescreve um `.env` existente): troca só a linha `POSTGRES_PASSWORD=` vazia pela senha (`PG_PASSWORD=...` ou `openssl rand -hex 24`) e deixa o arquivo com permissão 600 |
 | `network` | cria as redes `badblock` e `TRAEFIK_NETWORK` se faltarem (`TRAEFIK_NETWORK` lida do `.env`, padrão `network_public`) |
-| `up` | `env` + `network` + `docker compose up -d --build`; depois imprime a URL local de cada API, a partir da lista fixa `cgibr:8101 afrinic:8102 apnic:8103 arin:8104 lacnic:8105 ripencc:8106 iana:8107 asnames:8108 roothints:8109 rootzone:8110 rootanchors:8111 anatel/pst:8112` (a porta de cada uma pode ser trocada por `API_<FONTE>_HOST_PORT` no `.env`; numa fonte de dois níveis, `/` vira `_` na variável e `-` no nome do app) e a de cada site (`www:8201`, `WEBSITE_<SITE>_HOST_PORT`) |
+| `up` | `env` + `network` + `docker compose up -d --build`; depois imprime a URL local de cada API, a partir da lista fixa `cgibr:8101 afrinic:8102 apnic:8103 arin:8104 lacnic:8105 ripencc:8106 iana:8107 ripe/asnames:8108 roothints:8109 rootzone:8110 rootanchors:8111 anatel/pst:8112` (a porta de cada uma pode ser trocada por `API_<FONTE>_HOST_PORT` no `.env`; numa fonte de dois níveis, `/` vira `_` na variável e `-` no nome do app) e a de cada site (`www:8201`, `WEBSITE_<SITE>_HOST_PORT`) |
 | `down`, `ps`, `logs`, `build` | o compose da raiz (`ps -a`; `logs -f --tail=100`) |
 | `migrate` | `make -C database/postgres migrate` |
 | `test`, `test-int`, `lint`, `vet` | o alvo em cada app (`APPS := $(sort $(wildcard apps/*/collector apps/*/api apps/*/*/collector apps/*/*/api))`, que inclui as fontes de dois níveis), parando no primeiro que falha; `test-int` roda também `make -C database/postgres test`; `test` e `lint` rodam também em cada site (`WEBSITES := $(sort $(wildcard websites/*))`, exige Node) |

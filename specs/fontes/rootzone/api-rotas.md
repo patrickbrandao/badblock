@@ -135,7 +135,7 @@ que a zona raiz traz de cada um e os DS.
   "nameservers": [
     {"name": "a.dns.br", "ttl": 172800, "ipv4": [{"address": "200.219.148.10", "ttl": 172800}], "ipv6": [{"address": "2001:12f8:6::10", "ttl": 172800}]},
     {"name": "b.dns.br", "ttl": 172800, "ipv4": [{"address": "200.189.41.10", "ttl": 172800}], "ipv6": [{"address": "2001:12f8:8::10", "ttl": 172800}]},
-    {"name": "c.dns.br", "ttl": 172800, "ipv4": [{"address": "200.192.233.10", "ttl": 172800}], "ipv6": [{"address": "2001:12f8:a::10", "ttl": 172800}]},
+    {"name": "c.dns.br", "ttl": 172800, "ipv4": [{"address": "200.225.233.10", "ttl": 172800}], "ipv6": [{"address": "2001:12f8:a::10", "ttl": 172800}]},
     {"name": "d.dns.br", "ttl": 172800, "ipv4": [{"address": "200.219.154.10", "ttl": 172800}], "ipv6": [{"address": "2001:12f8:4::10", "ttl": 172800}]},
     {"name": "e.dns.br", "ttl": 172800, "ipv4": [{"address": "200.229.248.10", "ttl": 172800}], "ipv6": [{"address": "2001:12f8:2::10", "ttl": 172800}]},
     {"name": "f.dns.br", "ttl": 172800, "ipv4": [{"address": "200.219.159.10", "ttl": 172800}], "ipv6": [{"address": "2001:12f8:c::10", "ttl": 172800}]}

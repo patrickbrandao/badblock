@@ -40,7 +40,7 @@ apps/<fonte>/api/
 ```
 
 Um pacote a mais só quando a fonte pede (ex.: `internal/testdb` na
-`api-asnames`), descrito na spec da fonte.
+`api-ripe-asnames`), descrito na spec da fonte.
 
 ### `main.go`
 
@@ -132,7 +132,7 @@ Toda rota de dados passa por `serveCached(chave, build)`:
    ETag atual (com ou sem `W/`, numa lista, ou `*`) → **304** sem corpo e sem
    consultar nada.
 3. Chave no Valkey: `badblock:api-<fonte>:<versão>:<chave>`, com a consulta
-   **normalizada** (a fonte lista as suas; ex.: `asn:61613` sem o `AS`, IP
+   **normalizada** (a fonte lista as suas; ex.: `asn:61610` sem o `AS`, IP
    mapeado vira IPv4, bits de host do prefixo zerados). Rotas com e sem `/v1`
    usam a mesma chave e o mesmo ETag.
 4. Achou → corpo do cache (`X-Cache: HIT`).
@@ -334,7 +334,7 @@ No compose, as variáveis do app ganham o prefixo `API_<FONTE>_` no `.env`:
 | Unitários | `httpapi/openapi_test.go` | manifesto × rotas registradas ([openapi.md](openapi.md#teste)) |
 | Unitários | `cache`, `config`, `realip`, `dataset` | disjuntor e fail-open, ordem da configuração, proxies confiáveis, releitura da versão |
 | Integração (`make test-int`) | `store` | PG18 descartável (testcontainers) com as migrations reais e dados inseridos pelo teste: cada consulta e o uso de índice |
-| Fonte real (`make test-real`) | `httpapi` (RIRs), `store` (IANA) | nas fontes que têm: compila o coletor irmão (`../collector`), carrega a fonte real num PG18 descartável e mede as rotas. RIRs: `FILE=...`; IANA: sem `FILE` (baixa os 10 arquivos ou usa `IANA_REAL_DIR`); asnames: `ASNAMES_REAL_FILE=... make test-int`; rootzone: sem `FILE`, baixa o do dia; roothints e rootanchors: sem `FILE`, a fixture do coletor (roda também no `make test-int`); anatel/pst: `FILE=<zip>` ou, sem `FILE`, o ZIP do dia (com a fixture do coletor, roda também no `make test-int`) |
+| Fonte real (`make test-real`) | `httpapi` (RIRs), `store` (IANA) | nas fontes que têm: compila o coletor irmão (`../collector`), carrega a fonte real num PG18 descartável e mede as rotas. RIRs: `FILE=...`; IANA: sem `FILE` (baixa os 10 arquivos ou usa `IANA_REAL_DIR`); ripe/asnames: `RIPE_ASNAMES_REAL_FILE=... make test-int`; rootzone: sem `FILE`, baixa o do dia; roothints e rootanchors: sem `FILE`, a fixture do coletor (roda também no `make test-int`); anatel/pst: `FILE=<zip>` ou, sem `FILE`, o ZIP do dia (com a fixture do coletor, roda também no `make test-int`) |
 | Stack no ar (`make smoke`) | — | `/status`, `/meta`, uma consulta e `/openapi.yaml` pela porta do loopback |
 
 Detalhes e comandos em [../processos/testes.md](../processos/testes.md).

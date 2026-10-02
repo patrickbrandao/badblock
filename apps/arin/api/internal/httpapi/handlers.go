@@ -52,7 +52,7 @@ func (a *API) handleOpenAPI(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(openapi.Spec)
 }
 
-// GET /asn/{asn} — aceita "61613", "AS61613" ou "as61613".
+// GET /asn/{asn} — aceita "61610", "AS61610" ou "as61610".
 func (a *API) handleASN(w http.ResponseWriter, r *http.Request) {
 	raw := r.PathValue("asn")
 	num, ok := strings.CutPrefix(strings.ToUpper(raw), "AS")

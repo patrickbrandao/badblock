@@ -9,7 +9,7 @@ opaque-id). É uma fonte da [família RIR](../rir/README.md): o
 especial, o opaque-id é um UUID **novo a cada arquivo diário**
 ([fonte.md](fonte.md#opaque-id-novo-a-cada-arquivo)).
 
-O `asn.txt` do RIPE NCC (nomes de AS) é outra fonte, [`asnames`](../asnames/README.md).
+O `asn.txt` do RIPE NCC (nomes de AS) é outra fonte, [`ripe/asnames`](../ripe/asnames/README.md).
 
 | Item | Valor |
 |---|---|

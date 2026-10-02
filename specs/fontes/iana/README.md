@@ -54,7 +54,7 @@ Este `README.md` é do `collector-iana`, menos a seção [API](#api), que é da
 
 A [`api-iana`](../../../apps/iana/api/) serve, só lendo as tabelas acima,
 tudo abaixo de `/iana` (`https://api.badblock.net.br/iana/...`, e
-`/iana/v1/...` para a v1 fixa): para um ASN, IP ou prefixo (`/iana/asn/61613`,
+`/iana/v1/...` para a v1 fixa): para um ASN, IP ou prefixo (`/iana/asn/61610`,
 `/iana/ip/10.0.0.1`, `/iana/prefix/2001:db8::/48`), a faixa ou bloco da IANA
 (RIR, status, WHOIS, RDAP), os registros de uso especial que o contêm, o
 servidor RDAP e, para IPs e prefixos, se é bogon; também as listas completas

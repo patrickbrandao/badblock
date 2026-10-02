@@ -44,8 +44,8 @@ reaproveita um download com `IANA_REAL_DIR=<pasta>`. Hoje o `test-real`
 existe nos RIRs, na IANA e no rootzone (coletor e API; no rootzone, sem
 `FILE`, baixa o `root.zone` do dia) e nas APIs de roothints e rootanchors
 (sem `FILE`, usam a fixture do coletor, e o mesmo teste roda no
-`make test-int`). No asnames não há alvo: os testes com o arquivo real rodam
-no `make test-int` com `ASNAMES_REAL_FILE=<arquivo>`, e no coletor do roothints
+`make test-int`). No ripe/asnames não há alvo: os testes com o arquivo real rodam
+no `make test-int` com `RIPE_ASNAMES_REAL_FILE=<arquivo>`, e no coletor do roothints
 também, com `ROOTHINTS_REAL_FILE`; no do rootanchors o arquivo real inteiro já
 é a fixture. No coletor do `anatel/pst`, `make -C apps/anatel/pst/collector test-real FILE=<zip ou csv>`
 (variável `ANATEL_PST_REAL_FILE`), e na API dele

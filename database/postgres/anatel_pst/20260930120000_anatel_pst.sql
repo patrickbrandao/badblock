@@ -17,7 +17,7 @@
 -- numa transação só, então a api-anatel-pst nunca vê um arquivo pela metade.
 --
 -- Nota: pg_trgm é criada com IF NOT EXISTS e o migrate:down NÃO a remove: é
--- do banco inteiro e outras pastas (ex.: asnames) também a usam.
+-- do banco inteiro e outras pastas (ex.: ripe/asnames) também a usam.
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

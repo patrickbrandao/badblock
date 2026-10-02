@@ -6,7 +6,7 @@ servidores RDAP —, servida abaixo de `/iana`. Faz par com
 [`collector-iana`](../collector/) na fonte `iana`.
 
 ```bash
-curl https://api.badblock.net.br/iana/asn/61613
+curl https://api.badblock.net.br/iana/asn/61610
 curl https://api.badblock.net.br/iana/ip/10.0.0.1          # bogon: true
 curl https://api.badblock.net.br/iana/v1/prefix/2001:db8::/48
 curl https://api.badblock.net.br/iana/special

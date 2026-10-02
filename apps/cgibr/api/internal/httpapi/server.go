@@ -1,7 +1,7 @@
 // Package httpapi implementa as rotas HTTP da api-cgibr.
 //
 // A API é dona de tudo abaixo do caminho de base (BASE_PATH, padrão /cgibr):
-// /cgibr/asn/61613 é a versão atual e /cgibr/v1/asn/61613 fixa a v1. Uma v2
+// /cgibr/asn/61610 é a versão atual e /cgibr/v1/asn/61610 fixa a v1. Uma v2
 // futura ganha /cgibr/v2/... e passa a ser a versão sem prefixo.
 package httpapi
 

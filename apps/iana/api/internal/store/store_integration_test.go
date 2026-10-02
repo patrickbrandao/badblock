@@ -99,10 +99,10 @@ var ipCases = []ipCase{
 	{"100.64.0.1/32", "100.0.0.0/8", "100.64.0.0/10", "100.0.0.0/8", true},
 	{"192.0.2.1/32", "192.0.0.0/8", "192.0.2.0/24", "192.0.0.0/8", true},
 	{"8.8.8.8/32", "8.0.0.0/8", "", "8.0.0.0/8", false},
-	{"45.171.61.10/32", "45.0.0.0/8", "", "45.0.0.0/8", false},
+	{"187.87.29.10/32", "187.0.0.0/8", "", "187.0.0.0/8", false},
 	{"2001:db8::1/128", "2001:c00::/23", "2001:db8::/32", "2001:c00::/23", true},
 	{"fe80::1/128", "", "fe80::/10", "", true},
-	{"2804:5964::1/128", "2800::/12", "", "2800::/12", false},
+	{"2804:8ae0::1/128", "2800::/12", "", "2800::/12", false},
 	{"::1/128", "", "::1/128", "", true},
 	{"240.0.0.1/32", "240.0.0.0/8", "240.0.0.0/4", "", true},
 	{"0.0.0.1/32", "0.0.0.0/8", "0.0.0.0/8", "", true},
@@ -158,18 +158,31 @@ func checkPrefixes(t *testing.T, st *Store) {
 		}
 	}
 
-	// Colunas de um bloco com tudo preenchido.
-	l, err := st.Prefix(ctx, netip.MustParsePrefix("45.171.61.10/32"))
+	// Colunas de um bloco ALLOCATED a um RIR (o do ASN de exemplo)...
+	l, err := st.Prefix(ctx, netip.MustParsePrefix("187.87.29.10/32"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	b := l.Block
+	if b.Designation != "LACNIC" || *b.Registry != "lacnic" || *b.Whois != "whois.lacnic.net" || b.Status != "ALLOCATED" ||
+		strings.Join(b.RDAPURLs, " ") != "https://rdap.lacnic.net/rdap/" || *b.AllocationDate != "2007-09" || b.Note != nil {
+		t.Errorf("187/8 = %+v", b)
+	}
+	if l.RDAP.Kind != "ipv4" || *l.RDAP.Registry != "lacnic" || strings.Join(l.RDAP.URLs, " ") != "https://rdap.lacnic.net/rdap/" {
+		t.Errorf("RDAP 187/8 = %+v", l.RDAP)
+	}
+	// ... e de um bloco LEGACY administrado pela ARIN.
+	l, err = st.Prefix(ctx, netip.MustParsePrefix("8.8.8.8/32"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b = l.Block
 	if b.Designation != "Administered by ARIN" || *b.Registry != "arin" || *b.Whois != "whois.arin.net" || b.Status != "LEGACY" ||
-		strings.Join(b.RDAPURLs, " ") != "https://rdap.arin.net/registry http://rdap.arin.net/registry" || *b.AllocationDate != "1995-01" {
-		t.Errorf("45/8 = %+v", b)
+		strings.Join(b.RDAPURLs, " ") != "https://rdap.arin.net/registry http://rdap.arin.net/registry" || *b.AllocationDate != "1992-12" {
+		t.Errorf("8/8 = %+v", b)
 	}
 	if l.RDAP.Kind != "ipv4" || *l.RDAP.Registry != "arin" || l.RDAP.URLs[0] != "https://rdap.arin.net/registry/" {
-		t.Errorf("RDAP 45/8 = %+v", l.RDAP)
+		t.Errorf("RDAP 8/8 = %+v", l.RDAP)
 	}
 	// Flags e datas do special registry (NULL = vazio ou N/A).
 	l, err = st.Prefix(ctx, netip.MustParsePrefix("2001::1/128"))
@@ -202,7 +215,7 @@ var asnCases = []asnCase{
 	{0, 0, "Reserved", "0-0", ""},
 	{1, 1, "Assigned by ARIN", "", "1-1876"},
 	{23456, 23456, "AS_TRANS", "23456-23456", ""},
-	{61613, 61440, "Assigned by LACNIC", "", "61440-61951"},
+	{61610, 61440, "Assigned by LACNIC", "", "61440-61951"},
 	{64496, 64496, "Reserved for use in documentation and sample code", "64496-64511", ""},
 	{65000, 64512, "Reserved for Private Use", "64512-65534", ""},
 	{65535, 65535, "Reserved", "65535-65535", ""},
@@ -239,13 +252,13 @@ func checkASNs(t *testing.T, st *Store) {
 			t.Errorf("AS%d:\n got %+v\nquero %+v", c.asn, got, c)
 		}
 	}
-	l, err := st.ASN(ctx, 61613)
+	l, err := st.ASN(ctx, 61610)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if b := l.Block; b.End != 61951 || *b.Registry != "lacnic" || *b.Whois != "whois.lacnic.net" ||
 		b.RDAPURLs[0] != "https://rdap.lacnic.net/rdap/" || *b.RegistrationDate != "2013-06-11" || b.Reference != nil {
-		t.Errorf("AS61613 = %+v", b)
+		t.Errorf("AS61610 = %+v", b)
 	}
 }
 

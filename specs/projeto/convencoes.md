@@ -62,8 +62,8 @@
 - Fixtures são **recortes reais** da fonte em `testdata/`; mudou o formato,
   mudam a fixture, os testes e a spec juntos.
 - Fonte real inteira: `make test-real` onde existe (RIRs: `FILE=...`, pela
-  variável `<FONTE>_REAL_FILE`; IANA: `IANA_REAL_DIR`); no asnames, sem alvo,
-  `ASNAMES_REAL_FILE=<arquivo> make test-int`
+  variável `<FONTE>_REAL_FILE`; IANA: `IANA_REAL_DIR`); no ripe/asnames, sem alvo,
+  `RIPE_ASNAMES_REAL_FILE=<arquivo> make test-int`
   ([../processos/testes.md](../processos/testes.md#arquivo-real)).
 - Os testes não dependem de rede externa (a fonte é servida por
   `httptest.Server`).

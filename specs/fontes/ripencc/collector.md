@@ -119,7 +119,7 @@ que os testes citam — os que o clone trocou pelos do modelo:
   `2001:7f8:6::/48` (assigned, titular `162f9494-…`); `2001:609::/32`
   (reserved).
 - `TestParseOtherRIRFormats`: `formats/` com AFRINIC, APNIC, ARIN e LACNIC;
-  o caso da LACNIC confere AS28003 + 3 (available de 7 campos), AS61613
+  o caso da LACNIC confere AS28003 + 3 (available de 7 campos), AS61610
   (`258500`), `45.68.105.0/24` (reserved com o opaque-id vazio no fim) e
   `UTCOffset` `-0300`. Cada caso tem o seu `enddate` (o da LACNIC é
   20260925; os outros, 20260928). `TestParseWrongRegistry` usa

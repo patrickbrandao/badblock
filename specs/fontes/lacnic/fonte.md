@@ -36,9 +36,9 @@ O delegated-extended do modelo, sem comentários. Início do arquivo de
 lacnic|*|ipv4|*|20804|summary
 lacnic|*|ipv6|*|59982|summary
 lacnic|*|asn|*|16515|summary
-lacnic|BR|ipv4|45.171.60.0|1024|20190211|allocated|258500
-lacnic|BR|ipv6|2804:5964::|32|20190211|allocated|258500
-lacnic|BR|asn|61613|1|20230505|allocated|258500
+lacnic|BR|ipv4|187.87.28.0|1024|20190211|allocated|258500
+lacnic|BR|ipv6|2804:8ae0::|32|20190211|allocated|258500
+lacnic|BR|asn|61610|1|20230227|allocated|258500
 lacnic||ipv4|45.68.105.0|256||reserved|
 lacnic||ipv6|2001:1201:20::|43||available
 ```
@@ -79,12 +79,12 @@ agrupados por tipo na mesma ordem e crescentes pelo início:
 
 | Tipo | Registros | Cobre |
 |---|---|---|
-| ipv4 (8) | `2.152.0.0` + 1024 (GT, allocated, 20260714, `71316`); `2.152.252.0` + 1024 (PA, assigned, 20260826, `75377`); `45.68.105.0` + 256 (reserved, 8 campos com opaque-id vazio); `45.171.60.0` + 1024 (BR, allocated, 20190211, `258500`); `150.165.0.0` + 65536 (BR, assigned, 19930607, `130343`); `187.192.0.0` + 2097152 (MX, allocated, 20110606, `21461`); `200.17.0.0` + 4096 (BR, assigned, 20000216, `130343`); `200.192.152.0` + 1024 (BR, allocated, 20031125, `258500`) | todos CIDR, do `/11` (o maior da LACNIC) ao `/24` |
-| ipv6 (6) | `2001:1201::/44` (MX, assigned, 20190404, `27835`); `2001:1201:20::/43` (available, 7 campos); `2001:12b8::/32` (reserved, 8 campos); `2001:12f0::/32` (BR, assigned, 20071219, `130343`); `2001:12f8::/48` (BR, assigned, 20071219, `114721`); `2804:5964::/32` (BR, allocated, 20190211, `258500`) | available de 7 e reserved de 8 campos, `/48` |
-| asn (7) | AS1916 (BR, allocated, 19991116, `130343`); AS6064 (available, 7 campos); AS6065 (reserved, 8 campos); AS22548 (BR, allocated, 20011016, `114721`); AS26596 + 2 (available); AS28003 + 3 (available); AS61613 (BR, allocated, 20230505, `258500`) | faixas de ASN em available |
+| ipv4 (8) | `2.152.0.0` + 1024 (GT, allocated, 20260714, `71316`); `2.152.252.0` + 1024 (PA, assigned, 20260826, `75377`); `45.68.105.0` + 256 (reserved, 8 campos com opaque-id vazio); `150.165.0.0` + 65536 (BR, assigned, 19930607, `130343`); `187.87.28.0` + 1024 (BR, allocated, 20190211, `258500`); `187.192.0.0` + 2097152 (MX, allocated, 20110606, `21461`); `200.17.0.0` + 4096 (BR, assigned, 20000216, `130343`); `200.225.48.0` + 2048 (BR, allocated, 20031125, `258500`) | todos CIDR, do `/11` (o maior da LACNIC) ao `/24` |
+| ipv6 (6) | `2001:1201::/44` (MX, assigned, 20190404, `27835`); `2001:1201:20::/43` (available, 7 campos); `2001:12b8::/32` (reserved, 8 campos); `2001:12f0::/32` (BR, assigned, 20071219, `130343`); `2001:12f8::/48` (BR, assigned, 20071219, `114721`); `2804:8ae0::/32` (BR, allocated, 20190211, `258500`) | available de 7 e reserved de 8 campos, `/48` |
+| asn (7) | AS1916 (BR, allocated, 19991116, `130343`); AS6064 (available, 7 campos); AS6065 (reserved, 8 campos); AS22548 (BR, allocated, 20011016, `114721`); AS26596 + 2 (available); AS28003 + 3 (available); AS61610 (BR, allocated, 20230227, `258500`) | faixas de ASN em available |
 
-Titulares com ASN e blocos: `258500` (AS61613, `45.171.60.0/22`,
-`200.192.152.0/22`, `2804:5964::/32`), `130343` (AS1916, `150.165.0.0/16`,
+Titulares com ASN e blocos: `258500` (AS61610, `187.87.28.0/22`,
+`200.225.48.0/21`, `2804:8ae0::/32`), `130343` (AS1916, `150.165.0.0/16`,
 `200.17.0.0/20`, `2001:12f0::/32`) e `114721` (AS22548, `2001:12f8::/48`).
 Available e reserved com `cc`, data e opaque-id vazios em ASN, IPv4 e IPv6.
 

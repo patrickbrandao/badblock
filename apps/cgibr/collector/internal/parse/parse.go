@@ -2,7 +2,7 @@
 //
 // Formato: uma linha por ASN, campos separados por "|":
 //
-//	AS61613|TMSoft Solucoes em Informatica Ltda|08.030.063/0001-00|45.171.60.0/22|2804:5964::/32
+//	AS61610|ELEA DATA CENTERS|35.980.592/0001-30|187.87.28.0/22|2804:8ae0::/32
 //
 // ASN (com o prefixo AS), nome do titular, documento (CNPJ formatado ou
 // identificador estrangeiro de 8 dígitos) e zero ou mais blocos CIDR.
