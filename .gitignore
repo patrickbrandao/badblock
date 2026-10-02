@@ -1,4 +1,6 @@
-# Material de referência local — nunca vai para o repositório.
+# Versões anteriores e material de referência local — nunca vão para o git e
+# não são lidos por agentes sem pedido explícito do usuário.
+old/
 tmp/
 
 # Só os .env.example são versionados. Qualquer outro .env* (na raiz ou nas
@@ -6,33 +8,33 @@ tmp/
 .env
 .env.*
 !.env.example
-deploy.env
+# .mcp.json leva o token do servidor de skills.
+.mcp.json
 
-# Scripts de operação do mantenedor na raiz (run-local.sh, run-prod.sh,
-# sync.sh...): guardam valores do ambiente dele e ficam fora do git. Só o
-# release-images.sh é versionado. Update_and_fixes é a mensagem de commit que
-# o run-commit.sh usa.
+# Scripts de operação do mantenedor na raiz (run-*.sh, sync.sh...): guardam
+# valores do ambiente dele e ficam fora do git.
 /build.sh
 /destroy.sh
 /hub.sh
 /sync.sh
-/run-builder.sh
-/run-commit.sh
-/run-local.sh
-/run-prod.sh
-/run-rebuild.sh
+/run-*.sh
 /Update_and_fixes
-
-# Certificados locais gerados pelo mkcert/openssl (infra/traefik/certs).
-*.pem
-*.key
-*.crt
 
 # Artefatos de build e teste dos apps Go.
 bin/
 dist/
 coverage.out
 *.test
+
+# Dependências, build e logs locais dos sites (websites/<site>/): nada que a
+# compilação ou o servidor local produzem vai para o git.
+/websites/*/node_modules/
+/websites/*/dist/
+/websites/*/.next/
+/websites/*/.vite/
+/websites/*/.src-work/
+/websites/*/*.tsbuildinfo
+/websites/*/*.log
 
 # Sistema operacional e editores.
 .DS_Store

@@ -1,20 +1,17 @@
 #!/bin/sh
 # BadBlock — build local e push das imagens dos apps para o Docker Hub.
 #
-# O caminho normal de publicação é o CI: a tag <app>/vX.Y.Z
-# (`make -C apps/<app> release V=X.Y.Z`) dispara o release.yml, que testa e
-# publica. Este script é a alternativa manual, para quando o CI não pode
-# publicar (secrets do Docker Hub ausentes, Actions fora do ar). Rode de uma
+# É o caminho de publicação das imagens (não há CI publicando). Rode de uma
 # máquina já autenticada (`docker login`) na conta tmsoftbrasil.
 #
-# A versão de cada app vem da tag git <app>/vX.Y.Z que aponta para o HEAD — a
-# mesma que o CI usaria —, então crie a tag antes:
+# A versão de cada app vem da tag git <app>/vX.Y.Z que aponta para o HEAD
+# (o ./run-commit.sh cria as tags), então crie a tag antes:
 #
-#   git tag -a registry-api/v1.2.0 -m "registry-api v1.2.0"
+#   git tag -a api-cgibr/v0.1.0 -m "api-cgibr v0.1.0"
 #
 # Cada imagem sai com DUAS tags: a versão e `latest`. A de versão existe porque
 # `latest` é sobrescrita e não deixa cópia; o caminho de volta é
-# REGISTRY_API_TAG=<versão anterior> no .env do servidor.
+# API_CGIBR_TAG=<versão anterior> no .env do servidor (ou TAG no run-prod.sh).
 #
 # A `latest` só anda no fim, e de uma vez. O laço de build publica apenas a tag
 # de versão; só depois que TODAS as imagens pedidas estão no Hub um segundo
@@ -23,7 +20,7 @@
 # falha no meio deixa `latest` inteira na versão anterior, e o script diz em
 # que estado o Hub ficou e o que rodar em seguida.
 #
-# Multi-plataforma, como no CI: publicando de um Mac ARM sem `--platform`, o
+# Multi-plataforma: publicando de um Mac ARM sem `--platform`, o
 # servidor amd64 receberia "no match for platform" no pull. Com pressa, uma
 # arquitetura só: `PLATFORMS=linux/amd64 ./release-images.sh`. Exige um builder
 # que conheça as duas arquiteturas (o `desktop-linux` do Docker Desktop
@@ -31,19 +28,25 @@
 #
 # O gate é UMA confirmação, mostrando o que vai subir: versões, plataformas e o
 # commit — com aviso quando a árvore está suja, porque o build sai do disco, não
-# do commit. Testes não rodam aqui: o CI já os roda em todo push. A procedência
+# do commit. Testes não rodam aqui: rode `make test test-int lint` antes. A procedência
 # vai gravada na imagem (labels OCI `...image.version` e `...image.revision`) e
 # no binário (`<app> --version`).
 #
 #   ./release-images.sh                 # os apps com tag no HEAD
-#   ./release-images.sh registry-api    # só os nomes passados
+#   ./release-images.sh api-cgibr       # só os nomes passados
 #
 # Rode sempre a partir da raiz do repositório.
 
 set -eu
 
 NAMESPACE="tmsoftbrasil"
-APPS="registry-sync registry-api"
+APPS="collector-afrinic api-afrinic collector-apnic api-apnic collector-arin api-arin"
+APPS="$APPS collector-asnames api-asnames collector-cgibr api-cgibr collector-iana api-iana"
+APPS="$APPS collector-lacnic api-lacnic collector-ripencc api-ripencc"
+APPS="$APPS collector-rootanchors api-rootanchors collector-roothints api-roothints"
+APPS="$APPS collector-rootzone api-rootzone"
+APPS="$APPS collector-anatel-pst api-anatel-pst"
+APPS="$APPS website-www"
 
 # Arquiteturas do manifesto publicado: servidor comum é amd64 e quem publica
 # costuma estar em arm64.
@@ -88,7 +91,7 @@ for app in $APPS; do
         echo "   git tag -a $app/vX.Y.Z -m \"$app vX.Y.Z\"" >&2
         exit 1
     fi
-    # Mesma regra do release.yml.
+    # SemVer: X.Y.Z, com sufixo opcional (-rc.1).
     if ! printf '%s' "$versao" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
         echo "!! a tag $app/v$versao não segue SemVer (app/vX.Y.Z)" >&2
         exit 1
@@ -99,7 +102,7 @@ done
 
 if [ -z "$SELECIONADAS" ]; then
     echo "!! nenhum app com tag <app>/vX.Y.Z no HEAD. Crie a tag antes, por exemplo:" >&2
-    echo "   git tag -a registry-api/v1.2.0 -m \"registry-api v1.2.0\"" >&2
+    echo "   git tag -a api-cgibr/v0.1.0 -m \"api-cgibr v0.1.0\"" >&2
     exit 1
 fi
 
@@ -186,7 +189,15 @@ for entry in $SELECIONADAS; do
     versao="${entry#*:}"
     image="$NAMESPACE/badblock-$app"
 
-    echo "== build: $image:$versao ($PLATFORMS, contexto: apps/$app)"
+    # collector-<fonte> e api-<fonte> moram em apps/<fonte>/<collector|api>;
+    # numa fonte de dois níveis o "-" do nome vira "/" no caminho
+    # (collector-anatel-pst → apps/anatel/pst/collector); website-<site>, em
+    # websites/<site>.
+    case "$app" in
+        website-*) contexto="websites/${app#website-}" ;;
+        *) contexto="apps/$(echo "${app#*-}" | tr - /)/${app%%-*}" ;;
+    esac
+    echo "== build: $image:$versao ($PLATFORMS, contexto: $contexto)"
     # Build e push num passo só: a imagem multi-plataforma não cabe no store
     # local do Docker, então não há o que empurrar depois com `docker push`.
     # Só a tag de versão sai daqui — a `latest` é do laço seguinte.
@@ -198,7 +209,7 @@ for entry in $SELECIONADAS; do
         --label "org.opencontainers.image.version=$versao" \
         --label "org.opencontainers.image.revision=$COMMIT" \
         -t "$image:$versao" \
-        --push "apps/$app"
+        --push "$contexto"
     PUBLICADAS="$PUBLICADAS $app:$versao"
 done
 
@@ -217,5 +228,4 @@ done
 FASE="fim"
 
 echo "== Publicado em $PLATFORMS:$SELECIONADAS (e latest)."
-echo "== A tag git ainda é só local? Ao enviá-la (git push origin <app>/vX.Y.Z), o"
-echo "== release.yml publica a mesma versão de novo — ou falha no login, sem os secrets."
+echo "== A tag git ainda é só local? Envie com ./run-commit.sh push (ou git push origin <app>/vX.Y.Z)."

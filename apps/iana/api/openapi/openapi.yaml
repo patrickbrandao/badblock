@@ -1,0 +1,1635 @@
+openapi: 3.1.0
+info:
+  title: api-iana
+  version: 0.1.0
+  description: |
+    API HTTP (JSON), só leitura, dos registros de numeração da IANA coletados
+    pelo `collector-iana` do BadBlock (tabelas `iana_*`): a quem cada faixa de
+    ASN e cada bloco IP (os /8 do IPv4 e os blocos do IPv6 unicast) foi
+    entregue (RIR, status, WHOIS, RDAP), os registros de uso especial
+    (special-purpose) de IPv4, IPv6 e ASN, que sustentam a regra de **bogon**,
+    e o bootstrap RDAP (RFC 9224). Fonte: https://www.iana.org/numbers.
+
+    Versões: os servidores sem `/v1` servem a versão atual (hoje v1); os
+    servidores com `/v1` fixam a v1 (`/iana/v1/asn/61613`), com o mesmo
+    conteúdo, a mesma chave de cache e o mesmo ETag. Cada rota aparece uma vez
+    em `paths`, relativa ao servidor. Saúde (`/health`, `/status`, `/ping`) e
+    este manifesto (`/openapi.yaml`) ficam fora do versionamento: sobrescrevem
+    `servers` só com os servidores sem `/v1`.
+
+    Todo `GET` também aceita `HEAD`. `OPTIONS` em qualquer caminho responde o
+    preflight de CORS (`204`, `Access-Control-Allow-Methods: GET, HEAD,
+    OPTIONS`). `/iana` redireciona (`301`) para `/iana/`; qualquer outro
+    caminho ou método responde `404` com `code` `not_found`.
+
+    Em todas as respostas: `X-Content-Type-Options: nosniff`,
+    `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin` (padrão
+    `*`), `Access-Control-Expose-Headers: ETag, X-Cache, X-Dataset-Version` e
+    `Server: badblock-api-iana/<versão>`. Erros sempre em JSON
+    `{"error": {"code", "message"}}`, com `Cache-Control: no-store`.
+
+    Pública, sem chave; rate limit por IP no Traefik.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/iana
+servers:
+  - url: https://api.badblock.net.br/iana
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/iana/v1
+    description: Produção, v1 fixa (só o índice, as rotas de dados e o /meta)
+  - url: http://127.0.0.1:8107/iana
+    description: Desenvolvimento local, versão atual (porta API_IANA_HOST_PORT no loopback)
+  - url: http://127.0.0.1:8107/iana/v1
+    description: Desenvolvimento local, v1 fixa
+tags:
+  - name: dados
+    description: Consultas e listas dos registros da IANA (com ETag, `X-Cache` e cache no Valkey).
+  - name: meta
+    description: Índice da API, estado dos dados e este manifesto.
+  - name: saúde
+    description: Healthchecks, fora do versionamento e sem cache.
+paths:
+  /:
+    get:
+      operationId: getIndex
+      tags: [meta]
+      summary: Índice da API
+      description: |
+        App, versão do build, caminho de base, versões da API e rotas.
+        `/iana/` e `/iana/v1/` respondem o mesmo.
+      responses:
+        '200':
+          description: Índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-iana
+                version: 0.1.0
+                base_path: /iana
+                versions: [v1]
+                endpoints:
+                  - /iana/asn/{asn}
+                  - /iana/ip/{ip}
+                  - /iana/prefix/{ip}/{len}
+                  - /iana/asns
+                  - /iana/ipv4
+                  - /iana/ipv6
+                  - /iana/special
+                  - /iana/rdap
+                  - /iana/meta
+                  - /iana/status
+                  - /iana/openapi.yaml
+                source: https://www.iana.org/numbers
+  /asn/{asn}:
+    get:
+      operationId: getASN
+      tags: [dados]
+      summary: Consulta um ASN
+      description: |
+        A faixa de `as-numbers-1`/`-2` que contém o ASN (`block`), as faixas
+        de `special-purpose-as-numbers` que o contêm (`special`, em ordem de
+        início) e a entrada do bootstrap RDAP (`asn.json`) que o contém
+        (`rdap`). Nunca responde 404 para um ASN válido: o que a IANA não diz
+        sai `null`/`[]` (`block` só é `null` com dados incompletos; faixas
+        reservadas e não alocadas não têm `rdap`).
+      parameters:
+        - $ref: '#/components/parameters/ASN'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: O que a IANA diz sobre o ASN.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ASNResponse'
+              examples:
+                lacnic:
+                  summary: GET /asn/61613
+                  value:
+                    asn: 61613
+                    block:
+                      start: 61440
+                      end: 61951
+                      description: Assigned by LACNIC
+                      registry: lacnic
+                      whois: whois.lacnic.net
+                      rdap_urls: [https://rdap.lacnic.net/rdap/]
+                      reference: null
+                      registration_date: '2013-06-11'
+                    special: []
+                    rdap:
+                      resource: 61440-61951
+                      registry: lacnic
+                      urls: [https://rdap.lacnic.net/rdap/]
+                    dataset:
+                      version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                      updated_at: '2026-09-29T00:49:05Z'
+                as_trans:
+                  summary: GET /asn/AS23456
+                  value:
+                    asn: 23456
+                    block:
+                      start: 23456
+                      end: 23456
+                      description: AS_TRANS
+                      registry: null
+                      whois: null
+                      rdap_urls: []
+                      reference: '[RFC6793]'
+                      registration_date: null
+                    special:
+                      - start: 23456
+                        end: 23456
+                        reason: AS_TRANS; reserved by [RFC6793]
+                        reference: '[RFC6793]'
+                    rdap: null
+                    dataset:
+                      version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                      updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /ip/{ip}:
+    get:
+      operationId: getIP
+      tags: [dados]
+      summary: Consulta um IP
+      description: |
+        O bloco mais específico de `ipv4-address-space` (/8) ou
+        `ipv6-unicast-address-assignments` que contém o IP (`block`, `null`
+        fora deles), **todas** as entradas dos special-purpose registries
+        que o contêm, da mais específica para a menos, inclusive as
+        encerradas (`special`), se é **bogon** (`bogon`) e a entrada mais
+        específica do bootstrap RDAP que o contém (`rdap`). Nunca responde
+        404 para um IP válido.
+
+        Regra de bogon (`store.PrefixLookup.Bogon`), avaliada em ordem:
+
+        1. Entre as entradas de `special` **em vigor** (`termination_date`
+           nulo), a mais específica decide se tiver `globally_reachable`
+           preenchido: `false` = bogon, `true` = não bogon (ex.:
+           `192.0.0.9/32`, `true`, vale dentro de `192.0.0.0/24`, `false`).
+           Se ela tem `globally_reachable` nulo (a IANA publica `N/A`:
+           TEREDO `2001::/32`, 6to4 `2002::/16`), vale a regra 2. Entradas
+           encerradas não contam.
+        2. Bogon se nenhum bloco da IANA que cruza a consulta tem status
+           diferente de `RESERVED`: a consulta está toda em blocos
+           `RESERVED` (0/8, 10/8, 127/8, 224–255...) ou fora de qualquer
+           bloco (IPv6 que a IANA não entregou: `ff00::/8`, `4000::/3`...).
+
+        Marca o espaço reservado (bogons clássicos), não o "fullbogon" dos
+        RIRs.
+      parameters:
+        - $ref: '#/components/parameters/IP'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: O que a IANA diz sobre o IP.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPResponse'
+              examples:
+                pcp_anycast:
+                  summary: GET /ip/192.0.0.9 (não bogon)
+                  value:
+                    ip: 192.0.0.9
+                    block:
+                      prefix: 192.0.0.0/8
+                      designation: Administered by ARIN
+                      registry: arin
+                      status: LEGACY
+                      whois: whois.arin.net
+                      rdap_urls:
+                        - https://rdap.arin.net/registry
+                        - http://rdap.arin.net/registry
+                      allocation_date: '1993-05'
+                      note: '[10][11]'
+                    special:
+                      - prefix: 192.0.0.9/32
+                        name: Port Control Protocol Anycast
+                        rfc: '[RFC7723]'
+                        allocation_date: '2015-10'
+                        termination_date: null
+                        source: true
+                        destination: true
+                        forwardable: true
+                        globally_reachable: true
+                        reserved_by_protocol: false
+                      - prefix: 192.0.0.0/24
+                        name: IETF Protocol Assignments
+                        rfc: '[RFC6890], Section 2.1'
+                        allocation_date: '2010-01'
+                        termination_date: null
+                        source: false
+                        destination: false
+                        forwardable: false
+                        globally_reachable: false
+                        reserved_by_protocol: false
+                    bogon: false
+                    rdap:
+                      resource: 192.0.0.0/8
+                      registry: arin
+                      urls:
+                        - https://rdap.arin.net/registry/
+                        - http://rdap.arin.net/registry/
+                    dataset:
+                      version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                      updated_at: '2026-09-29T00:49:05Z'
+                private_use:
+                  summary: GET /ip/10.0.0.1 (bogon)
+                  value:
+                    ip: 10.0.0.1
+                    block:
+                      prefix: 10.0.0.0/8
+                      designation: IANA - Private Use
+                      registry: null
+                      status: RESERVED
+                      whois: null
+                      rdap_urls: []
+                      allocation_date: '1995-06'
+                      note: '[4]'
+                    special:
+                      - prefix: 10.0.0.0/8
+                        name: Private-Use
+                        rfc: '[RFC1918]'
+                        allocation_date: '1996-02'
+                        termination_date: null
+                        source: true
+                        destination: true
+                        forwardable: true
+                        globally_reachable: false
+                        reserved_by_protocol: false
+                    bogon: true
+                    rdap: null
+                    dataset:
+                      version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                      updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /prefix/{ip}/{len}:
+    get:
+      operationId: getPrefix
+      tags: [dados]
+      summary: Consulta um prefixo
+      description: |
+        Como `/ip`, para um prefixo. Os bits de host são zerados
+        (`/prefix/10.1.2.3/16` consulta `10.1.0.0/16`). `block` e `rdap` são
+        os mais específicos que **contêm** o prefixo (`null` para um prefixo
+        maior que eles, ex.: `8.0.0.0/7`); `special` lista as entradas que
+        contêm o prefixo pedido (as que estão dentro dele não entram). `bogon`
+        segue a regra do `/ip`, aplicada ao prefixo inteiro (`224.0.0.0/4`
+        é bogon: só cruza blocos `RESERVED`; `8.0.0.0/7` não: cruza
+        `8.0.0.0/8` `LEGACY`). Nunca responde 404 para um prefixo válido.
+      parameters:
+        - $ref: '#/components/parameters/PrefixAddress'
+        - $ref: '#/components/parameters/PrefixLength'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: O que a IANA diz sobre o prefixo.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefixResponse'
+              example:
+                query: 2001:db8::/48
+                block:
+                  prefix: 2001:c00::/23
+                  designation: APNIC
+                  registry: apnic
+                  status: ALLOCATED
+                  whois: whois.apnic.net
+                  rdap_urls: [https://rdap.apnic.net/]
+                  allocation_date: '2002-05-02'
+                  note: 2001:db8::/32 is reserved for Documentation [RFC3849]. See [IPv6 Special-Purpose Address Space] for details.
+                special:
+                  - prefix: 2001:db8::/32
+                    name: Documentation
+                    rfc: '[RFC3849]'
+                    allocation_date: '2004-07'
+                    termination_date: null
+                    source: false
+                    destination: false
+                    forwardable: false
+                    globally_reachable: false
+                    reserved_by_protocol: false
+                bogon: true
+                rdap:
+                  resource: 2001:c00::/23
+                  registry: apnic
+                  urls: [https://rdap.apnic.net/]
+                dataset:
+                  version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                  updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /asns:
+    get:
+      operationId: getASNs
+      tags: [dados]
+      summary: Todas as faixas de ASN
+      description: |
+        As faixas de `as-numbers-1`/`-2` (173, ~35 KB), em ordem numérica, no
+        formato de `block` do `/asn`. Sem parâmetros de consulta: a lista vem
+        sempre inteira, sem paginação nem filtro (a query string é ignorada).
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Todas as faixas de ASN.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ASNBlocksResponse'
+              example:
+                count: 173
+                blocks:
+                  - start: 0
+                    end: 0
+                    description: Reserved
+                    registry: null
+                    whois: null
+                    rdap_urls: []
+                    reference: '[RFC7607]'
+                    registration_date: null
+                  - start: 1
+                    end: 1876
+                    description: Assigned by ARIN
+                    registry: arin
+                    whois: whois.arin.net
+                    rdap_urls:
+                      - https://rdap.arin.net/registry
+                      - http://rdap.arin.net/registry
+                    reference: null
+                    registration_date: null
+                dataset:
+                  version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                  updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /ipv4:
+    get:
+      operationId: getIPv4
+      tags: [dados]
+      summary: Todos os blocos IPv4
+      description: |
+        Os 256 /8 de `ipv4-address-space` (~54 KB), em ordem de endereço, no
+        formato de `block` do `/ip`. Sem parâmetros de consulta: a lista vem
+        sempre inteira, sem paginação nem filtro (a query string é ignorada).
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Todos os blocos IPv4.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefixBlocksResponse'
+              example:
+                count: 256
+                blocks:
+                  - prefix: 0.0.0.0/8
+                    designation: IANA - Local Identification
+                    registry: null
+                    status: RESERVED
+                    whois: null
+                    rdap_urls: []
+                    allocation_date: '1981-09'
+                    note: '[2][3]'
+                dataset:
+                  version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                  updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /ipv6:
+    get:
+      operationId: getIPv6
+      tags: [dados]
+      summary: Todos os blocos IPv6
+      description: |
+        Os 51 blocos de `ipv6-unicast-address-assignments` (~12 KB), em ordem
+        de endereço, no formato de `block` do `/ip`. Sem parâmetros de
+        consulta: a lista vem sempre inteira, sem paginação nem filtro (a
+        query string é ignorada).
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Todos os blocos IPv6 unicast.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefixBlocksResponse'
+              example:
+                count: 51
+                blocks:
+                  - prefix: 2001::/23
+                    designation: IANA
+                    registry: null
+                    status: ALLOCATED
+                    whois: whois.iana.org
+                    rdap_urls: []
+                    allocation_date: '1999-07-01'
+                    note: This range has been partially allocated. See [IPv6 Special-Purpose Address Space] for details.
+                dataset:
+                  version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                  updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /special:
+    get:
+      operationId: getSpecial
+      tags: [dados]
+      summary: Registros de uso especial
+      description: |
+        Os três special-purpose registries inteiros (~13 KB): blocos IPv4 (26)
+        e IPv6 (25) em ordem de endereço, no formato de `special` do `/ip`, e
+        as faixas de ASN (9) em ordem numérica, no formato de `special` do
+        `/asn`. Inclui as entradas encerradas (`termination_date`
+        preenchido). Sem parâmetros de consulta: a lista vem sempre inteira,
+        sem paginação nem filtro (a query string é ignorada).
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Os registros de uso especial.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpecialResponse'
+              example:
+                ipv4:
+                  - prefix: 0.0.0.0/8
+                    name: '"This network"'
+                    rfc: '[RFC791], Section 3.2'
+                    allocation_date: '1981-09'
+                    termination_date: null
+                    source: true
+                    destination: false
+                    forwardable: false
+                    globally_reachable: false
+                    reserved_by_protocol: true
+                ipv6:
+                  - prefix: '::/128'
+                    name: Unspecified Address
+                    rfc: '[RFC4291]'
+                    allocation_date: '2006-02'
+                    termination_date: null
+                    source: true
+                    destination: false
+                    forwardable: false
+                    globally_reachable: false
+                    reserved_by_protocol: true
+                asn:
+                  - start: 0
+                    end: 0
+                    reason: Reserved by [RFC7607]
+                    reference: '[RFC7607]'
+                dataset:
+                  version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                  updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /rdap:
+    get:
+      operationId: getRDAP
+      tags: [dados]
+      summary: Bootstrap RDAP
+      description: |
+        O bootstrap RDAP (RFC 9224) inteiro (~41 KB): as entradas de
+        `asn.json` (159, em ordem de faixa), `ipv4.json` (221) e `ipv6.json`
+        (34) (em ordem de endereço), no formato de `rdap` do `/asn` e do
+        `/ip`, e o campo `publication` de cada JSON (`null` se o arquivo não
+        trouxer). Sem parâmetros de consulta: a lista vem sempre inteira, sem
+        paginação nem filtro (a query string é ignorada).
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: O bootstrap RDAP.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RDAPResponse'
+              example:
+                publication:
+                  asn: '2026-06-01T20:00:01Z'
+                  ipv4: '2019-06-07T19:00:02Z'
+                  ipv6: '2024-11-01T22:00:01Z'
+                asn:
+                  - resource: 1-1876
+                    registry: arin
+                    urls:
+                      - https://rdap.arin.net/registry/
+                      - http://rdap.arin.net/registry/
+                ipv4:
+                  - resource: 1.0.0.0/8
+                    registry: apnic
+                    urls: [https://rdap.apnic.net/]
+                ipv6:
+                  - resource: 2001:200::/23
+                    registry: apnic
+                    urls: [https://rdap.apnic.net/]
+                dataset:
+                  version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                  updated_at: '2026-09-29T00:49:05Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatasetUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /meta:
+    get:
+      operationId: getMeta
+      tags: [meta]
+      summary: Estado dos dados
+      description: |
+        Último dataset aplicado (os 10 arquivos, na ordem fixa do
+        collector-iana) e a linha do `collector-iana` em `jobs`. Sem cache e
+        sem ETag; responde também antes da primeira carga, com `dataset` e
+        `collector` `null`.
+      responses:
+        '200':
+          description: Estado dos dados.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                loaded:
+                  summary: Com dados (recorte de 2 dos 10 arquivos)
+                  value:
+                    app: api-iana
+                    version: 0.1.0
+                    dataset:
+                      version: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+                      updated_at: '2026-09-29T00:49:05Z'
+                      sha256: b22ef6b2e76eafd675b5d1a144ad6488720da7c39d56e1d8c09a6cf6401ad06e
+                      files:
+                        - name: as-numbers-1
+                          url: https://www.iana.org/assignments/as-numbers/as-numbers-1.csv
+                          sha256: 47f5fe7842029d8077ef749d6b3590293df3252841f1446a188284c5a1839949
+                          bytes: 7936
+                          rows: 88
+                          last_modified: Sat, 19 Sep 2026 00:44:44 GMT
+                          publication: null
+                        - name: rdap-asn
+                          url: https://data.iana.org/rdap/asn.json
+                          sha256: 80a0659f933b45130435c0bc7d6143ca2b815b3c5d2ef80c769b985a7821bb65
+                          bytes: 4408
+                          rows: 159
+                          last_modified: Mon, 01 Jun 2026 20:00:01 GMT
+                          publication: '2026-06-01T20:00:01Z'
+                    collector:
+                      app: collector-iana
+                      last_sync_at: '2026-09-29T00:49:05Z'
+                      last_check_at: '2026-09-29T00:49:05Z'
+                      consolidated: false
+                empty:
+                  summary: Antes da primeira carga
+                  value:
+                    app: api-iana
+                    version: 0.1.0
+                    dataset: null
+                    collector: null
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/iana
+        description: Produção
+      - url: http://127.0.0.1:8107/iana
+        description: Desenvolvimento local
+    get:
+      operationId: getHealth
+      tags: [saúde]
+      summary: Saúde da API
+      description: |
+        Mesmo conteúdo de `/status`: confere o Postgres, o Valkey e se já há
+        dados. Postgres fora = `error` (503); só o Valkey fora = `degraded`
+        (200, a API segue sem cache); sem dados ainda = `starting` (200).
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusUnavailable'
+    post:
+      operationId: postHealth
+      tags: [saúde]
+      summary: Saúde da API (POST)
+      description: Igual ao `GET /health`; o corpo da requisição é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusUnavailable'
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/iana
+        description: Produção
+      - url: http://127.0.0.1:8107/iana
+        description: Desenvolvimento local
+    get:
+      operationId: getStatus
+      tags: [saúde]
+      summary: Estado da API
+      description: |
+        Confere o Postgres, o Valkey e se já há dados. Postgres fora = `error`
+        (503); só o Valkey fora = `degraded` (200, a API segue sem cache); sem
+        dados ainda = `starting` (200).
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusUnavailable'
+    post:
+      operationId: postStatus
+      tags: [saúde]
+      summary: Estado da API (POST)
+      description: Igual ao `GET /status`; o corpo da requisição é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusUnavailable'
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/iana
+        description: Produção
+      - url: http://127.0.0.1:8107/iana
+        description: Desenvolvimento local
+    get:
+      operationId: ping
+      tags: [saúde]
+      summary: Ping
+      description: |
+        Responde o texto `pong` sem consultar nada. É o healthcheck do Docker
+        (`api-iana healthcheck`) e fica fora do log de acesso.
+      responses:
+        '200':
+          description: O texto `pong`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/iana
+        description: Produção
+      - url: http://127.0.0.1:8107/iana
+        description: Desenvolvimento local
+    get:
+      operationId: getOpenAPI
+      tags: [meta]
+      summary: Este manifesto OpenAPI
+      description: |
+        O contrato da API em OpenAPI 3.1, embutido no binário (o mesmo
+        conteúdo de `openapi/openapi.yaml` no repositório). Sem ETag e sem
+        Valkey; fora do versionamento.
+      responses:
+        '200':
+          description: O manifesto em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  parameters:
+    ASN:
+      name: asn
+      in: path
+      required: true
+      description: Número do AS, de 0 a 4294967295, com ou sem o prefixo `AS` (maiúsculas ou minúsculas).
+      schema:
+        type: string
+        pattern: '^([Aa][Ss])?[0-9]+$'
+      example: AS61613
+    IP:
+      name: ip
+      in: path
+      required: true
+      description: |
+        Endereço IPv4 ou IPv6. IPv4 mapeado em IPv6 (`::ffff:10.0.0.1`) vira
+        IPv4; endereço com zona (`fe80::1%eth0`) é inválido.
+      schema:
+        type: string
+        anyOf:
+          - format: ipv4
+          - format: ipv6
+      example: 192.0.0.9
+    PrefixAddress:
+      name: ip
+      in: path
+      required: true
+      description: |
+        Endereço do prefixo, IPv4 ou IPv6 (as mesmas regras do `/ip`). Os bits
+        de host são zerados.
+      schema:
+        type: string
+        anyOf:
+          - format: ipv4
+          - format: ipv6
+      example: '2001:db8::'
+    PrefixLength:
+      name: len
+      in: path
+      required: true
+      description: Tamanho do prefixo, de 0 a 32 (IPv4) ou a 128 (IPv6).
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 128
+      example: 48
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |
+        ETag de uma resposta anterior (fraco ou forte, numa lista, ou `*`). Se
+        bater com o ETag atual, a resposta é `304` sem corpo e sem consultar
+        nada.
+      schema:
+        type: string
+      example: W/"3db9c99d25843e9a"
+  headers:
+    ETag:
+      description: |
+        ETag fraco, `W/"<hash da versão do dataset + consulta normalizada>"`.
+        O mesmo com e sem `/v1`; muda quando a versão dos dados muda.
+      schema:
+        type: string
+      example: W/"3db9c99d25843e9a"
+    CacheControlPublic:
+      description: Cacheável por 5 minutos.
+      schema:
+        type: string
+        const: public, max-age=300
+      example: public, max-age=300
+    CacheControlNoStore:
+      description: Não cacheável.
+      schema:
+        type: string
+        const: no-store
+      example: no-store
+    XCache:
+      description: |
+        `HIT` (veio do Valkey, ou `304`), `MISS` (consultou o Postgres e
+        guardou no Valkey) ou `BYPASS` (cache desligado).
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS]
+      example: MISS
+    XDatasetVersion:
+      description: Versão dos dados usada na resposta (a mesma de `dataset.version`).
+      schema:
+        type: string
+        format: uuid
+      example: 01a0eaa2-fd5c-7c24-bc6c-4e3c35d61c53
+  responses:
+    NotModified:
+      description: |
+        O `If-None-Match` bateu com o ETag atual: sem corpo e sem consulta ao
+        banco (`X-Cache: HIT`).
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+        X-Dataset-Version:
+          $ref: '#/components/headers/XDatasetVersion'
+    BadRequest:
+      description: ASN, IP ou tamanho de prefixo inválido (`bad_request`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: ASN inválido
+              value:
+                error:
+                  code: bad_request
+                  message: 'ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS'
+            ip:
+              summary: IP inválido
+              value:
+                error:
+                  code: bad_request
+                  message: endereço IP inválido
+            len:
+              summary: Tamanho de prefixo inválido
+              value:
+                error:
+                  code: bad_request
+                  message: tamanho de prefixo inválido
+    NotFound:
+      description: |
+        Rota inexistente (`not_found`): qualquer caminho ou método fora dos
+        descritos aqui. As rotas de consulta não respondem 404 para entrada
+        válida.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: not_found
+              message: rota inexistente; veja /iana/
+    DatasetUnavailable:
+      description: |
+        `dataset_not_ready` (a primeira sincronização do collector-iana ainda
+        não terminou) ou `database_unavailable` (falha no Postgres).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes da primeira carga
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: a primeira sincronização do collector-iana ainda não terminou; tente em alguns minutos
+            database_unavailable:
+              summary: Falha no Postgres
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no Postgres (`database_unavailable`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (`timeout`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: Panic no tratamento da requisição, registrado no log (`internal_error`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: |
+        A API responde: `ok` (tudo no ar), `starting` (ainda não há dados) ou
+        `degraded` (Valkey fora; a API segue sem cache).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: true
+            status: ok
+            timestamp: '2026-09-29T01:00:00Z'
+            message: api-iana operacional
+            checks:
+              dataset: ok
+              postgres: ok
+              valkey: ok
+    StatusUnavailable:
+      description: Postgres fora (`status` `error`, `success` `false`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-09-29T01:00:00Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+  schemas:
+    Registry:
+      description: |
+        RIR responsável: `afrinic`, `apnic`, `arin`, `lacnic`, `ripencc`, ou
+        `null` (sem RIR: reservado, IANA, 6to4...; no RDAP, servidor de outro
+        operador).
+      type: [string, 'null']
+      enum: [afrinic, apnic, arin, lacnic, ripencc, null]
+    IANADate:
+      description: |
+        Data como a IANA publica, em texto: `AAAA-MM` ou `AAAA-MM-DD`; `null`
+        quando vazia.
+      type: [string, 'null']
+      pattern: '^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$'
+    Dataset:
+      type: object
+      description: Versão dos dados usada na resposta.
+      required: [version, updated_at]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: |
+            UUID da última carga aplicada pelo collector-iana
+            (`iana_run.uuid`); entra na chave de cache e no ETag.
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando o collector-iana aplicou essa carga (UTC).
+    ASNBlock:
+      type: object
+      description: Faixa de ASN de `as-numbers-1`/`-2`.
+      required: [start, end, description, registry, whois, rdap_urls, reference, registration_date]
+      properties:
+        start:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Primeiro ASN da faixa.
+        end:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Último ASN da faixa, inclusive.
+        description:
+          type: string
+          description: Coluna Description como publicada (ex. `Assigned by LACNIC`, `Reserved`).
+        registry:
+          $ref: '#/components/schemas/Registry'
+        whois:
+          type: [string, 'null']
+          description: Servidor WHOIS da faixa; `null` quando vazio.
+        rdap_urls:
+          type: array
+          description: URLs RDAP da faixa (`[]` se nenhuma).
+          items:
+            type: string
+            format: uri
+        reference:
+          type: [string, 'null']
+          description: Coluna Reference como publicada (ex. `[RFC7607]`); `null` quando vazia.
+        registration_date:
+          $ref: '#/components/schemas/IANADate'
+    SpecialASN:
+      type: object
+      description: Faixa de ASN de `special-purpose-as-numbers`.
+      required: [start, end, reason, reference]
+      properties:
+        start:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Primeiro ASN da faixa.
+        end:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Último ASN da faixa, inclusive.
+        reason:
+          type: string
+          description: Coluna Reason for Reservation como publicada.
+        reference:
+          type: [string, 'null']
+          description: Coluna Reference como publicada; `null` quando vazia.
+    PrefixBlock:
+      type: object
+      description: Bloco de `ipv4-address-space` (/8) ou `ipv6-unicast-address-assignments`.
+      required: [prefix, designation, registry, status, whois, rdap_urls, allocation_date, note]
+      properties:
+        prefix:
+          type: string
+          description: Bloco em notação CIDR (ex. `192.0.0.0/8`, `2001:c00::/23`).
+        designation:
+          type: string
+          description: Coluna Designation como publicada (ex. `Administered by ARIN`, `APNIC`).
+        registry:
+          $ref: '#/components/schemas/Registry'
+        status:
+          type: string
+          description: Coluna Status em maiúsculas; hoje `ALLOCATED`, `LEGACY` ou `RESERVED`.
+          examples: [ALLOCATED, LEGACY, RESERVED]
+        whois:
+          type: [string, 'null']
+          description: Servidor WHOIS do bloco; `null` quando vazio.
+        rdap_urls:
+          type: array
+          description: URLs RDAP do bloco (`[]` se nenhuma).
+          items:
+            type: string
+            format: uri
+        allocation_date:
+          $ref: '#/components/schemas/IANADate'
+        note:
+          type: [string, 'null']
+          description: |
+            Notas da IANA; no IPv4 só as marcas de nota de rodapé (ex.
+            `[10][11]`). `null` quando vazio.
+    SpecialPrefix:
+      type: object
+      description: |
+        Bloco de um special-purpose registry (IPv4 ou IPv6). As 5 flags saem
+        `null` quando a IANA publica vazio ou `N/A`.
+      required: [prefix, name, rfc, allocation_date, termination_date, source, destination, forwardable, globally_reachable, reserved_by_protocol]
+      properties:
+        prefix:
+          type: string
+          description: Bloco em notação CIDR.
+        name:
+          type: string
+          description: Coluna Name como publicada.
+        rfc:
+          type: [string, 'null']
+          description: Coluna RFC como publicada; `null` quando vazia.
+        allocation_date:
+          $ref: '#/components/schemas/IANADate'
+        termination_date:
+          $ref: '#/components/schemas/IANADate'
+          description: Data de encerramento; preenchida = entrada encerrada, que não conta na regra de bogon.
+        source:
+          type: [boolean, 'null']
+          description: Válido como endereço de origem.
+        destination:
+          type: [boolean, 'null']
+          description: Válido como endereço de destino.
+        forwardable:
+          type: [boolean, 'null']
+          description: Roteadores podem encaminhar.
+        globally_reachable:
+          type: [boolean, 'null']
+          description: |
+            Alcançável na Internet pública. Decide a regra de bogon quando é a
+            entrada em vigor mais específica (`false` = bogon, `true` = não
+            bogon, `null` = passa para a regra da alocação da IANA).
+        reserved_by_protocol:
+          type: [boolean, 'null']
+          description: Reservado pelo protocolo.
+    RDAPService:
+      type: object
+      description: Entrada do bootstrap RDAP (`asn.json`, `ipv4.json` ou `ipv6.json`).
+      required: [resource, registry, urls]
+      properties:
+        resource:
+          type: string
+          description: Faixa de ASN (`61440-61951`, ou um número só) ou bloco CIDR (`192.0.0.0/8`).
+        registry:
+          $ref: '#/components/schemas/Registry'
+        urls:
+          type: array
+          description: URLs base do servidor RDAP, na ordem publicada.
+          items:
+            type: string
+            format: uri
+    ASNResponse:
+      type: object
+      required: [asn, block, special, rdap, dataset]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: ASN consultado, normalizado.
+        block:
+          description: Faixa que contém o ASN (`null` só com dados incompletos).
+          oneOf:
+            - $ref: '#/components/schemas/ASNBlock'
+            - type: 'null'
+        special:
+          type: array
+          description: Faixas de uso especial que contêm o ASN, em ordem de início (`[]` se nenhuma).
+          items:
+            $ref: '#/components/schemas/SpecialASN'
+        rdap:
+          description: Entrada do bootstrap RDAP que contém o ASN, ou `null`.
+          oneOf:
+            - $ref: '#/components/schemas/RDAPService'
+            - type: 'null'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    IPResponse:
+      type: object
+      required: [ip, block, special, bogon, rdap, dataset]
+      properties:
+        ip:
+          type: string
+          anyOf:
+            - format: ipv4
+            - format: ipv6
+          description: IP consultado, normalizado (IPv4 mapeado em IPv6 vira IPv4).
+        block:
+          description: Bloco mais específico da IANA que contém o IP, ou `null`.
+          oneOf:
+            - $ref: '#/components/schemas/PrefixBlock'
+            - type: 'null'
+        special:
+          type: array
+          description: |
+            Todas as entradas de uso especial que contêm o IP, da mais
+            específica para a menos, inclusive as encerradas (`[]` se nenhuma).
+          items:
+            $ref: '#/components/schemas/SpecialPrefix'
+        bogon:
+          type: boolean
+          description: Resultado da regra de bogon (veja a descrição da operação).
+        rdap:
+          description: Entrada mais específica do bootstrap RDAP que contém o IP, ou `null`.
+          oneOf:
+            - $ref: '#/components/schemas/RDAPService'
+            - type: 'null'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    PrefixResponse:
+      type: object
+      required: [query, block, special, bogon, rdap, dataset]
+      properties:
+        query:
+          type: string
+          description: Prefixo consultado em notação CIDR, com os bits de host zerados.
+        block:
+          description: Bloco mais específico da IANA que contém o prefixo, ou `null`.
+          oneOf:
+            - $ref: '#/components/schemas/PrefixBlock'
+            - type: 'null'
+        special:
+          type: array
+          description: |
+            Entradas de uso especial que contêm o prefixo, da mais específica
+            para a menos (as que estão dentro dele não entram).
+          items:
+            $ref: '#/components/schemas/SpecialPrefix'
+        bogon:
+          type: boolean
+          description: Resultado da regra de bogon aplicada ao prefixo inteiro.
+        rdap:
+          description: Entrada mais específica do bootstrap RDAP que contém o prefixo, ou `null`.
+          oneOf:
+            - $ref: '#/components/schemas/RDAPService'
+            - type: 'null'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    ASNBlocksResponse:
+      type: object
+      required: [count, blocks, dataset]
+      properties:
+        count:
+          type: integer
+          description: Número de faixas em `blocks`.
+        blocks:
+          type: array
+          description: Todas as faixas de ASN, em ordem numérica.
+          items:
+            $ref: '#/components/schemas/ASNBlock'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    PrefixBlocksResponse:
+      type: object
+      required: [count, blocks, dataset]
+      properties:
+        count:
+          type: integer
+          description: Número de blocos em `blocks`.
+        blocks:
+          type: array
+          description: Todos os blocos da família, em ordem de endereço.
+          items:
+            $ref: '#/components/schemas/PrefixBlock'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    SpecialResponse:
+      type: object
+      required: [ipv4, ipv6, asn, dataset]
+      properties:
+        ipv4:
+          type: array
+          description: Blocos IPv4 de uso especial, em ordem de endereço.
+          items:
+            $ref: '#/components/schemas/SpecialPrefix'
+        ipv6:
+          type: array
+          description: Blocos IPv6 de uso especial, em ordem de endereço.
+          items:
+            $ref: '#/components/schemas/SpecialPrefix'
+        asn:
+          type: array
+          description: Faixas de ASN de uso especial, em ordem numérica.
+          items:
+            $ref: '#/components/schemas/SpecialASN'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    RDAPPublication:
+      type: object
+      description: Campo `publication` de cada JSON do bootstrap RDAP, como publicado.
+      required: [asn, ipv4, ipv6]
+      properties:
+        asn:
+          type: [string, 'null']
+          format: date-time
+          description: '`publication` de `asn.json`; `null` se o arquivo não trouxer.'
+        ipv4:
+          type: [string, 'null']
+          format: date-time
+          description: '`publication` de `ipv4.json`; `null` se o arquivo não trouxer.'
+        ipv6:
+          type: [string, 'null']
+          format: date-time
+          description: '`publication` de `ipv6.json`; `null` se o arquivo não trouxer.'
+    RDAPResponse:
+      type: object
+      required: [publication, asn, ipv4, ipv6, dataset]
+      properties:
+        publication:
+          $ref: '#/components/schemas/RDAPPublication'
+        asn:
+          type: array
+          description: Entradas de `asn.json`, em ordem de faixa.
+          items:
+            $ref: '#/components/schemas/RDAPService'
+        ipv4:
+          type: array
+          description: Entradas de `ipv4.json`, em ordem de endereço.
+          items:
+            $ref: '#/components/schemas/RDAPService'
+        ipv6:
+          type: array
+          description: Entradas de `ipv6.json`, em ordem de endereço.
+          items:
+            $ref: '#/components/schemas/RDAPService'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    MetaResponse:
+      type: object
+      required: [app, version, dataset, collector]
+      properties:
+        app:
+          type: string
+          const: api-iana
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API (`dev` fora de um build com tag).
+        dataset:
+          description: Último dataset aplicado, ou `null` antes da primeira carga.
+          oneOf:
+            - $ref: '#/components/schemas/MetaDataset'
+            - type: 'null'
+        collector:
+          description: Linha do `collector-iana` em `jobs`, ou `null` se ainda não existe.
+          oneOf:
+            - $ref: '#/components/schemas/MetaCollector'
+            - type: 'null'
+    MetaDataset:
+      type: object
+      description: Último dataset aplicado pelo collector-iana (`iana_run` com `status = 1`).
+      required: [version, updated_at, sha256, files]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: Versão dos dados (`iana_run.uuid`).
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando a carga foi aplicada (UTC).
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Hash combinado dos 10 arquivos.
+        files:
+          type: array
+          description: Os 10 arquivos da IANA, na ordem fixa do collector-iana.
+          items:
+            $ref: '#/components/schemas/MetaFile'
+    MetaFile:
+      type: object
+      description: Um dos arquivos da IANA do dataset aplicado.
+      required: [name, url, sha256, bytes, rows, last_modified, publication]
+      properties:
+        name:
+          type: string
+          description: |
+            Nome do arquivo no collector-iana: `as-numbers-1`, `as-numbers-2`,
+            `ipv4-address-space`, `ipv6-unicast-address-assignments`,
+            `iana-ipv4-special-registry-1`, `iana-ipv6-special-registry-1`,
+            `special-purpose-as-numbers`, `rdap-asn`, `rdap-ipv4` ou
+            `rdap-ipv6`.
+        url:
+          type: string
+          format: uri
+          description: URL de onde o arquivo foi baixado.
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 do conteúdo.
+        bytes:
+          type: integer
+          format: int64
+          description: Tamanho em bytes.
+        rows:
+          type: [integer, 'null']
+          description: Linhas lidas pelo parser; `null` quando o collector não gravou.
+        last_modified:
+          type: [string, 'null']
+          description: Cabeçalho `Last-Modified` da IANA (data HTTP); `null` quando ausente.
+        publication:
+          type: [string, 'null']
+          format: date-time
+          description: Campo `publication` do JSON (só nos `rdap-*`); `null` nos demais ou quando ausente.
+    MetaCollector:
+      type: object
+      description: Linha do `collector-iana` na tabela `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          const: collector-iana
+          description: Nome do coletor.
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última sincronização realizada (UTC).
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última verificação dos arquivos na IANA (UTC).
+        consolidated:
+          type: boolean
+          description: Se a consolidação da fase 2 já copiou a carga atual (`jobs.consolidated = 1`).
+    Status:
+      type: object
+      description: Resposta de `/health` e `/status`.
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só com `status` `error`.'
+        status:
+          type: string
+          enum: [ok, starting, degraded, error]
+          description: |
+            `ok` (tudo no ar), `starting` (sem dados ainda), `degraded` (Valkey
+            fora) ou `error` (Postgres fora, HTTP 503).
+        timestamp:
+          type: string
+          format: date-time
+          description: Hora da verificação (UTC).
+        message:
+          type: string
+          description: Mensagem em PT-BR sobre o estado.
+        checks:
+          $ref: '#/components/schemas/StatusChecks'
+    StatusChecks:
+      type: object
+      description: Resultado de cada verificação.
+      required: [postgres, valkey, dataset]
+      properties:
+        postgres:
+          type: string
+          enum: [ok, error]
+          description: Ping no Postgres.
+        valkey:
+          type: string
+          enum: [ok, error, disabled]
+          description: Ping no Valkey (`disabled` com o cache desligado).
+        dataset:
+          type: string
+          enum: [ok, empty]
+          description: '`empty` antes da primeira carga do collector-iana.'
+    IndexResponse:
+      type: object
+      required: [app, version, base_path, versions, endpoints, source]
+      properties:
+        app:
+          type: string
+          const: api-iana
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+        base_path:
+          type: string
+          description: Caminho de base (`BASE_PATH`).
+        versions:
+          type: array
+          description: Versões da API servidas (a última é a das rotas sem versão).
+          items:
+            type: string
+        endpoints:
+          type: array
+          description: Rotas principais, com o caminho de base.
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: Página da IANA com os registros de numeração.
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error]
+              description: Código do erro, estável para uso em programas.
+            message:
+              type: string
+              description: Mensagem em PT-BR para pessoas.

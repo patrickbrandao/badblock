@@ -1,0 +1,28 @@
+{
+  "name": "badblock-website-www",
+  "version": "1.0.0",
+  "description": "Site www do BadBlock (Vite + React + Tailwind, servido por lighttpd)",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/run.mjs",
+    "build": "vite build",
+    "dev": "vite --open index.src.html",
+    "serve": "lighttpd -D -f lighttpd.conf"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "vite": "^8.3.1"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.12.0",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.28",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^3.4.19"
+  }
+}

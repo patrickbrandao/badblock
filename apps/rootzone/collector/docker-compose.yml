@@ -1,0 +1,48 @@
+# collector-rootzone: importa periodicamente a zona raiz do DNS (root.zone da
+# InterNIC: TLDs delegados, servidores de nome, glue e DS) para as tabelas
+# rootzone_* do PostgreSQL.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não tem porta nem
+# API HTTP: o estado fica nas tabelas rootzone_run e jobs, e nos logs.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-rootzone
+
+services:
+  collector-rootzone:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-rootzone:${COLLECTOR_ROOTZONE_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_ROOTZONE_TAG:-dev}
+    container_name: badblock-collector-rootzone
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senha só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      SYNC_INTERVAL: ${COLLECTOR_ROOTZONE_SYNC_INTERVAL:-1h}
+      RETRY_INTERVAL: ${COLLECTOR_ROOTZONE_RETRY_INTERVAL:-5m}
+      SOURCE_URL: ${COLLECTOR_ROOTZONE_SOURCE_URL:-https://www.internic.net/domain/root.zone}
+      # Vazio = SOURCE_URL + ".md5"; "off" desliga a conferência.
+      SOURCE_MD5_URL: ${COLLECTOR_ROOTZONE_SOURCE_MD5_URL:-}
+      MIN_TLDS: ${COLLECTOR_ROOTZONE_MIN_TLDS:-1000}
+      REMOVAL_THRESHOLD: ${COLLECTOR_ROOTZONE_REMOVAL_THRESHOLD:-0.05}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

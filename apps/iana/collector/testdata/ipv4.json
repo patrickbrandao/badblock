@@ -1,0 +1,59 @@
+{
+  "description": "RDAP bootstrap file for IPv4 address allocations",
+  "publication": "2019-06-07T19:00:02Z",
+  "services": [
+    [
+      [
+        "41.0.0.0/8",
+        "102.0.0.0/8",
+        "105.0.0.0/8"
+      ],
+      [
+        "https://rdap.afrinic.net/rdap/",
+        "http://rdap.afrinic.net/rdap/"
+      ]
+    ],
+    [
+      [
+        "1.0.0.0/8",
+        "14.0.0.0/8",
+        "27.0.0.0/8"
+      ],
+      [
+        "https://rdap.apnic.net/"
+      ]
+    ],
+    [
+      [
+        "3.0.0.0/8",
+        "4.0.0.0/8",
+        "6.0.0.0/8"
+      ],
+      [
+        "https://rdap.arin.net/registry/",
+        "http://rdap.arin.net/registry/"
+      ]
+    ],
+    [
+      [
+        "2.0.0.0/8",
+        "5.0.0.0/8",
+        "25.0.0.0/8"
+      ],
+      [
+        "https://rdap.db.ripe.net/"
+      ]
+    ],
+    [
+      [
+        "177.0.0.0/8",
+        "179.0.0.0/8",
+        "181.0.0.0/8"
+      ],
+      [
+        "https://rdap.lacnic.net/rdap/"
+      ]
+    ]
+  ],
+  "version": "1.0"
+}

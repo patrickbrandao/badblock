@@ -1,0 +1,956 @@
+openapi: 3.1.0
+info:
+  title: api-rootanchors
+  version: '0.1.0'
+  summary: Âncoras de confiança DNSSEC da zona raiz (root-anchors.xml da IANA), com o registro DS pronto.
+  description: |-
+    API HTTP (JSON), só de leitura, com as **âncoras de confiança DNSSEC da
+    zona raiz**: as KSKs publicadas pela IANA no arquivo
+    [`root-anchors.xml`](https://data.iana.org/root-anchors/root-anchors.xml),
+    que o `collector-rootanchors` grava nas tabelas `rootanchors_*` depois de
+    conferir o key tag e o digest de cada chave com `PublicKey`. Cada chave
+    traz o registro DS (key tag, algoritmo, tipo e valor do digest) e o texto
+    pronto dele (`. IN DS <key_tag> <algorithm> <digest_type> <digest>`); as
+    mais novas trazem também o DNSKEY (flags e chave pública) e o texto dele.
+    Pública, sem chave; rate limit por IP no proxy.
+
+    - O arquivo mantém as chaves aposentadas (com `valid_until`): a lista
+      traz todas, da mais antiga para a mais nova.
+    - **Não há campo "ativa"**: ele depende do relógio, e a resposta fica em
+      cache enquanto os dados não mudam. Uma chave está ativa no instante `t`
+      quando `valid_from <= t` e (`valid_until` é `null` ou
+      `valid_until > t`); o cliente calcula com a própria hora.
+    - O key tag **não é único**: `/key/{key_tag}` responde sempre uma lista.
+    - Versões são servidores: as rotas de dados, o índice e `/meta` respondem
+      no servidor sem versão (versão atual, hoje v1) e no servidor `/v1` (v1
+      fixa), com o mesmo conteúdo, o mesmo ETag e a mesma chave de cache.
+      Saúde (`/health`, `/status`, `/ping`) e `/openapi.yaml` ficam fora do
+      versionamento: só existem no servidor sem versão (declaram `servers`
+      próprios).
+    - Toda rota com `GET` também aceita `HEAD`; `OPTIONS` responde o preflight
+      de CORS (204, `GET, HEAD, OPTIONS`). `/rootanchors` redireciona (301)
+      para `/rootanchors/`; qualquer outro caminho, ou método que a rota não
+      aceita, responde 404 em JSON.
+    - Todas as respostas levam `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin`,
+      `Access-Control-Expose-Headers: ETag, X-Cache, X-Dataset-Version` e
+      `Server: badblock-api-rootanchors/<versão>`.
+    - Erros sempre em JSON `{"error": {"code", "message"}}`, com
+      `Cache-Control: no-store`. A validação vem antes de tudo: um pedido
+      inválido recebe 400 mesmo antes da primeira carga dos dados.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/rootanchors
+servers:
+  - url: https://api.badblock.net.br/rootanchors
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/rootanchors/v1
+    description: Produção, v1 fixa
+  - url: http://127.0.0.1:8111/rootanchors
+    description: Desenvolvimento local, versão atual (porta publicada no loopback pelo docker-compose.yml)
+  - url: http://127.0.0.1:8111/rootanchors/v1
+    description: Desenvolvimento local, v1 fixa
+tags:
+  - name: dados
+    description: Consultas às âncoras de confiança (com ETag e cache no Valkey).
+  - name: meta
+    description: Índice, estado dos dados e este manifesto.
+  - name: saúde
+    description: Saúde do serviço, fora do versionamento.
+paths:
+  /:
+    get:
+      operationId: getIndex
+      tags: [meta]
+      summary: Índice da API
+      description: |-
+        App, versão do build, caminho de base, versões da API e rotas.
+        Responde igual nos dois servidores (`/rootanchors/` e
+        `/rootanchors/v1/`); não consulta o banco nem o Valkey.
+      responses:
+        '200':
+          description: O índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-rootanchors
+                version: '0.1.0'
+                base_path: /rootanchors
+                versions: [v1]
+                endpoints:
+                  - /rootanchors/keys
+                  - /rootanchors/key/{key_tag}
+                  - /rootanchors/meta
+                  - /rootanchors/status
+                  - /rootanchors/openapi.yaml
+                source: https://data.iana.org/root-anchors/root-anchors.xml
+  /keys:
+    get:
+      operationId: listKeys
+      tags: [dados]
+      summary: Todas as chaves
+      description: |-
+        Todas as chaves (`KeyDigest`) do último arquivo aplicado, inclusive
+        as aposentadas, em ordem de `valid_from` e `key_id`, com o
+        `TrustAnchor` do arquivo (`id`, `source`, `zone`). Cada chave traz o
+        DS em texto (`ds`) e, quando o arquivo publica a chave pública, o
+        DNSKEY em texto (`dnskey`). Não há 404.
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: As chaves.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeysResponse'
+              examples:
+                todas:
+                  summary: GET /rootanchors/keys (arquivo de 2026-09-30)
+                  value:
+                    trust_anchor:
+                      id: 0C05FDD6-422C-4910-8ED6-430ED15E11C2
+                      source: http://data.iana.org/root-anchors/root-anchors.xml
+                      zone: '.'
+                    count: 3
+                    keys:
+                    - key_id: 'Kjqmt7v'
+                      key_tag: 19036
+                      algorithm: 8
+                      digest_type: 2
+                      digest: '49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5'
+                      ds: '. IN DS 19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5'
+                      public_key: null
+                      flags: null
+                      dnskey: null
+                      valid_from: '2010-07-15T00:00:00Z'
+                      valid_until: '2019-01-11T00:00:00Z'
+                      first_seen: '2026-09-30T03:44:43Z'
+                      updated_at: '2026-09-30T03:44:43Z'
+                    - key_id: 'Klajeyz'
+                      key_tag: 20326
+                      algorithm: 8
+                      digest_type: 2
+                      digest: 'E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D'
+                      ds: '. IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D'
+                      public_key: 'AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3+/4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kvArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF0jLHwVN8efS3rCj/EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+eoZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfdRUfhHdY6+cn8HFRm+2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwNR1AkUTV74bU='
+                      flags: 257
+                      dnskey: '. IN DNSKEY 257 3 8 AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3+/4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kvArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF0jLHwVN8efS3rCj/EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+eoZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfdRUfhHdY6+cn8HFRm+2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwNR1AkUTV74bU='
+                      valid_from: '2017-02-02T00:00:00Z'
+                      valid_until: null
+                      first_seen: '2026-09-30T03:44:43Z'
+                      updated_at: '2026-09-30T03:44:43Z'
+                    - key_id: 'Kmyv6jo'
+                      key_tag: 38696
+                      algorithm: 8
+                      digest_type: 2
+                      digest: '683D2D0ACB8C9B712A1948B27F741219298D0A450D612C483AF444A4C0FB2B16'
+                      ds: '. IN DS 38696 8 2 683D2D0ACB8C9B712A1948B27F741219298D0A450D612C483AF444A4C0FB2B16'
+                      public_key: 'AwEAAa96jeuknZlaeSrvyAJj6ZHv28hhOKkx3rLGXVaC6rXTsDc449/cidltpkyGwCJNnOAlFNKF2jBosZBU5eeHspaQWOmOElZsjICMQMC3aeHbGiShvZsx4wMYSjH8e7Vrhbu6irwCzVBApESjbUdpWWmEnhathWu1jo+siFUiRAAxm9qyJNg/wOZqqzL/dL/q8PkcRU5oUKEpUge71M3ej2/7CPqpdVwuMoTvoB+ZOT4YeGyxMvHmbrxlFzGOHOijtzN+u1TQNatX2XBuzZNQ1K+s2CXkPIZo7s6JgZyvaBevYtxPvYLw4z9mR7K2vaF18UYH9Z9GNUUeayffKC73PYc='
+                      flags: 257
+                      dnskey: '. IN DNSKEY 257 3 8 AwEAAa96jeuknZlaeSrvyAJj6ZHv28hhOKkx3rLGXVaC6rXTsDc449/cidltpkyGwCJNnOAlFNKF2jBosZBU5eeHspaQWOmOElZsjICMQMC3aeHbGiShvZsx4wMYSjH8e7Vrhbu6irwCzVBApESjbUdpWWmEnhathWu1jo+siFUiRAAxm9qyJNg/wOZqqzL/dL/q8PkcRU5oUKEpUge71M3ej2/7CPqpdVwuMoTvoB+ZOT4YeGyxMvHmbrxlFzGOHOijtzN+u1TQNatX2XBuzZNQ1K+s2CXkPIZo7s6JgZyvaBevYtxPvYLw4z9mR7K2vaF18UYH9Z9GNUUeayffKC73PYc='
+                      valid_from: '2024-07-18T00:00:00Z'
+                      valid_until: null
+                      first_seen: '2026-09-30T03:44:43Z'
+                      updated_at: '2026-09-30T03:44:43Z'
+                    dataset:
+                      version: 01a0f06a-259b-7abc-a1fd-a7b4bd279125
+                      updated_at: '2026-09-30T03:44:43Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /key/{key_tag}:
+    get:
+      operationId: getKeyTag
+      tags: [dados]
+      summary: As chaves de um key tag
+      description: |-
+        As chaves com um key tag, no mesmo formato de `/keys`. O key tag não é
+        único (duas chaves podem ter o mesmo), então a resposta é sempre uma
+        lista, em ordem de `valid_from` e `key_id`. Key tag de 0 a 65535, só
+        dígitos (zeros à esquerda valem: `020326` = `20326`); fora disso, 400.
+        Nenhuma chave com o key tag: 404.
+      parameters:
+        - $ref: '#/components/parameters/KeyTag'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: As chaves do key tag.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyTagResponse'
+              examples:
+                ksk_2017:
+                  summary: GET /rootanchors/key/20326 (a KSK-2017, com o DNSKEY)
+                  value:
+                    key_tag: 20326
+                    trust_anchor:
+                      id: 0C05FDD6-422C-4910-8ED6-430ED15E11C2
+                      source: http://data.iana.org/root-anchors/root-anchors.xml
+                      zone: '.'
+                    count: 1
+                    keys:
+                    - key_id: 'Klajeyz'
+                      key_tag: 20326
+                      algorithm: 8
+                      digest_type: 2
+                      digest: 'E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D'
+                      ds: '. IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D'
+                      public_key: 'AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3+/4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kvArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF0jLHwVN8efS3rCj/EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+eoZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfdRUfhHdY6+cn8HFRm+2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwNR1AkUTV74bU='
+                      flags: 257
+                      dnskey: '. IN DNSKEY 257 3 8 AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3+/4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kvArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF0jLHwVN8efS3rCj/EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+eoZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfdRUfhHdY6+cn8HFRm+2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwNR1AkUTV74bU='
+                      valid_from: '2017-02-02T00:00:00Z'
+                      valid_until: null
+                      first_seen: '2026-09-30T03:44:43Z'
+                      updated_at: '2026-09-30T03:44:43Z'
+                    dataset:
+                      version: 01a0f06a-259b-7abc-a1fd-a7b4bd279125
+                      updated_at: '2026-09-30T03:44:43Z'
+                ksk_2010:
+                  summary: GET /rootanchors/key/19036 (a KSK-2010, aposentada, só com o DS)
+                  value:
+                    key_tag: 19036
+                    trust_anchor:
+                      id: 0C05FDD6-422C-4910-8ED6-430ED15E11C2
+                      source: http://data.iana.org/root-anchors/root-anchors.xml
+                      zone: '.'
+                    count: 1
+                    keys:
+                    - key_id: 'Kjqmt7v'
+                      key_tag: 19036
+                      algorithm: 8
+                      digest_type: 2
+                      digest: '49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5'
+                      ds: '. IN DS 19036 8 2 49AAC11D7B6F6446702E54A1607371607A1A41855200FD2CE1CDDE32F24E8FB5'
+                      public_key: null
+                      flags: null
+                      dnskey: null
+                      valid_from: '2010-07-15T00:00:00Z'
+                      valid_until: '2019-01-11T00:00:00Z'
+                      first_seen: '2026-09-30T03:44:43Z'
+                      updated_at: '2026-09-30T03:44:43Z'
+                    dataset:
+                      version: 01a0f06a-259b-7abc-a1fd-a7b4bd279125
+                      updated_at: '2026-09-30T03:44:43Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /meta:
+    get:
+      operationId: getMeta
+      tags: [meta]
+      summary: Estado dos dados
+      description: |-
+        Último arquivo aplicado (com o `TrustAnchor` dele) e a linha do
+        `collector-rootanchors` na tabela `jobs`, lidos na hora (sem Valkey e
+        sem ETag). `dataset` e `collector` são `null` antes da primeira carga.
+      responses:
+        '200':
+          description: O estado dos dados.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                carregado:
+                  summary: Com dados carregados
+                  value:
+                    app: api-rootanchors
+                    version: '0.1.0'
+                    dataset:
+                      version: 01a0f06a-259b-7abc-a1fd-a7b4bd279125
+                      updated_at: '2026-09-30T03:44:43Z'
+                      source: https://data.iana.org/root-anchors/root-anchors.xml
+                      sha256: 3ccaab38830025ee0a0f6c1f25769427544f81ea2865aa860468f3ef5278b908
+                      keys: 3
+                      trust_anchor:
+                        id: 0C05FDD6-422C-4910-8ED6-430ED15E11C2
+                        source: http://data.iana.org/root-anchors/root-anchors.xml
+                        zone: '.'
+                    collector:
+                      app: collector-rootanchors
+                      last_sync_at: '2026-09-30T03:44:43Z'
+                      last_check_at: '2026-09-30T03:44:43Z'
+                      consolidated: false
+                antes_da_primeira_carga:
+                  summary: Antes da primeira carga do collector
+                  value:
+                    app: api-rootanchors
+                    version: '0.1.0'
+                    dataset: null
+                    collector: null
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/rootanchors
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8111/rootanchors
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getHealth
+      tags: [saúde]
+      summary: Saúde do serviço
+      description: |-
+        Mesmo conteúdo de `/status`. Confere o PostgreSQL, o Valkey e se já
+        há dados carregados; nunca usa o cache.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+    post:
+      operationId: postHealth
+      tags: [saúde]
+      summary: Saúde do serviço (POST)
+      description: Igual ao `GET /health`; o corpo do pedido é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/rootanchors
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8111/rootanchors
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getStatus
+      tags: [saúde]
+      summary: Estado do serviço
+      description: |-
+        `ok` com tudo no ar; `starting` antes da primeira carga do collector;
+        `degraded` com o Valkey fora (a API segue sem cache); `error` (HTTP
+        503, `success: false`) com o PostgreSQL fora. Precedência:
+        `error` > `degraded` > `starting` > `ok`.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+    post:
+      operationId: postStatus
+      tags: [saúde]
+      summary: Estado do serviço (POST)
+      description: Igual ao `GET /status`; o corpo do pedido é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/rootanchors
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8111/rootanchors
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: ping
+      tags: [saúde]
+      summary: pong
+      description: |-
+        Responde o texto `pong` sem consultar nada. É o healthcheck do Docker
+        (a cada 15 s) e fica fora do log de acesso.
+      responses:
+        '200':
+          description: O texto `pong`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/rootanchors
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8111/rootanchors
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getOpenAPI
+      tags: [meta]
+      summary: Este manifesto OpenAPI
+      description: |-
+        O contrato da API em OpenAPI 3.1, embutido no binário (mesmo conteúdo
+        de `openapi/openapi.yaml` no repositório). Não usa o banco nem o
+        Valkey.
+      responses:
+        '200':
+          description: O manifesto em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  parameters:
+    KeyTag:
+      name: key_tag
+      in: path
+      required: true
+      description: |-
+        Key tag do DNSKEY (RFC 4034, apêndice B): número decimal de 0 a 65535,
+        só dígitos (sem sinal nem espaço; zeros à esquerda valem). Fora disso:
+        400.
+      schema:
+        type: string
+        pattern: '^[0-9]+$'
+      example: '20326'
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |-
+        ETag de uma resposta anterior (fraco ou forte, vários separados por
+        vírgula, ou `*`). Se algum bater com o ETag atual, a resposta é 304
+        sem corpo e sem consultar nada.
+      schema:
+        type: string
+      example: 'W/"e2045590e46611e7"'
+  headers:
+    ETag:
+      description: |-
+        ETag fraco, `W/"<hash da versão do dataset + consulta normalizada>"`.
+        Igual com e sem `/v1` e muda quando a versão dos dados muda. O exemplo
+        é o de `/rootanchors/key/20326` no dataset
+        `01a0f06a-259b-7abc-a1fd-a7b4bd279125`.
+      schema:
+        type: string
+      example: 'W/"e2045590e46611e7"'
+    CacheControlPublic:
+      description: Cache por 5 minutos em clientes e proxies.
+      schema:
+        type: string
+        const: public, max-age=300
+    CacheControlNoStore:
+      description: Não guardar em cache.
+      schema:
+        type: string
+        const: no-store
+    XCache:
+      description: |-
+        `HIT` (veio do Valkey, ou 304), `MISS` (consultou o PostgreSQL) ou
+        `BYPASS` (cache desligado).
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS]
+    XDatasetVersion:
+      description: Versão dos dados usada na resposta (uuid da última carga aplicada).
+      schema:
+        type: string
+        format: uuid
+      example: 01a0f06a-259b-7abc-a1fd-a7b4bd279125
+  responses:
+    NotModified:
+      description: |-
+        O `If-None-Match` bate com o ETag atual: sem corpo e sem consultar o
+        banco nem o Valkey (`X-Cache: HIT`).
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+        X-Dataset-Version:
+          $ref: '#/components/headers/XDatasetVersion'
+    BadRequest:
+      description: Parâmetro inválido (`bad_request`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            key_tag:
+              summary: Key tag inválido (/key/{key_tag})
+              value:
+                error:
+                  code: bad_request
+                  message: 'key tag inválido: use um número de 0 a 65535 (ex.: 20326)'
+    NotFound:
+      description: Nenhum registro para a consulta (`not_found`); não entra no cache.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            key_tag:
+              summary: Key tag sem chave (/key/{key_tag})
+              value:
+                error:
+                  code: not_found
+                  message: nenhuma chave com o key tag 12345 no root-anchors.xml da IANA
+    ServiceUnavailable:
+      description: |-
+        `dataset_not_ready` antes da primeira carga do collector, ou
+        `database_unavailable` quando o PostgreSQL falha.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes da primeira carga
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: a primeira sincronização do collector-rootanchors ainda não terminou; tente em alguns minutos
+            database_unavailable:
+              summary: PostgreSQL fora
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no PostgreSQL (`database_unavailable`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (`timeout`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: Panic no servidor, registrado no log (`internal_error`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: Serviço no ar (`ok`, `starting` ou `degraded`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          examples:
+            ok:
+              summary: Tudo no ar
+              value:
+                success: true
+                status: ok
+                timestamp: '2026-09-30T03:46:46Z'
+                message: api-rootanchors operacional
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: ok
+            starting:
+              summary: Antes da primeira carga
+              value:
+                success: true
+                status: starting
+                timestamp: '2026-09-30T03:46:46Z'
+                message: aguardando a primeira sincronização do collector-rootanchors
+                checks:
+                  dataset: empty
+                  postgres: ok
+                  valkey: ok
+            degraded:
+              summary: Valkey fora
+              value:
+                success: true
+                status: degraded
+                timestamp: '2026-09-30T03:46:46Z'
+                message: Valkey indisponível; respondendo sem cache
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: error
+    StatusError:
+      description: PostgreSQL fora (`status` = `error`, `success` = false).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-09-30T03:46:46Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+  schemas:
+    Dataset:
+      type: object
+      description: Versão dos dados usada na resposta; acompanha toda resposta de dados.
+      required: [version, updated_at]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da última carga aplicada pelo collector-rootanchors (`rootanchors_run`).
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando essa carga foi aplicada (UTC).
+    TrustAnchor:
+      type: object
+      description: O elemento `TrustAnchor` do arquivo aplicado (há um por arquivo).
+      required: [id, source, zone]
+      properties:
+        id:
+          type: string
+          description: Atributo `id` do `TrustAnchor` (um UUID em maiúsculas).
+        source:
+          type: [string, 'null']
+          description: Atributo `source` (a URL de origem que a IANA declara); `null` quando vazio.
+        zone:
+          type: string
+          const: '.'
+          description: A zona das âncoras; sempre `.` (a raiz). É o dono (owner) dos textos `ds` e `dnskey`.
+    Key:
+      type: object
+      description: |-
+        Uma chave (`KeyDigest`). Não há campo "ativa" (depende do relógio):
+        ativa em `t` ⇔ `valid_from <= t` e (`valid_until` é `null` ou
+        `valid_until > t`).
+      required: [key_id, key_tag, algorithm, digest_type, digest, ds, public_key, flags, dnskey, valid_from, valid_until, first_seen, updated_at]
+      properties:
+        key_id:
+          type: string
+          description: 'Atributo `id` do `KeyDigest` (ex.: `Kmyv6jo`); único no arquivo.'
+        key_tag:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Key tag do DNSKEY; não é único.
+        algorithm:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Algoritmo DNSSEC (8 = RSA/SHA-256).
+        digest_type:
+          type: integer
+          enum: [1, 2, 4]
+          description: Tipo do digest do DS (1 SHA-1, 2 SHA-256, 4 SHA-384).
+        digest:
+          type: string
+          pattern: '^[0-9A-F]+$'
+          description: Digest do DS em hexadecimal maiúsculo (40, 64 ou 96 dígitos, conforme o tipo).
+        ds:
+          type: string
+          description: 'O registro DS em texto de arquivo de zona, sem TTL: `<zona> IN DS <key_tag> <algorithm> <digest_type> <digest>`.'
+        public_key:
+          type: [string, 'null']
+          description: Chave pública do DNSKEY em base64, sem espaços; `null` quando o arquivo não a traz (as chaves antigas).
+        flags:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 65535
+          description: Flags do DNSKEY (257 = zone key + SEP); `null` junto com `public_key`.
+        dnskey:
+          type: [string, 'null']
+          description: 'O registro DNSKEY em texto, sem TTL: `<zona> IN DNSKEY <flags> 3 <algorithm> <public_key>`; `null` junto com `public_key`.'
+        valid_from:
+          type: string
+          format: date-time
+          description: Início da validade (`validFrom`, UTC).
+        valid_until:
+          type: [string, 'null']
+          format: date-time
+          description: Fim da validade (`validUntil`, UTC); `null` = sem data de fim.
+        first_seen:
+          type: string
+          format: date-time
+          description: Quando este banco viu a chave pela primeira vez (UTC); não é data da IANA.
+        updated_at:
+          type: string
+          format: date-time
+          description: Última alteração de algum dado da chave neste banco (UTC).
+    KeysResponse:
+      type: object
+      description: Todas as chaves (`GET /keys`).
+      required: [trust_anchor, count, keys, dataset]
+      properties:
+        trust_anchor:
+          $ref: '#/components/schemas/TrustAnchor'
+        count:
+          type: integer
+          minimum: 0
+          description: Número de chaves na lista.
+        keys:
+          type: array
+          description: Todas as chaves, inclusive as aposentadas, em ordem de `valid_from` e `key_id`.
+          items:
+            $ref: '#/components/schemas/Key'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    KeyTagResponse:
+      type: object
+      description: As chaves de um key tag (`GET /key/{key_tag}`).
+      required: [key_tag, trust_anchor, count, keys, dataset]
+      properties:
+        key_tag:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Key tag consultado, sem zeros à esquerda.
+        trust_anchor:
+          $ref: '#/components/schemas/TrustAnchor'
+        count:
+          type: integer
+          minimum: 1
+          description: Número de chaves com esse key tag.
+        keys:
+          type: array
+          description: As chaves, em ordem de `valid_from` e `key_id`.
+          items:
+            $ref: '#/components/schemas/Key'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    MetaResponse:
+      type: object
+      description: Estado dos dados (`GET /meta`).
+      required: [app, version, dataset, collector]
+      properties:
+        app:
+          type: string
+          const: api-rootanchors
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+        dataset:
+          description: Último arquivo aplicado; `null` antes da primeira carga.
+          oneOf:
+            - $ref: '#/components/schemas/MetaDataset'
+            - type: 'null'
+        collector:
+          description: Linha do collector-rootanchors em `jobs`; `null` antes da primeira execução.
+          oneOf:
+            - $ref: '#/components/schemas/Collector'
+            - type: 'null'
+    MetaDataset:
+      type: object
+      description: O arquivo root-anchors.xml aplicado por último.
+      required: [version, updated_at, source, sha256, keys, trust_anchor]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da carga (`rootanchors_run`); é a versão usada no cache e no ETag.
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando a carga foi aplicada (UTC).
+        source:
+          type: string
+          format: uri
+          description: URL de onde o arquivo foi baixado.
+        sha256:
+          type: string
+          description: SHA-256 do arquivo, em hexadecimal minúsculo.
+        keys:
+          type: integer
+          minimum: 0
+          description: Número de `KeyDigest` no arquivo.
+        trust_anchor:
+          $ref: '#/components/schemas/TrustAnchor'
+    Collector:
+      type: object
+      description: Linha do collector-rootanchors na tabela central `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          const: collector-rootanchors
+          description: Nome do app coletor.
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última sincronização realizada (UTC); `null` se ainda não houve.
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última verificação da fonte (UTC); `null` se ainda não houve.
+        consolidated:
+          type: boolean
+          description: '`true` depois que a consolidação (fase 2) copiou os dados atuais.'
+    Status:
+      type: object
+      description: Saúde do serviço (`/health` e `/status`).
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só quando o PostgreSQL está fora.'
+        status:
+          type: string
+          enum: [ok, starting, degraded, error]
+          description: |-
+            `ok` tudo no ar; `starting` ainda sem dados; `degraded` Valkey fora
+            (segue sem cache); `error` PostgreSQL fora (HTTP 503).
+        timestamp:
+          type: string
+          format: date-time
+          description: Hora da verificação (UTC).
+        message:
+          type: string
+          description: Descrição do estado, em PT-BR.
+        checks:
+          $ref: '#/components/schemas/StatusChecks'
+    StatusChecks:
+      type: object
+      description: Resultado de cada verificação.
+      required: [dataset, postgres, valkey]
+      properties:
+        dataset:
+          type: string
+          enum: [ok, empty]
+          description: '`empty` antes da primeira carga do collector.'
+        postgres:
+          type: string
+          enum: [ok, error]
+          description: Ping no PostgreSQL.
+        valkey:
+          type: string
+          enum: [ok, error, disabled]
+          description: Ping no Valkey; `disabled` com o cache desligado.
+    IndexResponse:
+      type: object
+      description: Índice da API (`GET /`, nos dois servidores).
+      required: [app, version, base_path, versions, endpoints, source]
+      properties:
+        app:
+          type: string
+          const: api-rootanchors
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+        base_path:
+          type: string
+          description: Caminho de base (`BASE_PATH`).
+        versions:
+          type: array
+          description: Versões da API servidas; a última é a das rotas sem versão.
+          items:
+            type: string
+        endpoints:
+          type: array
+          description: Rotas principais, já com o caminho de base.
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: URL do arquivo da fonte.
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error]
+              description: Código estável do erro (use este para decidir no cliente).
+            message:
+              type: string
+              description: Explicação para pessoas, em PT-BR.

@@ -1,0 +1,19 @@
+Prefix,Designation,Date,WHOIS,RDAP,Status,Note
+2001::/23,IANA,1999-07-01,whois.iana.org,,ALLOCATED,This range has been partially allocated. See [IPv6 Special-Purpose Address Space] for details.
+2001:200::/23,APNIC,1999-07-01,whois.apnic.net,https://rdap.apnic.net/,ALLOCATED,
+2001:400::/23,ARIN,1999-07-01,whois.arin.net,https://rdap.arin.net/registryhttp://rdap.arin.net/registry,ALLOCATED,
+2001:600::/23,RIPE NCC,1999-07-01,whois.ripe.net,https://rdap.db.ripe.net/,ALLOCATED,
+2001:1200::/23,LACNIC,2002-11-01,whois.lacnic.net,https://rdap.lacnic.net/rdap/,ALLOCATED,
+2001:2000::/19,RIPE NCC,2019-03-12,whois.ripe.net,https://rdap.db.ripe.net/,ALLOCATED,"2001:2000::/20, 2001:3000::/21, and 2001:3800::/22 were allocated on 2004-05-04. The more recent allocation (2019-03-12) incorporates all these previous allocations."
+2001:4200::/23,AFRINIC,2004-06-01,whois.afrinic.net,https://rdap.afrinic.net/rdap/http://rdap.afrinic.net/rdap/,ALLOCATED,
+2002::/16,6to4,2001-02-01,,,ALLOCATED,See [IPv6 Special-Purpose Address Space] for details.
+2400::/12,APNIC,2006-10-03,whois.apnic.net,https://rdap.apnic.net/,ALLOCATED,"2400::/19 was allocated on 2005-05-20. 2400:2000::/19 was allocated on 2005-07-08. 2400:4000::/21 was 
+allocated on 2005-08-08.  2404::/23 was allocated on 2006-01-19. The more recent allocation (2006-10-03) 
+incorporates all these previous allocations."
+2800::/12,LACNIC,2006-10-03,whois.lacnic.net,https://rdap.lacnic.net/rdap/,ALLOCATED,"2800::/23 was allocated on 2005-11-17. The more recent allocation (2006-10-03) incorporates the 
+previous allocation."
+2c00::/12,AFRINIC,2006-10-03,whois.afrinic.net,https://rdap.afrinic.net/rdap/http://rdap.afrinic.net/rdap/,ALLOCATED,
+2d00::/8,IANA,1999-07-01,,,RESERVED,
+3ffe::/16,IANA,2008-04,,,RESERVED,"3ffe:831f::/32 was used for Teredo in some old but widely distributed networking stacks. This usage is deprecated in favor of 2001::/32, which was allocated for the purpose in [RFC4380].
+3ffe::/16 and 5f00::/8 were used for the 6bone, but returned [RFC5156]."
+3fff::/20,Documentation,2024-07-23,,,RESERVED,See [IPv6 Special-Purpose Address Space] for details.

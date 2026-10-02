@@ -1,0 +1,92 @@
+# PostgreSQL 18 do BadBlock: servidor dedicado e migrations (dbmate).
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example):
+#
+#   docker network create badblock    # uma vez; na raiz: make network
+#   docker compose up -d
+#
+# O banco badblock é criado pela própria imagem na primeira subida do volume
+# (POSTGRES_DB). Todos os serviços usam o usuário postgres. Os dados são
+# descartáveis: vêm das fontes externas, pelos collectors; não há backup.
+#
+# O serviço migrate roda a cada `up`: aplica as migrations pendentes de todas
+# as pastas (central/ e uma por app, via migrate.sh) e sai.
+
+name: badblock-postgres
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:18-trixie
+    container_name: badblock-postgres
+    restart: unless-stopped
+    shm_size: 256mb
+    stop_grace_period: 60s
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-512MB}
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=256MB
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-200}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: badblock
+    # Só no loopback: acesso administrativo local ou por túnel SSH.
+    ports:
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      # No PG 18+ o volume vai em /var/lib/postgresql (o PGDATA virou
+      # /var/lib/postgresql/18/docker).
+      - pgdata:/var/lib/postgresql
+    networks:
+      badblock:
+        aliases: [badblock-postgres]
+    labels:
+      traefik.enable: "false"
+    healthcheck:
+      # Via TCP: durante o initdb o servidor temporário só escuta no socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d badblock"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    logging: *logging
+
+  migrate:
+    image: ghcr.io/amacneil/dbmate:2.36
+    container_name: badblock-postgres-migrate
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/db/migrate.sh"]
+    command: ["up"]
+    environment:
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD}@badblock-postgres:5432/badblock?sslmode=disable}
+      DBMATE_WAIT_TIMEOUT: 120s
+    volumes:
+      - ./:/db:ro
+    networks: [badblock]
+    labels:
+      traefik.enable: "false"
+    logging: *logging
+
+volumes:
+  pgdata:
+    name: badblock-postgres-data
+
+networks:
+  badblock:
+    name: badblock
+    external: true

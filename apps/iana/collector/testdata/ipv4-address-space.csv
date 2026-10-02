@@ -1,0 +1,17 @@
+Prefix,Designation,Date,WHOIS,RDAP,Status [1],Note
+000/8,IANA - Local Identification,1981-09,,,RESERVED,[2][3]
+001/8,APNIC,2010-01,whois.apnic.net,https://rdap.apnic.net/,ALLOCATED,
+002/8,RIPE NCC,2009-09,whois.ripe.net,https://rdap.db.ripe.net/,ALLOCATED,
+003/8,Administered by ARIN,1994-05,whois.arin.net,https://rdap.arin.net/registryhttp://rdap.arin.net/registry,LEGACY,
+006/8,Army Information Systems Center,1994-02,whois.arin.net,https://rdap.arin.net/registryhttp://rdap.arin.net/registry,LEGACY,
+010/8,IANA - Private Use,1995-06,,,RESERVED,[4]
+041/8,AFRINIC,2005-04,whois.afrinic.net,https://rdap.afrinic.net/rdap/http://rdap.afrinic.net/rdap/,ALLOCATED,
+045/8,Administered by ARIN,1995-01,whois.arin.net,https://rdap.arin.net/registryhttp://rdap.arin.net/registry,LEGACY,
+053/8,Daimler AG,1993-10,whois.ripe.net,https://rdap.db.ripe.net/,LEGACY,
+127/8,IANA - Loopback,1981-09,,,RESERVED,[7]
+177/8,LACNIC,2010-06,whois.lacnic.net,https://rdap.lacnic.net/rdap/,ALLOCATED,
+191/8,Administered by LACNIC,1993-05,whois.lacnic.net,https://rdap.lacnic.net/rdap/,LEGACY,
+200/8,LACNIC,2002-11,whois.lacnic.net,https://rdap.lacnic.net/rdap/,ALLOCATED,
+224/8,Multicast,1981-09,,,RESERVED,[14]
+240/8,Future use,1981-09,,,RESERVED,[17]
+255/8,Future use,1981-09,,,RESERVED,[17][18]

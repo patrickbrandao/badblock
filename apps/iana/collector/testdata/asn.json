@@ -1,0 +1,59 @@
+{
+  "description": "RDAP bootstrap file for Autonomous System Number allocations",
+  "publication": "2026-06-01T20:00:01Z",
+  "services": [
+    [
+      [
+        "36864-37887",
+        "327680-328703",
+        "328704-329727"
+      ],
+      [
+        "https://rdap.afrinic.net/rdap/",
+        "http://rdap.afrinic.net/rdap/"
+      ]
+    ],
+    [
+      [
+        "4608-4865",
+        "7467-7722",
+        "9216-10239"
+      ],
+      [
+        "https://rdap.apnic.net/"
+      ]
+    ],
+    [
+      [
+        "1-1876",
+        "1902-2042",
+        "2044-2046"
+      ],
+      [
+        "https://rdap.arin.net/registry/",
+        "http://rdap.arin.net/registry/"
+      ]
+    ],
+    [
+      [
+        "1877-1901",
+        "2043",
+        "2047"
+      ],
+      [
+        "https://rdap.db.ripe.net/"
+      ]
+    ],
+    [
+      [
+        "27648-28671",
+        "52224-53247",
+        "61440-61951"
+      ],
+      [
+        "https://rdap.lacnic.net/rdap/"
+      ]
+    ]
+  ],
+  "version": "1.0"
+}

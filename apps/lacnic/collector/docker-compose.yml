@@ -1,0 +1,49 @@
+# collector-lacnic: importa periodicamente o arquivo delegated-extended da
+# LACNIC (delegações de ASNs e blocos IP) para as tabelas lacnic_* do
+# PostgreSQL.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não tem porta nem
+# API HTTP: o estado fica nas tabelas lacnic_run e jobs, e nos logs.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+#
+# SOURCE_URL e MIN_RECORDS vazios valem o padrão do app (internal/rir).
+
+name: badblock-collector-lacnic
+
+services:
+  collector-lacnic:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-lacnic:${COLLECTOR_LACNIC_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_LACNIC_TAG:-dev}
+    container_name: badblock-collector-lacnic
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senha só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      SYNC_INTERVAL: ${COLLECTOR_LACNIC_SYNC_INTERVAL:-1h}
+      RETRY_INTERVAL: ${COLLECTOR_LACNIC_RETRY_INTERVAL:-5m}
+      SOURCE_URL: ${COLLECTOR_LACNIC_SOURCE_URL:-}
+      SOURCE_MD5_URL: ${COLLECTOR_LACNIC_SOURCE_MD5_URL:-}
+      MIN_RECORDS: ${COLLECTOR_LACNIC_MIN_RECORDS:-}
+      REMOVAL_THRESHOLD: ${COLLECTOR_LACNIC_REMOVAL_THRESHOLD:-0.05}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

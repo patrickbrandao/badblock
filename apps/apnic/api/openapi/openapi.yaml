@@ -1,0 +1,1477 @@
+openapi: 3.1.0
+info:
+  title: api-apnic
+  version: '0.1.0'
+  summary: Delegações de ASNs e blocos IP do RIR APNIC, do BadBlock.
+  description: |
+    API HTTP (JSON) do BadBlock sobre as delegações de ASNs e blocos IPv4/IPv6
+    do RIR APNIC: o arquivo delegated-extended do RIR, importado pelo
+    collector-apnic, com país, data, status e titular de cada registro. Só
+    leitura, pública e sem chave (rate limit por IP no proxy).
+
+    - Caminho de base `/apnic`, já incluído em `servers`; os `paths` são
+      relativos a ele. As rotas sem versão são a versão atual (hoje v1); a v1
+      fixa é o servidor terminado em `/v1` (`/apnic/v1/asn/{asn}`), com o
+      mesmo conteúdo, o mesmo ETag e a mesma chave de cache. Saúde
+      (`/health`, `/status`, `/ping`) e este manifesto ficam fora do
+      versionamento e declaram só os servidores sem `/v1`. `/apnic`
+      redireciona (301) para `/apnic/`; qualquer outro caminho responde 404
+      em JSON.
+    - Toda rota `GET` aceita `HEAD` (mesmos cabeçalhos, sem corpo), e
+      `OPTIONS` responde o preflight de CORS (204).
+    - Consultas (`/asn`, `/ip`, `/prefix`, `/holder`): cache no Valkey com a
+      versão do dataset na chave e no ETag; `If-None-Match` com o ETag atual
+      responde 304 sem consultar nada.
+    - JSON em `snake_case`, timestamps ISO-8601 UTC, datas de registro
+      (`reg_date`) como `AAAA-MM-DD`.
+    - Em todas as respostas: `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin`,
+      `Access-Control-Expose-Headers: ETag, X-Cache, X-Dataset-Version` e
+      `Server: badblock-api-apnic/<versão>`.
+    - Erros sempre em JSON `{"error": {"code", "message"}}`, com
+      `Cache-Control: no-store`.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/apnic
+servers:
+  - url: https://api.badblock.net.br/apnic
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/apnic/v1
+    description: Produção, v1 fixa (índice, consultas e meta)
+  - url: http://127.0.0.1:8103/apnic
+    description: Desenvolvimento local, versão atual (porta publicada no loopback pelo docker-compose.yml)
+  - url: http://127.0.0.1:8103/apnic/v1
+    description: Desenvolvimento local, v1 fixa
+tags:
+  - name: dados
+    description: Consultas às delegações do RIR, com cache e ETag.
+  - name: meta
+    description: Índice, estado dos dados e este manifesto.
+  - name: saúde
+    description: Saúde do serviço, fora do versionamento.
+
+paths:
+  # Rotas com v1 fixa: valem nos quatro servidores da raiz.
+  /:
+    get:
+      operationId: getIndex
+      tags: [meta]
+      summary: Índice da API
+      description: >-
+        Nome do app, versão, RIR, caminho de base, versões da API e a lista de
+        rotas. Mesmo conteúdo em `/apnic/` e `/apnic/v1/`; não consulta o
+        banco.
+      responses:
+        '200':
+          description: Índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-apnic
+                version: '0.1.0'
+                registry: APNIC
+                base_path: /apnic
+                versions: [v1]
+                endpoints:
+                  - /apnic/asn/{asn}
+                  - /apnic/ip/{ip}
+                  - /apnic/prefix/{ip}/{len}
+                  - /apnic/holder/{opaque_id}
+                  - /apnic/meta
+                  - /apnic/status
+                  - /apnic/openapi.yaml
+                source: https://ftp.apnic.net/stats/apnic/delegated-apnic-extended-latest
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /asn/{asn}:
+    parameters:
+      - name: asn
+        in: path
+        required: true
+        description: >-
+          Número do ASN, de 0 a 4294967295, com ou sem o prefixo `AS` (em
+          qualquer caixa): `4608`, `AS4608` e `as4608` são a mesma consulta,
+          com a mesma chave de cache e o mesmo ETag.
+        schema:
+          type: string
+          pattern: '^([Aa][Ss])?[0-9]+$'
+        example: '4608'
+      - $ref: '#/components/parameters/IfNoneMatch'
+    get:
+      operationId: getASN
+      tags: [dados]
+      summary: Registro que contém um ASN
+      description: >-
+        Responde o registro do arquivo do RIR que contém o ASN. A maioria dos
+        registros tem um ASN só, mas um registro pode cobrir uma faixa
+        (`range`); `asn` é o número pedido.
+      responses:
+        '200':
+          description: Registro encontrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ASNResponse'
+              examples:
+                asn:
+                  summary: Registro de um ASN só (/asn/4608)
+                  value:
+                    asn: 4608
+                    range:
+                      start: 4608
+                      end: 4608
+                      count: 1
+                    cc: AU
+                    reg_date: '1995-05-30'
+                    status: allocated
+                    opaque_id: A91DC5BE
+                    first_seen: '2026-09-29T01:09:14Z'
+                    updated_at: '2026-09-29T01:09:14Z'
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+                faixa:
+                  summary: ASN no meio de uma faixa (/asn/4677, registro AS4672–AS4681)
+                  value:
+                    asn: 4677
+                    range:
+                      start: 4672
+                      end: 4681
+                      count: 10
+                    cc: JP
+                    reg_date: '1995-08-30'
+                    status: allocated
+                    opaque_id: A91A7381
+                    first_seen: '2026-09-29T01:09:14Z'
+                    updated_at: '2026-09-29T01:09:14Z'
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+                reservada:
+                  summary: Faixa reservada, sem país, data nem titular (/asn/9428)
+                  value:
+                    asn: 9428
+                    range:
+                      start: 9427
+                      end: 9429
+                      count: 3
+                    cc: null
+                    reg_date: null
+                    status: reserved
+                    opaque_id: null
+                    first_seen: '2026-09-29T01:09:14Z'
+                    updated_at: '2026-09-29T01:09:14Z'
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: ASN fora de 0 a 4294967295 ou em outro formato.
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Nenhum registro do arquivo contém o ASN (ASN de outro RIR, por exemplo).
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /ip/{ip}:
+    parameters:
+      - name: ip
+        in: path
+        required: true
+        description: >-
+          Endereço IPv4 ou IPv6, sem zona. IPv4 mapeado em IPv6
+          (`::ffff:a.b.c.d`) vira IPv4.
+        schema:
+          type: string
+        example: 1.1.1.1
+      - $ref: '#/components/parameters/IfNoneMatch'
+    get:
+      operationId: getIP
+      tags: [dados]
+      summary: Bloco mais específico que contém um IP
+      description: >-
+        Responde o bloco mais específico do arquivo do RIR que contém o IP,
+        com o registro original de onde ele saiu (`record`).
+      responses:
+        '200':
+          description: Bloco encontrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPResponse'
+              examples:
+                ipv4:
+                  summary: IPv4 (/ip/1.1.1.1, ou /ip/::ffff:1.1.1.1)
+                  value:
+                    ip: 1.1.1.1
+                    prefix: 1.1.1.0/24
+                    cc: AU
+                    reg_date: '2011-08-11'
+                    status: assigned
+                    opaque_id: A91872ED
+                    record:
+                      start: 1.1.1.0
+                      value: 256
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+                ipv6:
+                  summary: IPv6 (/ip/2001:dc0::1)
+                  value:
+                    ip: '2001:dc0::1'
+                    prefix: '2001:dc0::/32'
+                    cc: AU
+                    reg_date: '2003-01-24'
+                    status: assigned
+                    opaque_id: A91DC5BE
+                    record:
+                      start: '2001:dc0::'
+                      value: 32
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Endereço IP inválido (inclusive IPv6 com zona, como `fe80::1%eth0`).
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Nenhum bloco do arquivo contém o IP.
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /prefix/{ip}/{len}:
+    parameters:
+      - name: ip
+        in: path
+        required: true
+        description: >-
+          Endereço do prefixo, IPv4 ou IPv6, sem zona (IPv4 mapeado vira IPv4).
+          Bits de host são zerados: `1.1.1.9/24` consulta `1.1.1.0/24`.
+        schema:
+          type: string
+        example: 1.1.1.128
+      - name: len
+        in: path
+        required: true
+        description: Tamanho do prefixo, de 0 a 32 (IPv4) ou de 0 a 128 (IPv6).
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 128
+        example: 25
+      - $ref: '#/components/parameters/IfNoneMatch'
+    get:
+      operationId: getPrefix
+      tags: [dados]
+      summary: Bloco mais específico que contém um prefixo
+      description: >-
+        Responde o bloco mais específico do arquivo do RIR que contém o
+        prefixo pedido; `exact` diz se o bloco encontrado é o próprio prefixo.
+        IPv6 também funciona: `/prefix/2001:dc0:abcd::/48`.
+      responses:
+        '200':
+          description: Bloco encontrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefixResponse'
+              examples:
+                contido:
+                  summary: Prefixo contido num bloco maior (/prefix/1.1.1.128/25)
+                  value:
+                    query: 1.1.1.128/25
+                    prefix: 1.1.1.0/24
+                    exact: false
+                    cc: AU
+                    reg_date: '2011-08-11'
+                    status: assigned
+                    opaque_id: A91872ED
+                    record:
+                      start: 1.1.1.0
+                      value: 256
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+                exato:
+                  summary: O próprio bloco (/prefix/1.1.1.0/24, ou /prefix/1.1.1.9/24)
+                  value:
+                    query: 1.1.1.0/24
+                    prefix: 1.1.1.0/24
+                    exact: true
+                    cc: AU
+                    reg_date: '2011-08-11'
+                    status: assigned
+                    opaque_id: A91872ED
+                    record:
+                      start: 1.1.1.0
+                      value: 256
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+                ipv6:
+                  summary: IPv6 contido num bloco maior (/prefix/2001:dc0:abcd::/48)
+                  value:
+                    query: '2001:dc0:abcd::/48'
+                    prefix: '2001:dc0::/32'
+                    exact: false
+                    cc: AU
+                    reg_date: '2003-01-24'
+                    status: assigned
+                    opaque_id: A91DC5BE
+                    record:
+                      start: '2001:dc0::'
+                      value: 32
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: Endereço IP inválido ou tamanho de prefixo fora do intervalo da família.
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: Nenhum bloco do arquivo contém o prefixo.
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /holder/{opaque_id}:
+    parameters:
+      - name: opaque_id
+        in: path
+        required: true
+        description: >-
+          Identificador do titular dentro do RIR (o `opaque_id` que aparece em
+          `/asn` e `/ip`). Tem de casar com `^[A-Za-z0-9._-]{1,128}$` (400 fora
+          disso), que cobre os formatos dos cinco RIRs: na APNIC, hex
+          maiúsculo de 8 (`A91DC5BE`); nos outros, número de 2 a 6 dígitos,
+          hex minúsculo de 32 e UUID minúsculo com hífens. A busca tenta
+          primeiro o valor exato e, se não houver, a mesma sequência em
+          maiúsculas ou minúsculas (`a91dc5be` acha `A91DC5BE`); a chave de
+          cache usa o valor como foi pedido.
+        schema:
+          type: string
+          pattern: '^[A-Za-z0-9._-]{1,128}$'
+          minLength: 1
+          maxLength: 128
+        example: A91DC5BE
+      - $ref: '#/components/parameters/IfNoneMatch'
+    get:
+      operationId: getHolder
+      tags: [dados]
+      summary: Todos os recursos de um titular
+      description: >-
+        Todos os ASNs e blocos de um titular. O arquivo do RIR não liga ASNs a
+        blocos; o que os une é o titular. ASNs saem por início da faixa e
+        blocos por endereço, IPv4 e IPv6 separados; listas vazias vêm como
+        `[]`. `ccs` lista os países dos recursos, do mais frequente ao menos
+        (empate: ordem alfabética; cada registro de ASN e cada bloco conta 1;
+        recursos sem país não contam), e `cc` é o primeiro deles (`null` e
+        `[]` quando nenhum recurso tem país).
+      responses:
+        '200':
+          description: Recursos do titular.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HolderResponse'
+              example:
+                opaque_id: A91DC5BE
+                cc: AU
+                ccs: [AU, JP]
+                counts:
+                  asns: 7
+                  ipv4: 11
+                  ipv6: 6
+                asns:
+                  - start: 4608
+                    end: 4608
+                    count: 1
+                    cc: AU
+                    status: allocated
+                    reg_date: '1995-05-30'
+                  - start: 4777
+                    end: 4777
+                    count: 1
+                    cc: JP
+                    status: allocated
+                    reg_date: '1996-08-09'
+                  - start: 9545
+                    end: 9545
+                    count: 1
+                    cc: AU
+                    status: allocated
+                    reg_date: '2000-12-28'
+                  - start: 18366
+                    end: 18370
+                    count: 5
+                    cc: AU
+                    status: allocated
+                    reg_date: '2002-08-19'
+                  - start: 24555
+                    end: 24555
+                    count: 1
+                    cc: AU
+                    status: allocated
+                    reg_date: '2007-01-17'
+                  - start: 55638
+                    end: 55638
+                    count: 1
+                    cc: AU
+                    status: allocated
+                    reg_date: '2010-07-23'
+                  - start: 131076
+                    end: 131076
+                    count: 1
+                    cc: AU
+                    status: allocated
+                    reg_date: '2007-02-13'
+                prefixes:
+                  ipv4:
+                    - prefix: 202.12.28.0/23
+                      cc: AU
+                      status: assigned
+                      reg_date: '1997-03-04'
+                    - prefix: 202.12.31.0/24
+                      cc: AU
+                      status: assigned
+                      reg_date: '2002-08-19'
+                    - prefix: 203.119.0.0/24
+                      cc: AU
+                      status: allocated
+                      reg_date: '2003-01-13'
+                    - prefix: 203.119.42.0/24
+                      cc: AU
+                      status: allocated
+                      reg_date: '2005-09-28'
+                    - prefix: 203.119.76.0/24
+                      cc: AU
+                      status: assigned
+                      reg_date: '2008-11-18'
+                    - prefix: 203.119.77.0/24
+                      cc: AU
+                      status: assigned
+                      reg_date: '2009-09-09'
+                    - prefix: 203.119.86.0/24
+                      cc: AU
+                      status: assigned
+                      reg_date: '2010-03-09'
+                    - prefix: 203.119.95.0/24
+                      cc: AU
+                      status: assigned
+                      reg_date: '2010-09-28'
+                    - prefix: 203.119.100.0/22
+                      cc: AU
+                      status: assigned
+                      reg_date: '2010-11-04'
+                    - prefix: 203.119.104.0/21
+                      cc: AU
+                      status: assigned
+                      reg_date: '2010-11-04'
+                    - prefix: 220.247.144.0/20
+                      cc: AU
+                      status: allocated
+                      reg_date: '2011-03-30'
+                  ipv6:
+                    - prefix: '2001:dc0::/32'
+                      cc: AU
+                      status: assigned
+                      reg_date: '2003-01-24'
+                    - prefix: '2001:dd8:6::/48'
+                      cc: AU
+                      status: assigned
+                      reg_date: '2010-03-09'
+                    - prefix: '2001:dd8:8::/45'
+                      cc: AU
+                      status: assigned
+                      reg_date: '2010-03-09'
+                    - prefix: '2001:dd8:12::/48'
+                      cc: AU
+                      status: assigned
+                      reg_date: '2010-09-28'
+                    - prefix: '2001:ddd::/48'
+                      cc: AU
+                      status: assigned
+                      reg_date: '2015-11-20'
+                    - prefix: '2001:df9::/32'
+                      cc: AU
+                      status: allocated
+                      reg_date: '2007-01-17'
+                dataset:
+                  version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                  updated_at: '2026-09-29T01:09:14Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+          description: '`opaque_id` fora de `^[A-Za-z0-9._-]{1,128}$` (vazio, longo demais, com espaço ou acento...).'
+        '404':
+          $ref: '#/components/responses/NotFound'
+          description: O titular não tem nenhum recurso no arquivo atual do RIR.
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /meta:
+    get:
+      operationId: getMeta
+      tags: [meta]
+      summary: Estado dos dados
+      description: >-
+        O último arquivo aplicado pelo collector-apnic e a linha dele na
+        tabela central `jobs`, sem cache. Antes da primeira carga, `dataset`
+        e `collector` são `null` e a resposta continua 200.
+      responses:
+        '200':
+          description: Estado dos dados.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                carregado:
+                  summary: Com dados
+                  value:
+                    app: api-apnic
+                    version: '0.1.0'
+                    dataset:
+                      version: '01a0eab5-7637-7be3-9d60-271b74f11794'
+                      updated_at: '2026-09-29T01:09:14Z'
+                      source: https://ftp.apnic.net/stats/apnic/delegated-apnic-extended-latest
+                      sha256: '3e1d41f227d2f3990c88797333467c47e32595fb328c92c49a24bb001f1525c0'
+                      md5: 'a30f818f9c90fa519bdbcb1c298edb17'
+                      serial: '20260929'
+                      start_date: null
+                      end_date: '2026-09-28'
+                      asn_records: 14762
+                      ipv4_records: 61684
+                      ipv6_records: 113822
+                      prefixes_v4: 61684
+                      prefixes_v6: 113822
+                    collector:
+                      app: collector-apnic
+                      last_sync_at: '2026-09-29T01:09:14Z'
+                      last_check_at: '2026-09-29T01:09:14Z'
+                      consolidated: false
+                vazio:
+                  summary: Antes da primeira carga
+                  value:
+                    app: api-apnic
+                    version: '0.1.0'
+                    dataset: null
+                    collector: null
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # Fora do versionamento: só os servidores sem /v1.
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/apnic
+        description: Produção
+      - url: http://127.0.0.1:8103/apnic
+        description: Desenvolvimento local
+    get:
+      operationId: getHealth
+      tags: [saúde]
+      summary: Saúde do serviço
+      description: >-
+        Mesmo conteúdo de `/status`. Confere o PostgreSQL, o Valkey e se já há
+        dados; nunca usa cache.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postHealth
+      tags: [saúde]
+      summary: Saúde do serviço (POST)
+      description: Igual ao `GET /health` (o corpo da requisição é ignorado).
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/apnic
+        description: Produção
+      - url: http://127.0.0.1:8103/apnic
+        description: Desenvolvimento local
+    get:
+      operationId: getStatus
+      tags: [saúde]
+      summary: Estado do serviço
+      description: >-
+        Confere o PostgreSQL, o Valkey e se já há dados; nunca usa cache.
+        Precedência do `status`: `error` > `degraded` > `starting` > `ok`.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postStatus
+      tags: [saúde]
+      summary: Estado do serviço (POST)
+      description: Igual ao `GET /status` (o corpo da requisição é ignorado).
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/apnic
+        description: Produção
+      - url: http://127.0.0.1:8103/apnic
+        description: Desenvolvimento local
+    get:
+      operationId: ping
+      tags: [saúde]
+      summary: Teste de vida
+      description: >-
+        Responde `pong` em texto, sem consultar nada. É o healthcheck do
+        Docker e fica fora do log de acesso.
+      responses:
+        '200':
+          description: Processo no ar.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/apnic
+        description: Produção
+      - url: http://127.0.0.1:8103/apnic
+        description: Desenvolvimento local
+    get:
+      operationId: getOpenAPI
+      tags: [meta]
+      summary: Este manifesto
+      description: >-
+        Manifesto OpenAPI 3.1 da API, embutido no binário: o mesmo conteúdo de
+        `openapi/openapi.yaml` no repositório. Sem banco, sem Valkey e sem ETag.
+      responses:
+        '200':
+          description: O manifesto, em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  parameters:
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        ETag de uma resposta anterior (com ou sem `W/`, numa lista separada por
+        vírgulas, ou `*`). Se for o ETag atual, a resposta é 304, sem corpo e
+        sem consultar o cache nem o banco.
+      schema:
+        type: string
+      example: 'W/"6b76420aed360c08"'
+
+  headers:
+    ETag:
+      description: >-
+        ETag fraco, `W/"<hash>"`, calculado só da versão do dataset e da
+        consulta normalizada: `/apnic/asn/4608` e `/apnic/v1/asn/AS4608` têm o
+        mesmo (o do exemplo é o de `/asn/4608` com o dataset dos exemplos).
+      schema:
+        type: string
+      example: 'W/"6b76420aed360c08"'
+    CacheControlPublic:
+      description: Guardável por proxies e navegadores por 5 minutos.
+      schema:
+        type: string
+        const: 'public, max-age=300'
+    CacheControlNoStore:
+      description: Não guardar em cache.
+      schema:
+        type: string
+        const: no-store
+    XCache:
+      description: >-
+        De onde veio o corpo: `HIT` (Valkey, ou 304), `MISS` (consultou o banco
+        e guardou no Valkey) ou `BYPASS` (cache desligado).
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS]
+    XDatasetVersion:
+      description: Versão dos dados usada na resposta (a mesma de `dataset.version`).
+      schema:
+        type: string
+        format: uuid
+      example: '01a0eab5-7637-7be3-9d60-271b74f11794'
+
+  responses:
+    NotModified:
+      description: >-
+        `If-None-Match` trouxe o ETag atual: sem corpo, sem consultar o cache
+        nem o banco (`X-Cache: HIT`).
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+        X-Dataset-Version:
+          $ref: '#/components/headers/XDatasetVersion'
+    BadRequest:
+      description: Parâmetro inválido (ASN, IP, tamanho de prefixo ou opaque_id).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: /asn/abc
+              value:
+                error:
+                  code: bad_request
+                  message: 'ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS'
+            ip:
+              summary: /ip/x
+              value:
+                error:
+                  code: bad_request
+                  message: endereço IP inválido
+            len:
+              summary: /prefix/1.1.1.0/33
+              value:
+                error:
+                  code: bad_request
+                  message: tamanho de prefixo inválido
+            opaque_id:
+              summary: /holder/nao%20existe
+              value:
+                error:
+                  code: bad_request
+                  message: 'opaque_id inválido: use de 1 a 128 letras, dígitos, ponto, hífen ou sublinhado'
+    NotFound:
+      description: Nenhum registro do arquivo do RIR responde à consulta.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: /asn/61613 (ASN de outro RIR)
+              value:
+                error:
+                  code: not_found
+                  message: AS61613 não consta no arquivo do RIR APNIC
+            ip:
+              summary: /ip/8.8.8.8
+              value:
+                error:
+                  code: not_found
+                  message: 8.8.8.8 não pertence a nenhum bloco no arquivo do RIR APNIC
+            prefix:
+              summary: /prefix/8.8.8.0/24
+              value:
+                error:
+                  code: not_found
+                  message: 8.8.8.0/24 não está contido em nenhum bloco no arquivo do RIR APNIC
+            holder:
+              summary: /holder/NAOEXISTE
+              value:
+                error:
+                  code: not_found
+                  message: o titular NAOEXISTE não consta no arquivo do RIR APNIC
+    ServiceUnavailable:
+      description: >-
+        `dataset_not_ready`: a primeira carga do collector-apnic ainda não
+        terminou (responde sem consultar o banco). `database_unavailable`:
+        falha no PostgreSQL.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes da primeira carga
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: a primeira sincronização do collector-apnic ainda não terminou; tente em alguns minutos
+            database_unavailable:
+              summary: PostgreSQL fora
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no PostgreSQL.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (padrão 5s).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: Erro inesperado (panic), registrado no log.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: >-
+        Serviço respondendo. `ok`: tudo no ar. `starting`: ainda não há dados
+        (a primeira carga do collector-apnic não terminou). `degraded`: Valkey
+        fora; a API segue sem cache.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          examples:
+            ok:
+              summary: Tudo no ar
+              value:
+                success: true
+                status: ok
+                timestamp: '2026-09-29T01:09:57Z'
+                message: api-apnic operacional
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: ok
+            starting:
+              summary: Antes da primeira carga
+              value:
+                success: true
+                status: starting
+                timestamp: '2026-09-29T01:09:57Z'
+                message: aguardando a primeira sincronização do collector-apnic
+                checks:
+                  dataset: empty
+                  postgres: ok
+                  valkey: ok
+            degraded:
+              summary: Valkey fora
+              value:
+                success: true
+                status: degraded
+                timestamp: '2026-09-29T01:09:57Z'
+                message: Valkey indisponível; respondendo sem cache
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: error
+    StatusError:
+      description: PostgreSQL fora (`success` false, `status` error).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-09-29T01:09:57Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+
+  schemas:
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Código estável do erro.
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error]
+            message:
+              type: string
+              description: Mensagem para pessoas, em português.
+
+    Dataset:
+      type: object
+      description: Versão dos dados usada na resposta.
+      required: [version, updated_at]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: >-
+            Versão do dataset: o UUID da última carga aplicada pelo
+            collector-apnic (o mesmo de `X-Dataset-Version`).
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando essa carga foi aplicada.
+
+    CountryCode:
+      type: [string, 'null']
+      pattern: '^[A-Z]{2}$'
+      description: >-
+        País, ISO 3166-1 alfa-2; `null` quando vazio na fonte. A APNIC deixa o
+        `cc` vazio em todos os available/reserved e em um bloco designado
+        (`2001:de3::/48`) e não usa `ZZ` (outros RIRs usam `ZZ` = sem país, que
+        sai como veio).
+    RegDate:
+      type: [string, 'null']
+      format: date
+      description: Data da alocação/designação; `null` quando vazia ou `00000000` na fonte (na APNIC, só nos available/reserved).
+    DelegationStatus:
+      type: string
+      description: >-
+        Situação do registro: `allocated` (alocado a um LIR/ISP), `assigned`
+        (designado a um usuário final), `available` (livre no estoque do RIR)
+        ou `reserved` (reservado pelo RIR).
+      enum: [allocated, assigned, available, reserved]
+    OpaqueID:
+      type: [string, 'null']
+      description: >-
+        Identificador do titular dentro do RIR (liga ASNs e blocos; ver
+        `/holder/{opaque_id}`); `null` em available/reserved.
+    IPAddress:
+      type: string
+      description: Endereço IPv4 ou IPv6.
+      anyOf:
+        - format: ipv4
+        - format: ipv6
+    IPPrefix:
+      type: string
+      description: Bloco CIDR, IPv4 ou IPv6 (ex. `1.1.1.0/24`, `2001:dc0::/32`).
+
+    Range:
+      type: object
+      description: Faixa de ASNs de um registro.
+      required: [start, end, count]
+      properties:
+        start:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Primeiro ASN da faixa.
+        end:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Último ASN da faixa.
+        count:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Quantidade de ASNs da faixa.
+    Record:
+      type: object
+      description: >-
+        Registro original do arquivo de onde o bloco saiu. Quando um registro
+        IPv4 não forma um CIDR, o collector o divide em vários blocos, e cada
+        pedaço aponta para o mesmo registro; quando forma, `start` é o endereço
+        do próprio bloco. Na APNIC todo registro IPv4 forma um CIDR, então
+        `start` é sempre o endereço do próprio bloco.
+      required: [start, value]
+      properties:
+        start:
+          $ref: '#/components/schemas/IPAddress'
+          description: Endereço inicial do registro.
+        value:
+          type: integer
+          format: int64
+          minimum: 1
+          description: 'IPv4: quantidade de endereços. IPv6: tamanho do prefixo.'
+
+    ASNResponse:
+      type: object
+      description: Registro que contém o ASN pedido.
+      required: [asn, range, cc, reg_date, status, opaque_id, first_seen, updated_at, dataset]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: O ASN pedido.
+        range:
+          $ref: '#/components/schemas/Range'
+          description: Faixa do registro que contém o ASN.
+        cc:
+          $ref: '#/components/schemas/CountryCode'
+        reg_date:
+          $ref: '#/components/schemas/RegDate'
+        status:
+          $ref: '#/components/schemas/DelegationStatus'
+        opaque_id:
+          $ref: '#/components/schemas/OpaqueID'
+        first_seen:
+          type: string
+          format: date-time
+          description: Quando o registro apareceu pela primeira vez na fonte.
+        updated_at:
+          type: string
+          format: date-time
+          description: Última alteração do registro.
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+
+    IPResponse:
+      type: object
+      description: Bloco mais específico que contém o IP pedido.
+      required: [ip, prefix, cc, reg_date, status, opaque_id, record, dataset]
+      properties:
+        ip:
+          $ref: '#/components/schemas/IPAddress'
+          description: O IP pedido, normalizado (IPv4 mapeado vira IPv4).
+        prefix:
+          $ref: '#/components/schemas/IPPrefix'
+          description: Bloco encontrado.
+        cc:
+          $ref: '#/components/schemas/CountryCode'
+        reg_date:
+          $ref: '#/components/schemas/RegDate'
+        status:
+          $ref: '#/components/schemas/DelegationStatus'
+        opaque_id:
+          $ref: '#/components/schemas/OpaqueID'
+        record:
+          $ref: '#/components/schemas/Record'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+
+    PrefixResponse:
+      type: object
+      description: Bloco mais específico que contém o prefixo pedido.
+      required: [query, prefix, exact, cc, reg_date, status, opaque_id, record, dataset]
+      properties:
+        query:
+          $ref: '#/components/schemas/IPPrefix'
+          description: O prefixo pedido, com os bits de host zerados.
+        prefix:
+          $ref: '#/components/schemas/IPPrefix'
+          description: Bloco encontrado.
+        exact:
+          type: boolean
+          description: '`true` quando o bloco encontrado é o próprio prefixo pedido.'
+        cc:
+          $ref: '#/components/schemas/CountryCode'
+        reg_date:
+          $ref: '#/components/schemas/RegDate'
+        status:
+          $ref: '#/components/schemas/DelegationStatus'
+        opaque_id:
+          $ref: '#/components/schemas/OpaqueID'
+        record:
+          $ref: '#/components/schemas/Record'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+
+    HolderResponse:
+      type: object
+      description: Todos os recursos de um titular.
+      required: [opaque_id, cc, ccs, counts, asns, prefixes, dataset]
+      properties:
+        opaque_id:
+          type: string
+          description: O opaque_id gravado no arquivo (pode diferir do pedido só na caixa).
+        cc:
+          $ref: '#/components/schemas/CountryCode'
+          description: País mais frequente entre os recursos (o primeiro de `ccs`); `null` quando nenhum tem país.
+        ccs:
+          type: array
+          description: Países dos recursos, do mais frequente ao menos (empate em ordem alfabética).
+          items:
+            type: string
+            pattern: '^[A-Z]{2}$'
+        counts:
+          $ref: '#/components/schemas/HolderCounts'
+        asns:
+          type: array
+          description: Registros de ASN do titular, por início da faixa.
+          items:
+            $ref: '#/components/schemas/HolderASN'
+        prefixes:
+          $ref: '#/components/schemas/HolderPrefixes'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    HolderCounts:
+      type: object
+      description: Tamanho de cada lista do titular.
+      required: [asns, ipv4, ipv6]
+      properties:
+        asns:
+          type: integer
+          minimum: 0
+          description: Registros (faixas) de ASN.
+        ipv4:
+          type: integer
+          minimum: 0
+          description: Blocos IPv4.
+        ipv6:
+          type: integer
+          minimum: 0
+          description: Blocos IPv6.
+    HolderASN:
+      type: object
+      description: Um registro de ASN do titular.
+      required: [start, end, count, cc, status, reg_date]
+      properties:
+        start:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Primeiro ASN da faixa.
+        end:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Último ASN da faixa.
+        count:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Quantidade de ASNs da faixa.
+        cc:
+          $ref: '#/components/schemas/CountryCode'
+        status:
+          $ref: '#/components/schemas/DelegationStatus'
+        reg_date:
+          $ref: '#/components/schemas/RegDate'
+    HolderPrefix:
+      type: object
+      description: Um bloco do titular.
+      required: [prefix, cc, status, reg_date]
+      properties:
+        prefix:
+          $ref: '#/components/schemas/IPPrefix'
+        cc:
+          $ref: '#/components/schemas/CountryCode'
+        status:
+          $ref: '#/components/schemas/DelegationStatus'
+        reg_date:
+          $ref: '#/components/schemas/RegDate'
+    HolderPrefixes:
+      type: object
+      description: Blocos do titular por família, cada lista ordenada por endereço.
+      required: [ipv4, ipv6]
+      properties:
+        ipv4:
+          type: array
+          items:
+            $ref: '#/components/schemas/HolderPrefix'
+        ipv6:
+          type: array
+          items:
+            $ref: '#/components/schemas/HolderPrefix'
+
+    MetaResponse:
+      type: object
+      description: Estado dos dados.
+      required: [app, version, dataset, collector]
+      properties:
+        app:
+          type: string
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do binário (`dev` quando compilado sem tag).
+        dataset:
+          description: Último arquivo aplicado; `null` antes da primeira carga.
+          oneOf:
+            - $ref: '#/components/schemas/MetaDataset'
+            - type: 'null'
+        collector:
+          description: Linha do collector-apnic na tabela central `jobs`; `null` enquanto não existir.
+          oneOf:
+            - $ref: '#/components/schemas/MetaCollector'
+            - type: 'null'
+    MetaDataset:
+      type: object
+      description: >-
+        Último arquivo aplicado pelo collector (última linha `status = 1` da
+        tabela de execuções dele). Campos que o schema do banco permite `NULL`
+        saem `null`.
+      required: [version, updated_at, source, sha256, md5, serial, start_date, end_date, asn_records, ipv4_records, ipv6_records, prefixes_v4, prefixes_v6]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: Versão do dataset (a mesma de `dataset.version` nas consultas).
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando o arquivo foi aplicado.
+        source:
+          type: string
+          format: uri
+          description: URL de onde o collector baixou o arquivo.
+        sha256:
+          type: [string, 'null']
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 do arquivo.
+        md5:
+          type: [string, 'null']
+          pattern: '^[0-9a-f]{32}$'
+          description: MD5 do arquivo (o que o RIR publica ao lado dele).
+        serial:
+          type: [string, 'null']
+          description: Serial do cabeçalho do arquivo, como o RIR publica (data AAAAMMDD ou época Unix).
+        start_date:
+          type: [string, 'null']
+          format: date
+          description: Data inicial do cabeçalho do arquivo (a APNIC publica vazia, então sai `null`).
+        end_date:
+          type: [string, 'null']
+          format: date
+          description: Data final do cabeçalho do arquivo.
+        asn_records:
+          type: [integer, 'null']
+          minimum: 0
+          description: Registros de ASN do arquivo.
+        ipv4_records:
+          type: [integer, 'null']
+          minimum: 0
+          description: Registros IPv4 do arquivo.
+        ipv6_records:
+          type: [integer, 'null']
+          minimum: 0
+          description: Registros IPv6 do arquivo.
+        prefixes_v4:
+          type: [integer, 'null']
+          minimum: 0
+          description: Blocos IPv4 gravados (um registro não-CIDR vira vários blocos).
+        prefixes_v6:
+          type: [integer, 'null']
+          minimum: 0
+          description: Blocos IPv6 gravados.
+    MetaCollector:
+      type: object
+      description: Linha do collector na tabela central `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          description: Nome do collector (coluna `jobs.app`).
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última sincronização realizada (arquivo novo aplicado).
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última verificação da fonte.
+        consolidated:
+          type: boolean
+          description: '`true` quando a consolidação da fase 2 já copiou os dados atuais (`jobs.consolidated = 1`).'
+
+    Status:
+      type: object
+      description: Resposta de `/health` e `/status`.
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só quando `status` é `error`.'
+        status:
+          type: string
+          description: >-
+            `ok` (tudo no ar), `starting` (ainda sem dados), `degraded` (Valkey
+            fora) ou `error` (PostgreSQL fora, HTTP 503).
+          enum: [ok, starting, degraded, error]
+        timestamp:
+          type: string
+          format: date-time
+          description: Hora da verificação.
+        message:
+          type: string
+          description: Resumo para pessoas, em português.
+        checks:
+          type: object
+          description: Resultado de cada verificação.
+          required: [dataset, postgres, valkey]
+          properties:
+            dataset:
+              type: string
+              enum: [ok, empty]
+              description: '`empty` antes da primeira carga do collector.'
+            postgres:
+              type: string
+              enum: [ok, error]
+            valkey:
+              type: string
+              enum: [ok, error, disabled]
+              description: '`disabled` quando o cache está desligado.'
+
+    IndexResponse:
+      type: object
+      description: Índice da API.
+      required: [app, version, registry, base_path, versions, endpoints, source]
+      properties:
+        app:
+          type: string
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do binário (`dev` quando compilado sem tag).
+        registry:
+          type: string
+          description: Nome do RIR.
+        base_path:
+          type: string
+          description: Caminho de base (`BASE_PATH`).
+        versions:
+          type: array
+          description: Versões da API servidas; a última é a das rotas sem versão.
+          items:
+            type: string
+        endpoints:
+          type: array
+          description: Rotas principais, já com o caminho de base.
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: Arquivo delegated-extended do RIR.

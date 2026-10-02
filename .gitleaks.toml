@@ -9,12 +9,19 @@ useDefault = true
 [allowlist]
 description = "Dados públicos das fontes e senhas falsas dos testes"
 paths = [
-  # Recortes dos arquivos públicos dos RIRs: opaque-ids em hex parecem chaves.
-  '''apps/registry-sync/testdata/sources/''',
-  '''apps/registry-api/testdata/''',
+  # Recortes dos arquivos públicos das fontes.
+  '''apps/[^/]+/[^/]+/testdata/''',
+  # Dependências Go vendorizadas: código de terceiros.
+  '''apps/[^/]+/[^/]+/vendor/''',
+  # Material local, fora do git (o scan `dir` do make gitleaks também os vê).
+  '''(^|/)(old|tmp)/''',
+  # Dependências e build dos sites, fora do git.
+  '''websites/[^/]+/(node_modules|dist)/''',
+  '''\.mcp\.json$''',
+  '''(^|/)\.env$''',
 ]
 regexes = [
   # Senhas fixas e óbvias dos containers descartáveis dos testes.
-  '''(owner|sync|api)pw''',
+  '''(collector|api|owner|test)pw''',
   '''POSTGRES_PASSWORD=pg\b''',
 ]

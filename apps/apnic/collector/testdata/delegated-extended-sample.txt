@@ -1,0 +1,52 @@
+######################################################################
+#
+# 	CONDITIONS OF USE
+# ____________________________________________________________________
+# 
+# 
+# The files are freely available for download and use on the condition 
+# that APNIC will not be held responsible for any loss or damage 
+# arising from the use of the information contained in these reports.
+# 
+# APNIC endeavours to the best of its ability to ensure the accuracy 
+# of these reports; however, APNIC makes no guarantee in this regard.
+# 
+# In particular, it should be noted that these reports seek to 
+# indicate where resources were first allocated or assigned. It is not
+# intended that these reports be considered as an authoritative 
+# statement of the location in which any specific resource may 
+# currently be in use.
+# 
+# For more information see: 
+#
+#       http://www.apnic.net/db/rir-stats-format.html
+# or
+#	ftp://ftp.apnic.net/pub/apnic/stats/apnic/README-EXTENDED.TXT
+#
+######################################################################
+#
+2.3|apnic|20260929|21||20260928|+1000
+apnic|*|asn|*|8|summary
+apnic|*|ipv4|*|7|summary
+apnic|*|ipv6|*|6|summary
+apnic|AU|ipv4|1.0.0.0|256|20110811|assigned|A91872ED
+apnic|NZ|ipv4|14.128.4.0|1024|20100914|allocated|A913D7D6
+apnic|VN|ipv4|14.160.0.0|2097152|20100816|allocated|A92BA6BC
+apnic||ipv4|27.0.8.0|1024||reserved|
+apnic||ipv4|163.61.160.0|64||available|
+apnic|BD|ipv4|163.61.160.64|64|20250417|assigned|A91CDF1C
+apnic|NZ|ipv4|202.50.32.0|4096|19940514|allocated|A913D7D6
+apnic|JP|ipv6|2001:200::|35|19990813|allocated|A916B6AA
+apnic||ipv6|2001:201::|32||available|
+apnic||ipv6|2001:7fa::|64||reserved|
+apnic|HK|ipv6|2001:7fa:0:1::|64|20020116|assigned|A91972B6
+apnic||ipv6|2001:de3::|48|20250703|assigned|A919DB08
+apnic|NZ|ipv6|2404:6600::|32|20100914|allocated|A913D7D6
+apnic|JP|asn|173|1|20020801|allocated|A91A4B1A
+apnic|TW|asn|1768|2|20020801|allocated|A91BDB29
+apnic||asn|7619|1||reserved|
+apnic||asn|9427|3||reserved|
+apnic||asn|17830|2||available|
+apnic||asn|45122|3||available|
+apnic|NZ|asn|55759|1|20100914|allocated|A913D7D6
+apnic|CN|asn|143674|3072|20210507|allocated|A91E5D61

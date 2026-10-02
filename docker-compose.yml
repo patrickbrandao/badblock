@@ -1,21 +1,44 @@
-# BadBlock — stack completo, em desenvolvimento e em produção.
+# BadBlock — stack completo para desenvolvimento local.
 #
 #   make up                 # cria as redes, gera o .env se faltar e sobe tudo
 #   docker compose up -d    # equivalente, com as redes já criadas (make network)
 #
 # Cada componente mora na própria pasta, com um docker-compose.yml que também
-# sobe sozinho; este arquivo só os reúne. Os valores vêm do .env desta pasta
-# (copie o .env.example ou rode `make env`).
+# sobe sozinho — é assim que cada app é implantado de forma independente. Este
+# arquivo só os reúne. Os valores vêm do .env desta pasta (copie o
+# .env.example ou rode `make env`).
 #
-# O Traefik local (infra/traefik) tem o profile "dev" e só sobe com
-# COMPOSE_PROFILES=dev. Em produção, deixe COMPOSE_PROFILES vazio: a API se
-# publica no Traefik que já roda no servidor (rede externa "traefik").
+# Aqui, e só aqui, cada collector espera as migrations terminarem antes de
+# subir (compose.wait-migrate/collector-<fonte>.yml, aplicado sobre o compose
+# dele).
 
 name: badblock
 
 include:
-  - database/postgresql/docker-compose.yml
+  - database/postgres/docker-compose.yml
   - database/valkey/docker-compose.yml
-  - infra/traefik/docker-compose.yml
-  - apps/registry-sync/docker-compose.yml
-  - apps/registry-api/docker-compose.yml
+  - path: [apps/anatel/pst/collector/docker-compose.yml, compose.wait-migrate/collector-anatel-pst.yml]
+  - path: [apps/afrinic/collector/docker-compose.yml, compose.wait-migrate/collector-afrinic.yml]
+  - path: [apps/apnic/collector/docker-compose.yml, compose.wait-migrate/collector-apnic.yml]
+  - path: [apps/arin/collector/docker-compose.yml, compose.wait-migrate/collector-arin.yml]
+  - path: [apps/asnames/collector/docker-compose.yml, compose.wait-migrate/collector-asnames.yml]
+  - path: [apps/cgibr/collector/docker-compose.yml, compose.wait-migrate/collector-cgibr.yml]
+  - path: [apps/iana/collector/docker-compose.yml, compose.wait-migrate/collector-iana.yml]
+  - path: [apps/lacnic/collector/docker-compose.yml, compose.wait-migrate/collector-lacnic.yml]
+  - path: [apps/ripencc/collector/docker-compose.yml, compose.wait-migrate/collector-ripencc.yml]
+  - path: [apps/rootanchors/collector/docker-compose.yml, compose.wait-migrate/collector-rootanchors.yml]
+  - path: [apps/roothints/collector/docker-compose.yml, compose.wait-migrate/collector-roothints.yml]
+  - path: [apps/rootzone/collector/docker-compose.yml, compose.wait-migrate/collector-rootzone.yml]
+  - apps/afrinic/api/docker-compose.yml
+  - apps/anatel/pst/api/docker-compose.yml
+  - apps/apnic/api/docker-compose.yml
+  - apps/arin/api/docker-compose.yml
+  - apps/asnames/api/docker-compose.yml
+  - apps/cgibr/api/docker-compose.yml
+  - apps/iana/api/docker-compose.yml
+  - apps/lacnic/api/docker-compose.yml
+  - apps/ripencc/api/docker-compose.yml
+  - apps/rootanchors/api/docker-compose.yml
+  - apps/roothints/api/docker-compose.yml
+  - apps/rootzone/api/docker-compose.yml
+  - websites/www/docker-compose.yml

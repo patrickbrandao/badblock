@@ -1,42 +1,46 @@
-# BadBlock — rotinas da raiz. Cada app tem o próprio Makefile (make -C apps/<app>).
+# BadBlock — rotinas da raiz. Cada app tem o próprio Makefile
+# (make -C apps/<fonte>/collector, make -C apps/<fonte>/api).
 #
-#   make up        primeira vez: gera .env, cria redes e certificados, sobe tudo
+#   make up        primeira vez: gera .env, cria as redes e sobe tudo
 #   make test      testes unitários de todos os apps
-#   make e2e       teste ponta a ponta via Traefik (stack no ar)
+#   make test-int  testes de integração de todos os apps (Docker)
 
-APPS    := apps/registry-sync apps/registry-api
+APPS    := $(sort $(wildcard apps/*/collector apps/*/api apps/*/*/collector apps/*/*/api))
+WEBSITES := $(sort $(wildcard websites/*))
 COMPOSE := docker compose
+TRAEFIK_NETWORK ?= $(shell grep -s '^TRAEFIK_NETWORK=' .env | cut -d= -f2 | grep . || echo network_public)
 
 .DEFAULT_GOAL := help
-.PHONY: help env network certs up down ps logs build sync-once migrate test test-int lint vet e2e e2e-ci \
-        gitleaks backup verify-backup deploy clean-data
+.PHONY: help env network up down ps logs build migrate test test-int lint vet specs-check gitleaks clean-data
 
 help: ## Lista os alvos
-	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  %-14s %s\n", $$1, $$2}'
+	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  %-12s %s\n", $$1, $$2}'
 
-env: ## Gera o .env a partir do .env.example com senhas aleatórias (não sobrescreve)
+env: ## Gera o .env a partir do .env.example (não sobrescreve); PG_PASSWORD=x define a senha
 	@if [ -f .env ]; then echo ".env já existe; nada feito"; exit 0; fi; \
 	cp .env.example .env; \
-	for v in POSTGRES_PASSWORD BADBLOCK_OWNER_PASSWORD BADBLOCK_SYNC_PASSWORD BADBLOCK_API_PASSWORD VALKEY_PASSWORD; do \
-		pw=$$(openssl rand -hex 24); sed -i.bak "s/^$$v=$$/$$v=$$pw/" .env; \
-	done; rm -f .env.bak; chmod 600 .env; echo ".env criado com senhas aleatórias"
+	pw="$(PG_PASSWORD)"; [ -n "$$pw" ] || pw=$$(openssl rand -hex 24); \
+	sed -i.bak "s/^POSTGRES_PASSWORD=$$/POSTGRES_PASSWORD=$$pw/" .env; \
+	rm -f .env.bak; chmod 600 .env; echo ".env criado"
 
-network: ## Cria as redes Docker externas (badblock e traefik)
+network: ## Cria as redes Docker externas (badblock e a do Traefik)
 	@docker network inspect badblock >/dev/null 2>&1 || docker network create badblock
-	@docker network inspect traefik >/dev/null 2>&1 || docker network create traefik
+	@docker network inspect $(TRAEFIK_NETWORK) >/dev/null 2>&1 || docker network create $(TRAEFIK_NETWORK)
 
-certs: ## Gera o certificado local de *.badblock.localhost (se faltar)
-	@[ -f infra/traefik/certs/badblock.localhost.pem ] || $(MAKE) -C infra/traefik certs
-
-up: env network certs ## Sobe o stack inteiro (compila as imagens locais)
+up: env network ## Sobe o stack inteiro (compila as imagens locais)
 	$(COMPOSE) up -d --build
-	@echo "API: https://api.badblock.localhost  |  Traefik: https://traefik.badblock.localhost"
+	@for s in cgibr:8101 afrinic:8102 apnic:8103 arin:8104 lacnic:8105 ripencc:8106 iana:8107 asnames:8108 roothints:8109 rootzone:8110 rootanchors:8111 anatel/pst:8112; do \
+		f=$${s%%:*}; p=$$(grep -s "^API_$$(echo $$f | tr a-z/ A-Z_)_HOST_PORT=" .env | cut -d= -f2 | grep . || echo $${s#*:}); \
+		printf '  api-%-11s http://127.0.0.1:%s/%s/\n' $$(echo $$f | tr / -) $$p $$f; done
+	@for s in www:8201; do \
+		f=$${s%%:*}; p=$$(grep -s "^WEBSITE_$$(echo $$f | tr a-z A-Z)_HOST_PORT=" .env | cut -d= -f2 | grep . || echo $${s#*:}); \
+		printf '  website-%-7s http://127.0.0.1:%s/\n' $$f $$p; done
 
 down: ## Para o stack (os volumes ficam)
 	$(COMPOSE) down
 
 ps: ## Estado dos containers
-	$(COMPOSE) ps
+	$(COMPOSE) ps -a
 
 logs: ## Logs de todos os serviços
 	$(COMPOSE) logs -f --tail=100
@@ -44,43 +48,27 @@ logs: ## Logs de todos os serviços
 build: ## Compila as imagens locais
 	$(COMPOSE) build
 
-sync-once: ## Roda um ciclo completo do registry-sync agora
-	docker exec badblock-registry-sync /registry-sync --once
-
 migrate: ## Aplica as migrations pendentes
-	$(MAKE) -C database/postgresql migrate
+	$(MAKE) -C database/postgres migrate
 
-test: ## Testes unitários de todos os apps
-	@for a in $(APPS); do echo "== $$a"; $(MAKE) -C $$a test || exit 1; done
+test: ## Testes unitários de todos os apps e sites
+	@for a in $(APPS) $(WEBSITES); do echo "== $$a"; $(MAKE) -C $$a test || exit 1; done
 
-test-int: ## Testes de integração de todos os apps (Docker)
+test-int: ## Testes de integração de todos os apps + migrations (Docker)
 	@for a in $(APPS); do echo "== $$a"; $(MAKE) -C $$a test-int || exit 1; done
+	$(MAKE) -C database/postgres test
 
-lint: ## golangci-lint de todos os apps
-	@for a in $(APPS); do echo "== $$a"; $(MAKE) -C $$a lint || exit 1; done
+lint: ## golangci-lint de todos os apps; build nos sites
+	@for a in $(APPS) $(WEBSITES); do echo "== $$a"; $(MAKE) -C $$a lint || exit 1; done
 
 vet: ## go vet de todos os apps
 	@for a in $(APPS); do echo "== $$a"; $(MAKE) -C $$a vet || exit 1; done
 
-e2e: ## Teste ponta a ponta contra o stack no ar
-	tests/e2e/e2e.sh
-
-e2e-ci: env network certs ## Stack limpo com as fixtures + e2e (APAGA o banco local)
-	$(COMPOSE) down -v
-	$(COMPOSE) -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml up -d --build
-	tests/e2e/e2e.sh
+specs-check: ## Confere links, estrutura e mapa das specs (specs/README.md)
+	@sh specs/check.sh
 
 gitleaks: ## Procura segredos no repositório (Docker)
 	docker run --rm -v "$(CURDIR):/repo" zricethezav/gitleaks:v8.30.1 dir /repo --config /repo/.gitleaks.toml --redact
 
-backup: ## Backup do banco agora
-	$(MAKE) -C database/postgresql backup
-
-verify-backup: ## Restaura o último backup num banco descartável e confere
-	$(MAKE) -C database/postgresql verify
-
-deploy: ## Envia o compose ao servidor e atualiza o stack (deploy.env)
-	scripts/deploy.sh stack
-
-clean-data: ## APAGA os volumes locais (banco, backups, cache, arquivos do sync)
+clean-data: ## APAGA os volumes locais (banco; os collectors recarregam tudo)
 	$(COMPOSE) down -v

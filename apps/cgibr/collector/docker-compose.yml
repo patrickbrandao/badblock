@@ -1,0 +1,45 @@
+# collector-cgibr: importa periodicamente o arquivo de ASNs e blocos do NIC.br
+# (registro.br) para as tabelas cgibr_* do PostgreSQL.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não tem porta nem
+# API HTTP: o estado fica nas tabelas cgibr_run e jobs, e nos logs.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-cgibr
+
+services:
+  collector-cgibr:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-cgibr:${COLLECTOR_CGIBR_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_CGIBR_TAG:-dev}
+    container_name: badblock-collector-cgibr
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senha só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      SYNC_INTERVAL: ${COLLECTOR_CGIBR_SYNC_INTERVAL:-1h}
+      RETRY_INTERVAL: ${COLLECTOR_CGIBR_RETRY_INTERVAL:-5m}
+      SOURCE_URL: ${COLLECTOR_CGIBR_SOURCE_URL:-https://ftp.registro.br/pub/numeracao/origin/nicbr-asn-blk-latest.txt}
+      MIN_ASNS: ${COLLECTOR_CGIBR_MIN_ASNS:-5000}
+      REMOVAL_THRESHOLD: ${COLLECTOR_CGIBR_REMOVAL_THRESHOLD:-0.05}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

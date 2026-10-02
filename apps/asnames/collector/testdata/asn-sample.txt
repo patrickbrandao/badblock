@@ -1,0 +1,37 @@
+1 LVLT-1 - Level 3 Parent, LLC, US
+2 UDEL-DCN - University of Delaware, US
+28 DFVLR-SYS Deutsches Zentrum fuer Luft- und Raumfahrt e.V., DE
+248 IDDQD-AS - IDDQD-AS, EU
+378 MACHBA-AS IUCC - Israel InterUniversity Computation Center, IL
+511 PRISMA HEALTH - Prisma Health, US
+513 CERN CERN - European Organization for Nuclear Research, CH
+1297 CERN1297 CERN - European Organization for Nuclear Research, CH
+2047 ASN-ROCHE-BASLE Hoffmann - La Roche Ltd., CH
+2712 HALLIBURTON COMPANY - Halliburton Company, US
+2799 Polismyndigheten, SE
+3256 Renater, FR
+4640 ASN-TIC-HK  # AS-TIC-HK converted to ASN-TIC-HK for RPSL compliance - The Internetworking Corporation, HK
+4745 AS4745-138 - , KR
+5536 Xyberdata - Xyberdata, MU
+6794 ASN-HRTNET  HRT - Croatian Radio Television, HR
+7901 - , NZ
+9487 KTFC1120-AS-KR -KR - Korea Technology Finance Corporation, KR
+13040 ASN-FIZ FIZ Karlsruhe - Leibniz-Institut fuer Informationsinfrastruktur GmbH, DE
+15169 GOOGLE - Google LLC, US
+16509 AMAZON-02 - Amazon.com, Inc., US
+28000 AS28000 - LACNIC - Latin American and Caribbean IP address, UY
+29571 Orange Côte d'Ivoire - Orange Côte d'Ivoire, CI
+30619 TMCEL - Moçambique Telecom, SA - TMCEL - Moçambique Telecom, SA, MZ
+33764 African Network Information Center - (AfriNIC) Ltd - African Network Information Center - (AfriNIC) Ltd, MU
+37622 Mahanagar Telephone (Mauritius) Ltd - Mahanagar Telephone (Mauritius) Ltd, MU
+56122 VALE-SA-AP - Avenida GraÃƒÂ§a Aranha, 26 Castelo, SG
+59265 CT-CNGI - China telecom â China Next Generation Internet, CN
+61613 AS61613 - TMSoft Solucoes em Informatica Ltda, BR
+136209 CYBERFORESTLLC-AS-AP - CyberForest LLC., AP
+139247 PPPWAW-AS-AP - pppwaw, AP
+262287 AS262287 - Latitude.sh LTDA, BR
+263009 AS263009 - FORTE TELECOM LTDA., BR
+327710 Orange Côte d'Ivoire - Orange Côte d'Ivoire, CI
+328289 CEE DEE INVESTMENT Company Limited - CEE DEE INVESTMENT Company Limited, SL
+399999 LYON-BV-01 - LYON COLLEGE, US
+403009 LOREM-IPSUM - Lorem, US

@@ -1,0 +1,1208 @@
+openapi: 3.1.0
+info:
+  title: api-cgibr
+  version: 0.1.0
+  description: |
+    API HTTP (JSON), pública e só de leitura, dos ASNs, titulares (CNPJ ou
+    identificador estrangeiro) e blocos IP brasileiros que o NIC.br/registro.br
+    publica no arquivo `nicbr-asn-blk-latest.txt`
+    (https://ftp.registro.br/pub/numeracao/origin/nicbr-asn-blk-latest.txt).
+    Quem importa o arquivo para as tabelas `cgibr_*` do PostgreSQL é o
+    `collector-cgibr`; esta API só lê essas tabelas.
+
+    - A API é dona de tudo abaixo do caminho de base (`BASE_PATH`, padrão
+      `/cgibr`), que já está nos `servers`. As rotas de dados respondem sem
+      versão (versão atual, hoje v1) e no servidor `.../cgibr/v1` (v1 fixa),
+      com o mesmo conteúdo e a mesma chave de cache. Uma v2 futura ganha
+      `.../cgibr/v2`.
+    - Saúde (`/health`, `/status`, `/ping`) e este manifesto (`/openapi.yaml`)
+      ficam fora do versionamento: só existem nos servidores sem `/v1`.
+    - Toda rota `GET` também responde `HEAD`; `OPTIONS` em qualquer caminho
+      responde o preflight de CORS (204).
+    - Todas as respostas levam `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin`
+      (`CORS_ORIGIN`, padrão `*`), `Access-Control-Expose-Headers: ETag,
+      X-Cache, X-Dataset-Version` e `Server: badblock-api-cgibr/<versão>`.
+    - Erros são sempre JSON `{"error": {"code", "message"}}` com
+      `Cache-Control: no-store`. O caminho de base sem barra redireciona (301)
+      para o índice; qualquer outro caminho inexistente responde 404
+      `not_found`.
+    - Sem chave de acesso; o Traefik aplica rate limit por IP.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/cgibr
+servers:
+  - url: https://api.badblock.net.br/cgibr
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/cgibr/v1
+    description: Produção, v1 fixa (só rotas de dados)
+  - url: http://127.0.0.1:8101/cgibr
+    description: Desenvolvimento local, versão atual (porta API_CGIBR_HOST_PORT no loopback)
+  - url: http://127.0.0.1:8101/cgibr/v1
+    description: Desenvolvimento local, v1 fixa (só rotas de dados)
+tags:
+  - name: dados
+    description: Consultas aos dados do NIC.br, cacheadas no Valkey e com ETag.
+  - name: meta
+    description: Índice, estado dos dados e este manifesto.
+  - name: saúde
+    description: Verificações de saúde, fora do versionamento.
+paths:
+  /:
+    get:
+      operationId: getIndex
+      summary: Índice da API
+      description: >-
+        Nome do app, versão do build, caminho de base, versões da API e
+        lista de rotas. Não consulta o banco.
+      tags: [meta]
+      responses:
+        '200':
+          description: Índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-cgibr
+                version: 0.1.0
+                base_path: /cgibr
+                versions: [v1]
+                endpoints:
+                  - /cgibr/asn/{asn}
+                  - /cgibr/ip/{ip}
+                  - /cgibr/prefix/{ip}/{len}
+                  - /cgibr/document/{cnpj}
+                  - /cgibr/asns
+                  - /cgibr/meta
+                  - /cgibr/status
+                  - /cgibr/openapi.yaml
+                source: https://ftp.registro.br/pub/numeracao/origin/nicbr-asn-blk-latest.txt
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /asn/{asn}:
+    get:
+      operationId: getASN
+      summary: ASN com titular e blocos
+      description: >-
+        Um ASN do arquivo do NIC.br com o titular (nome e documento) e os
+        blocos IP registrados para ele: IPv4 antes, cada família em ordem de
+        endereço; listas vazias quando o ASN não tem blocos.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/ASN'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: ASN encontrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ASNResponse'
+              example:
+                asn: 61613
+                name: TMSoft Solucoes em Informatica Ltda
+                document: 08.030.063/0001-00
+                document_type: cnpj
+                prefixes:
+                  ipv4: ['45.171.60.0/22', '200.192.152.0/22']
+                  ipv6: ['2804:5964::/32']
+                first_seen: '2026-09-28T23:19:10Z'
+                updated_at: '2026-09-28T23:19:10Z'
+                dataset:
+                  version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
+                  updated_at: '2026-09-28T23:19:10Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /ip/{ip}:
+    get:
+      operationId: getIP
+      summary: Bloco que contém um IP
+      description: >-
+        Bloco mais específico do arquivo do NIC.br que contém o endereço
+        (IPv4 ou IPv6), com o ASN e o titular.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/IP'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Bloco encontrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPResponse'
+              example:
+                ip: 45.171.61.10
+                prefix: 45.171.60.0/22
+                asn:
+                  asn: 61613
+                  name: TMSoft Solucoes em Informatica Ltda
+                  document: 08.030.063/0001-00
+                  document_type: cnpj
+                dataset:
+                  version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
+                  updated_at: '2026-09-28T23:19:10Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /prefix/{ip}/{len}:
+    get:
+      operationId: getPrefix
+      summary: Bloco que contém um prefixo
+      description: >-
+        Bloco mais específico do arquivo do NIC.br que contém o prefixo
+        pedido. Os bits de host são zerados antes da consulta
+        (`/prefix/200.192.152.9/24` consulta `200.192.152.0/24`); `exact`
+        diz se o bloco encontrado é o próprio prefixo pedido.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/PrefixIP'
+        - $ref: '#/components/parameters/PrefixLength'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Bloco encontrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefixResponse'
+              example:
+                query: 200.192.152.0/24
+                prefix: 200.192.152.0/22
+                exact: false
+                asn:
+                  asn: 61613
+                  name: TMSoft Solucoes em Informatica Ltda
+                  document: 08.030.063/0001-00
+                  document_type: cnpj
+                dataset:
+                  version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
+                  updated_at: '2026-09-28T23:19:10Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /document/{doc}:
+    get:
+      operationId: getDocument
+      summary: ASNs de um titular
+      description: >-
+        Todos os ASNs cujo titular tem o documento pedido (CNPJ ou
+        identificador estrangeiro do NIC.br), em ordem numérica. `document`
+        e `name` vêm do primeiro ASN da lista.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/Document'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Titular encontrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+              example:
+                document: 08.030.063/0001-00
+                document_digits: '08030063000100'
+                document_type: cnpj
+                name: TMSoft Solucoes em Informatica Ltda
+                count: 1
+                asns:
+                  - asn: 61613
+                    name: TMSoft Solucoes em Informatica Ltda
+                dataset:
+                  version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
+                  updated_at: '2026-09-28T23:19:10Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /asns:
+    get:
+      operationId: listASNs
+      summary: Todos os ASNs
+      description: >-
+        Todos os ASNs do arquivo do NIC.br, sem os blocos, em ordem numérica
+        (cerca de 9 mil, ~900 KB). Não tem parâmetros: sem paginação nem
+        filtros; a lista vem inteira numa resposta só.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Lista completa (o exemplo mostra só os primeiros itens).
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ASNListResponse'
+              example:
+                count: 9134
+                asns:
+                  - asn: 174
+                    name: COGENT BRASIL TELECOMUNICAÇÕES LTDA.
+                    document: 29.484.413/0001-70
+                    document_type: cnpj
+                  - asn: 61613
+                    name: TMSoft Solucoes em Informatica Ltda
+                    document: 08.030.063/0001-00
+                    document_type: cnpj
+                dataset:
+                  version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
+                  updated_at: '2026-09-28T23:19:10Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /meta:
+    get:
+      operationId: getMeta
+      summary: Estado dos dados
+      description: >-
+        Último arquivo aplicado pelo `collector-cgibr` (tabela `cgibr_run`)
+        e a linha dele na tabela central `jobs`. Consulta o banco a cada
+        requisição (sem Valkey, sem ETag). `dataset` e `collector` são
+        `null` antes da primeira carga.
+      tags: [meta]
+      responses:
+        '200':
+          description: Estado dos dados.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                carregado:
+                  summary: Com dados carregados
+                  value:
+                    app: api-cgibr
+                    version: 0.1.0
+                    dataset:
+                      version: 01a0eb55-1a1c-7bdb-915a-e885abbaaf72
+                      updated_at: '2026-09-29T04:03:38Z'
+                      source: https://ftp.registro.br/pub/numeracao/origin/nicbr-asn-blk-latest.txt
+                      sha256: b9c3cb12fdb5738c919c64f7a4472e830fd5e244e2ca0ae96e6a898077dc2d20
+                      asns: 9135
+                      prefixes_v4: 13041
+                      prefixes_v6: 8955
+                    collector:
+                      app: collector-cgibr
+                      last_sync_at: '2026-09-29T04:03:38Z'
+                      last_check_at: '2026-09-29T14:11:25Z'
+                      consolidated: false
+                vazio:
+                  summary: Antes da primeira carga
+                  value:
+                    app: api-cgibr
+                    version: 0.1.0
+                    dataset: null
+                    collector: null
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/cgibr
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8101/cgibr
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getHealth
+      summary: Saúde da API
+      description: >-
+        Confere o PostgreSQL, o Valkey e se já existe dataset carregado. Mesma
+        resposta de `/status`. Sem cache.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postHealth
+      summary: Saúde da API (POST)
+      description: Igual ao `GET /health`; o corpo da requisição é ignorado.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/cgibr
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8101/cgibr
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getStatus
+      summary: Estado da API
+      description: >-
+        Confere o PostgreSQL, o Valkey e se já existe dataset carregado. Mesma
+        resposta de `/health`. Sem cache.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postStatus
+      summary: Estado da API (POST)
+      description: Igual ao `GET /status`; o corpo da requisição é ignorado.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/cgibr
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8101/cgibr
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: ping
+      summary: Ping
+      description: >-
+        Responde o texto `pong` sem consultar nada. É o healthcheck do Docker
+        (`api-cgibr healthcheck`) e fica fora do log de acesso.
+      tags: [saúde]
+      responses:
+        '200':
+          description: Processo no ar.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/cgibr
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8101/cgibr
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getOpenAPI
+      summary: Manifesto OpenAPI
+      description: >-
+        Este manifesto (OpenAPI 3.1), embutido no binário: o mesmo conteúdo de
+        `openapi/openapi.yaml` no repositório. Não consulta o banco nem o
+        Valkey.
+      tags: [meta]
+      responses:
+        '200':
+          description: Manifesto em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  parameters:
+    ASN:
+      name: asn
+      in: path
+      required: true
+      description: >-
+        Número do ASN, com ou sem o prefixo `AS` (maiúsculo ou minúsculo):
+        `61613`, `AS61613` ou `as61613`. O número vai de 0 a 4294967295
+        (32 bits); fora dessa faixa, vazio ou com outro caractere, responde
+        400.
+      schema:
+        type: string
+        pattern: '^([Aa][Ss])?[0-9]+$'
+      example: AS61613
+    IP:
+      name: ip
+      in: path
+      required: true
+      description: >-
+        Endereço IPv4 ou IPv6, sem zona (`fe80::1%eth0` é recusado). IPv4
+        mapeado em IPv6 (`::ffff:45.171.61.10`) é tratado como IPv4. Endereço
+        inválido responde 400.
+      schema:
+        type: string
+        anyOf:
+          - format: ipv4
+          - format: ipv6
+      example: 45.171.61.10
+    PrefixIP:
+      name: ip
+      in: path
+      required: true
+      description: >-
+        Endereço do prefixo, IPv4 ou IPv6, sem zona; IPv4 mapeado em IPv6 é
+        tratado como IPv4. Os bits de host são zerados
+        (`200.192.152.9/24` vira `200.192.152.0/24`). Endereço inválido
+        responde 400.
+      schema:
+        type: string
+        anyOf:
+          - format: ipv4
+          - format: ipv6
+      example: 200.192.152.9
+    PrefixLength:
+      name: len
+      in: path
+      required: true
+      description: >-
+        Tamanho do prefixo: 0 a 32 para IPv4 (inclusive o IPv4 mapeado em
+        IPv6) e 0 a 128 para IPv6. Fora da faixa ou não numérico responde
+        400.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 128
+      example: 24
+    Document:
+      name: doc
+      in: path
+      required: true
+      description: >-
+        Documento do titular. Todo caractere que não é dígito é descartado; os
+        dígitos que sobram decidem: 14 = CNPJ, 8 = identificador estrangeiro
+        do NIC.br, qualquer outra quantidade responde 400. Aceita só dígitos
+        (`08030063000100`) ou o CNPJ formatado com a barra codificada como
+        `%2F` (`08.030.063%2F0001-00`); com a barra sem codificar o caminho
+        ganha um segmento a mais e cai no 404 de rota inexistente.
+      schema:
+        type: string
+      example: '08030063000100'
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        ETag de uma resposta anterior (lista separada por vírgula, ou `*`; a
+        comparação ignora o `W/`). Se bater com o ETag atual, responde 304 sem
+        corpo e sem consultar o cache nem o banco.
+      schema:
+        type: string
+      example: W/"a344bf03cbbadb4a"
+  headers:
+    ETag:
+      description: >-
+        ETag fraco, `W/"<hash>"`, calculado da versão dos dados e da consulta
+        normalizada; muda quando o collector aplica um arquivo novo.
+      schema:
+        type: string
+      example: W/"a344bf03cbbadb4a"
+    CacheControlPublic:
+      description: Resposta cacheável por 5 minutos.
+      schema:
+        type: string
+        const: public, max-age=300
+      example: public, max-age=300
+    CacheControlNoStore:
+      description: Resposta que não deve ser guardada em cache.
+      schema:
+        type: string
+        const: no-store
+      example: no-store
+    XCache:
+      description: >-
+        Origem da resposta: `HIT` (Valkey, ou 304 pelo ETag), `MISS`
+        (calculada agora e guardada no Valkey) ou `BYPASS` (cache desligado).
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS]
+      example: MISS
+    XDatasetVersion:
+      description: Versão dos dados usada na resposta (uuid da execução aplicada em `cgibr_run`).
+      schema:
+        type: string
+        format: uuid
+      example: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
+  responses:
+    NotModified:
+      description: >-
+        O ETag enviado em `If-None-Match` é o atual; sem corpo. `X-Cache` é
+        sempre `HIT`.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+        X-Dataset-Version:
+          $ref: '#/components/headers/XDatasetVersion'
+    BadRequest:
+      description: Parâmetro inválido (ASN, IP, tamanho de prefixo ou documento).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: ASN inválido
+              value:
+                error:
+                  code: bad_request
+                  message: 'ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS'
+            ip:
+              summary: IP inválido
+              value:
+                error:
+                  code: bad_request
+                  message: endereço IP inválido
+            prefix:
+              summary: Tamanho de prefixo inválido
+              value:
+                error:
+                  code: bad_request
+                  message: tamanho de prefixo inválido
+            document:
+              summary: Documento inválido
+              value:
+                error:
+                  code: bad_request
+                  message: 'documento inválido: use o CNPJ (14 dígitos) ou o identificador estrangeiro (8 dígitos)'
+    NotFound:
+      description: Registro inexistente no arquivo do NIC.br.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: ASN fora do arquivo
+              value:
+                error:
+                  code: not_found
+                  message: AS1 não consta no arquivo do NIC.br
+            ip:
+              summary: IP fora dos blocos
+              value:
+                error:
+                  code: not_found
+                  message: 8.8.8.8 não pertence a nenhum bloco do arquivo do NIC.br
+            prefix:
+              summary: Prefixo fora dos blocos
+              value:
+                error:
+                  code: not_found
+                  message: 8.8.8.0/24 não está contido em nenhum bloco do arquivo do NIC.br
+            document:
+              summary: Documento sem ASN
+              value:
+                error:
+                  code: not_found
+                  message: nenhum ASN com esse documento no arquivo do NIC.br
+    DataUnavailable:
+      description: >-
+        Dados indisponíveis: a primeira carga do `collector-cgibr` ainda não
+        terminou (`dataset_not_ready`) ou o PostgreSQL falhou
+        (`database_unavailable`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes da primeira carga
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: a primeira sincronização do collector-cgibr ainda não terminou; tente em alguns minutos
+            database_unavailable:
+              summary: Falha no PostgreSQL
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no PostgreSQL.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (padrão 5s).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: Panic no handler (registrado no log).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: >-
+        API no ar: `ok`, `starting` (ainda sem dados) ou `degraded` (Valkey
+        fora; a API segue sem cache).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          examples:
+            ok:
+              summary: Tudo no ar
+              value:
+                success: true
+                status: ok
+                timestamp: '2026-09-29T14:44:16Z'
+                message: api-cgibr operacional
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: ok
+            starting:
+              summary: Primeira carga do collector não terminou
+              value:
+                success: true
+                status: starting
+                timestamp: '2026-09-29T14:44:16Z'
+                message: aguardando a primeira sincronização do collector-cgibr
+                checks:
+                  dataset: empty
+                  postgres: ok
+                  valkey: ok
+            degraded:
+              summary: Valkey fora
+              value:
+                success: true
+                status: degraded
+                timestamp: '2026-09-29T14:44:16Z'
+                message: Valkey indisponível; respondendo sem cache
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: error
+    StatusError:
+      description: PostgreSQL fora (`success` é `false`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-09-29T14:44:16Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+  schemas:
+    Dataset:
+      type: object
+      description: Versão dos dados usada na resposta; acompanha toda resposta de dados.
+      required: [version, updated_at]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da última execução aplicada pelo collector-cgibr (`cgibr_run`).
+          example: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando o collector aplicou essa versão (UTC).
+          example: '2026-09-28T23:19:10Z'
+    ASNRef:
+      type: object
+      description: ASN resumido, com o titular.
+      required: [asn, name, document, document_type]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Número do ASN.
+          example: 61613
+        name:
+          type: string
+          description: Nome do titular como está no arquivo do NIC.br.
+          example: TMSoft Solucoes em Informatica Ltda
+        document:
+          type: string
+          description: >-
+            Documento do titular como está no arquivo: CNPJ formatado ou
+            identificador estrangeiro de 8 dígitos.
+          example: 08.030.063/0001-00
+        document_type:
+          type: string
+          enum: [cnpj, foreign]
+          description: >-
+            `cnpj` quando o documento tem 14 dígitos; `foreign` para o
+            identificador estrangeiro de 8 dígitos do NIC.br.
+          example: cnpj
+    ASNName:
+      type: object
+      description: ASN só com número e nome.
+      required: [asn, name]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Número do ASN.
+          example: 61613
+        name:
+          type: string
+          description: Nome do titular do ASN.
+          example: TMSoft Solucoes em Informatica Ltda
+    Prefixes:
+      type: object
+      description: Blocos do ASN separados por família, cada lista em ordem de endereço.
+      required: [ipv4, ipv6]
+      properties:
+        ipv4:
+          type: array
+          description: Blocos IPv4 em notação CIDR (lista vazia quando não há).
+          items:
+            type: string
+          example: ['45.171.60.0/22', '200.192.152.0/22']
+        ipv6:
+          type: array
+          description: Blocos IPv6 em notação CIDR (lista vazia quando não há).
+          items:
+            type: string
+          example: ['2804:5964::/32']
+    ASNResponse:
+      description: Resposta de `GET /asn/{asn}`.
+      allOf:
+        - $ref: '#/components/schemas/ASNRef'
+        - type: object
+          required: [prefixes, first_seen, updated_at, dataset]
+          properties:
+            prefixes:
+              $ref: '#/components/schemas/Prefixes'
+            first_seen:
+              type: string
+              format: date-time
+              description: Quando o ASN apareceu pela primeira vez na fonte (UTC).
+              example: '2026-09-28T23:19:10Z'
+            updated_at:
+              type: string
+              format: date-time
+              description: Última mudança do registro do ASN (UTC).
+              example: '2026-09-28T23:19:10Z'
+            dataset:
+              $ref: '#/components/schemas/Dataset'
+    IPResponse:
+      type: object
+      description: Resposta de `GET /ip/{ip}`.
+      required: [ip, prefix, asn, dataset]
+      properties:
+        ip:
+          type: string
+          anyOf:
+            - format: ipv4
+            - format: ipv6
+          description: Endereço consultado, normalizado (IPv4 mapeado em IPv6 vira IPv4).
+          example: 45.171.61.10
+        prefix:
+          type: string
+          description: Bloco mais específico do arquivo que contém o IP, em CIDR.
+          example: 45.171.60.0/22
+        asn:
+          $ref: '#/components/schemas/ASNRef'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    PrefixResponse:
+      type: object
+      description: Resposta de `GET /prefix/{ip}/{len}`.
+      required: [query, prefix, exact, asn, dataset]
+      properties:
+        query:
+          type: string
+          description: Prefixo consultado, em CIDR, com os bits de host zerados.
+          example: 200.192.152.0/24
+        prefix:
+          type: string
+          description: Bloco mais específico do arquivo que contém o prefixo, em CIDR.
+          example: 200.192.152.0/22
+        exact:
+          type: boolean
+          description: '`true` quando o bloco encontrado é o próprio prefixo consultado.'
+          example: false
+        asn:
+          $ref: '#/components/schemas/ASNRef'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    DocumentResponse:
+      type: object
+      description: Resposta de `GET /document/{doc}`.
+      required: [document, document_digits, document_type, name, count, asns, dataset]
+      properties:
+        document:
+          type: string
+          description: Documento como está no arquivo (do primeiro ASN da lista).
+          example: 08.030.063/0001-00
+        document_digits:
+          type: string
+          pattern: '^([0-9]{8}|[0-9]{14})$'
+          description: Só os dígitos do documento consultado.
+          example: '08030063000100'
+        document_type:
+          type: string
+          enum: [cnpj, foreign]
+          description: '`cnpj` (14 dígitos) ou `foreign` (identificador estrangeiro de 8 dígitos).'
+          example: cnpj
+        name:
+          type: string
+          description: Nome do titular (do primeiro ASN da lista).
+          example: TMSoft Solucoes em Informatica Ltda
+        count:
+          type: integer
+          minimum: 1
+          description: Quantidade de ASNs do titular.
+          example: 1
+        asns:
+          type: array
+          description: ASNs do titular, em ordem numérica.
+          items:
+            $ref: '#/components/schemas/ASNName'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    ASNListResponse:
+      type: object
+      description: Resposta de `GET /asns`.
+      required: [count, asns, dataset]
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          description: Quantidade de ASNs no arquivo.
+          example: 9134
+        asns:
+          type: array
+          description: Todos os ASNs, sem os blocos, em ordem numérica.
+          items:
+            $ref: '#/components/schemas/ASNRef'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    MetaResponse:
+      type: object
+      description: Resposta de `GET /meta`.
+      required: [app, version, dataset, collector]
+      properties:
+        app:
+          type: string
+          const: api-cgibr
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+          example: 0.1.0
+        dataset:
+          description: Último arquivo aplicado; `null` antes da primeira carga.
+          oneOf:
+            - $ref: '#/components/schemas/MetaDataset'
+            - type: 'null'
+        collector:
+          description: Linha do collector-cgibr em `jobs`; `null` se ainda não existe.
+          oneOf:
+            - $ref: '#/components/schemas/MetaCollector'
+            - type: 'null'
+    MetaDataset:
+      type: object
+      description: Último arquivo aplicado pelo collector-cgibr (linha de `cgibr_run`).
+      required: [version, updated_at, source, sha256, asns, prefixes_v4, prefixes_v6]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da execução aplicada; é a versão dos dados.
+          example: 01a0eb55-1a1c-7bdb-915a-e885abbaaf72
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando o arquivo foi aplicado (UTC).
+          example: '2026-09-29T04:03:38Z'
+        source:
+          type: string
+          format: uri
+          description: URL de onde o arquivo foi baixado.
+          example: https://ftp.registro.br/pub/numeracao/origin/nicbr-asn-blk-latest.txt
+        sha256:
+          type: string
+          description: SHA-256 do arquivo aplicado, em hexadecimal.
+          example: b9c3cb12fdb5738c919c64f7a4472e830fd5e244e2ca0ae96e6a898077dc2d20
+        asns:
+          type: integer
+          minimum: 0
+          description: Quantidade de ASNs no arquivo.
+          example: 9135
+        prefixes_v4:
+          type: integer
+          minimum: 0
+          description: Quantidade de blocos IPv4 no arquivo.
+          example: 13041
+        prefixes_v6:
+          type: integer
+          minimum: 0
+          description: Quantidade de blocos IPv6 no arquivo.
+          example: 8955
+    MetaCollector:
+      type: object
+      description: Linha do collector-cgibr na tabela central `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          const: collector-cgibr
+          description: Nome do collector (coluna `app` de `jobs`).
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última sincronização que aplicou um arquivo novo (UTC).
+          example: '2026-09-29T04:03:38Z'
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última verificação da fonte, mudando ou não (UTC).
+          example: '2026-09-29T14:11:25Z'
+        consolidated:
+          type: boolean
+          description: Se a consolidação da fase 2 já copiou os dados atuais para as tabelas centrais.
+          example: false
+    Status:
+      type: object
+      description: Resposta de `/health` e `/status`.
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só quando o PostgreSQL está fora.'
+          example: true
+        status:
+          type: string
+          enum: [ok, starting, degraded, error]
+          description: >-
+            `ok` (tudo no ar), `starting` (ainda sem dados), `degraded`
+            (Valkey fora) ou `error` (PostgreSQL fora, HTTP 503).
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          description: Hora da verificação (UTC).
+          example: '2026-09-29T14:44:16Z'
+        message:
+          type: string
+          description: Resumo do estado em português.
+          example: api-cgibr operacional
+        checks:
+          $ref: '#/components/schemas/StatusChecks'
+    StatusChecks:
+      type: object
+      description: Resultado de cada verificação.
+      required: [postgres, valkey, dataset]
+      properties:
+        postgres:
+          type: string
+          enum: [ok, error]
+          description: Conexão com o PostgreSQL.
+        valkey:
+          type: string
+          enum: [ok, error, disabled]
+          description: Conexão com o Valkey; `disabled` quando o cache está desligado.
+        dataset:
+          type: string
+          enum: [ok, empty]
+          description: '`empty` enquanto a primeira carga do collector não terminou.'
+    IndexResponse:
+      type: object
+      description: Resposta do índice (`GET /`, na versão atual e na v1 fixa).
+      required: [app, version, base_path, versions, endpoints, source]
+      properties:
+        app:
+          type: string
+          const: api-cgibr
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+          example: 0.1.0
+        base_path:
+          type: string
+          description: Caminho de base (`BASE_PATH`).
+          example: /cgibr
+        versions:
+          type: array
+          description: Versões da API disponíveis.
+          items:
+            type: string
+          example: [v1]
+        endpoints:
+          type: array
+          description: Rotas principais, já com o caminho de base.
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: Arquivo do NIC.br de onde vêm os dados.
+          example: https://ftp.registro.br/pub/numeracao/origin/nicbr-asn-blk-latest.txt
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error]
+              description: Código estável do erro.
+              example: not_found
+            message:
+              type: string
+              description: Mensagem em português para pessoas.
+              example: AS1 não consta no arquivo do NIC.br

@@ -1,0 +1,67 @@
+# api-roothints: API HTTP dos dados coletados pelo collector-roothints.
+#
+# Dona do caminho /roothints no host da API (api.badblock.net.br/roothints/...):
+# o Traefik encaminha tudo desse caminho para cá, sem remover o prefixo, e a
+# própria API responde /roothints/servers, /roothints/v1/server/a etc.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinha, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Na rede do Traefik
+# (TRAEFIK_NETWORK, padrão network_public) para ser publicada, e na rede
+# badblock para alcançar Postgres e Valkey. A porta no loopback do host é só
+# para testes locais sem Traefik.
+
+name: badblock-api-roothints
+
+services:
+  api-roothints:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-api-roothints:${API_ROOTHINTS_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${API_ROOTHINTS_TAG:-dev}
+    container_name: badblock-api-roothints
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senhas só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      REDIS_URL: ${API_ROOTHINTS_REDIS_URL:-redis://:${VALKEY_PASSWORD:-}@badblock-valkey:6379/0}
+      REDIS_CACHE_ENABLED: ${API_ROOTHINTS_CACHE_ENABLED:-true}
+      REDIS_KEY_TTL: ${API_ROOTHINTS_CACHE_TTL:-3600}
+      HTTP_PORT: "8080"
+      BASE_PATH: /roothints
+      TRUSTED_PROXIES: ${API_TRUSTED_PROXIES:-127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
+      DB_POOL_MAX: ${API_ROOTHINTS_DB_POOL_MAX:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    ports:
+      - "127.0.0.1:${API_ROOTHINTS_HOST_PORT:-8109}:8080"
+    networks: [badblock, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-network_public}
+
+      traefik.http.services.badblock-api-roothints.loadbalancer.server.port: "8080"
+
+      traefik.http.routers.badblock-api-roothints.rule: Host(`${API_FQDN:-api.badblock.net.br}`) && (Path(`/roothints`) || PathPrefix(`/roothints/`))
+      traefik.http.routers.badblock-api-roothints.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.badblock-api-roothints.tls: "true"
+      traefik.http.routers.badblock-api-roothints.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.routers.badblock-api-roothints.service: badblock-api-roothints
+      traefik.http.routers.badblock-api-roothints.middlewares: badblock-api-roothints-ratelimit
+
+      traefik.http.middlewares.badblock-api-roothints-ratelimit.ratelimit.average: ${API_RATE_AVERAGE:-5}
+      traefik.http.middlewares.badblock-api-roothints-ratelimit.ratelimit.burst: ${API_RATE_BURST:-20}
+      traefik.http.middlewares.badblock-api-roothints-ratelimit.ratelimit.period: 1s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true
+  traefik:
+    name: ${TRAEFIK_NETWORK:-network_public}
+    external: true

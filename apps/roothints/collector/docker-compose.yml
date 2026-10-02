@@ -1,0 +1,47 @@
+# collector-roothints: importa periodicamente o arquivo named.root da InterNIC
+# (root hints: nomes e endereços IPv4/IPv6 dos 13 servidores raiz do DNS)
+# para as tabelas roothints_* do PostgreSQL.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não tem porta nem
+# API HTTP: o estado fica nas tabelas roothints_run e jobs, e nos logs.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-roothints
+
+services:
+  collector-roothints:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-roothints:${COLLECTOR_ROOTHINTS_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_ROOTHINTS_TAG:-dev}
+    container_name: badblock-collector-roothints
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senha só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      SYNC_INTERVAL: ${COLLECTOR_ROOTHINTS_SYNC_INTERVAL:-1h}
+      RETRY_INTERVAL: ${COLLECTOR_ROOTHINTS_RETRY_INTERVAL:-5m}
+      SOURCE_URL: ${COLLECTOR_ROOTHINTS_SOURCE_URL:-https://www.internic.net/domain/named.root}
+      SOURCE_MD5_URL: ${COLLECTOR_ROOTHINTS_SOURCE_MD5_URL:-}
+      MIN_SERVERS: ${COLLECTOR_ROOTHINTS_MIN_SERVERS:-13}
+      REMOVAL_THRESHOLD: ${COLLECTOR_ROOTHINTS_REMOVAL_THRESHOLD:-0.05}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

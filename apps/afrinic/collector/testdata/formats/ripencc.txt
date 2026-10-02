@@ -1,0 +1,9 @@
+2|ripencc|1790632799|5|19700101|20260928|+0200
+ripencc|*|asn|*|1|summary
+ripencc|*|ipv4|*|2|summary
+ripencc|*|ipv6|*|2|summary
+ripencc|RU|ipv4|62.122.208.0|1280|20090417|allocated|fa4615bf-0770-4e9a-8002-e125f84d6794
+ripencc|DE|ipv4|156.67.6.0|8|19920327|assigned|f7b5eb5d-2252-4fcc-97fa-2efcd27631a5
+ripencc||asn|1877|1||available
+ripencc|NL|ipv6|2001:600::|29|19990826|allocated|a71dd866-c717-4529-950b-2040370c754a
+ripencc||ipv6|2001:609::|32||reserved

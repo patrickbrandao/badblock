@@ -1,0 +1,11 @@
+2.3|lacnic|20260927|7|19870101|20260925|-0300
+lacnic|*|ipv4|*|2|summary
+lacnic|*|ipv6|*|2|summary
+lacnic|*|asn|*|3|summary
+lacnic||ipv4|45.68.105.0|256||reserved|
+lacnic|BR|ipv4|45.171.60.0|1024|20190211|allocated|258500
+lacnic||ipv6|2001:1201:20::|43||available
+lacnic|BR|ipv6|2804:5964::|32|20190211|allocated|258500
+lacnic||asn|6065|1||reserved|
+lacnic||asn|28003|3||available
+lacnic|BR|asn|61613|1|20230505|allocated|258500

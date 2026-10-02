@@ -1,0 +1,6 @@
+AS Number,Reason for Reservation,Reference
+0,Reserved by [RFC7607],[RFC7607]
+23456,AS_TRANS; reserved by [RFC6793],[RFC6793]
+64512-65534,For private use; reserved by [RFC6996],[RFC6996]
+4200000000-4294967294,For private use; reserved by [RFC6996],[RFC6996]
+4294967295,Reserved by [RFC7300],[RFC7300]

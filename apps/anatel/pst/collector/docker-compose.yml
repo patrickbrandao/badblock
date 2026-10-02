@@ -1,0 +1,46 @@
+# collector-anatel-pst: importa periodicamente o ZIP de prestadoras de
+# serviços de telecomunicações da Anatel para as tabelas anatel_pst_* do
+# PostgreSQL.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não tem porta nem
+# API HTTP: o estado fica nas tabelas anatel_pst_run e jobs, e nos logs.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-anatel-pst
+
+services:
+  collector-anatel-pst:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-anatel-pst:${COLLECTOR_ANATEL_PST_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_ANATEL_PST_TAG:-dev}
+    container_name: badblock-collector-anatel-pst
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senha só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      SYNC_INTERVAL: ${COLLECTOR_ANATEL_PST_SYNC_INTERVAL:-24h}
+      RETRY_INTERVAL: ${COLLECTOR_ANATEL_PST_RETRY_INTERVAL:-5m}
+      SOURCE_URL: ${COLLECTOR_ANATEL_PST_SOURCE_URL:-https://www.anatel.gov.br/dadosabertos/paineis_de_dados/outorga_e_licenciamento/prestadoras_servicos_telecomunicacoes.zip}
+      MIN_PROVIDERS: ${COLLECTOR_ANATEL_PST_MIN_PROVIDERS:-30000}
+      REMOVAL_THRESHOLD: ${COLLECTOR_ANATEL_PST_REMOVAL_THRESHOLD:-0.05}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

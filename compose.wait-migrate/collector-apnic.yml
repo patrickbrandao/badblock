@@ -1,0 +1,10 @@
+# Override usado só pelo docker-compose.yml da raiz: o collector-apnic espera as
+# migrations terminarem antes da primeira verificação. Sozinho, a partir da
+# pasta do app, ele não depende do migrate (tenta de novo em RETRY_INTERVAL).
+# Um arquivo por collector: cada include é um modelo à parte, e um override
+# que citasse outros serviços criaria serviços sem imagem.
+services:
+  collector-apnic:
+    depends_on:
+      migrate:
+        condition: service_completed_successfully

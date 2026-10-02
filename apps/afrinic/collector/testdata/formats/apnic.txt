@@ -1,0 +1,36 @@
+######################################################################
+#
+# 	CONDITIONS OF USE
+# ____________________________________________________________________
+# 
+# 
+# The files are freely available for download and use on the condition 
+# that APNIC will not be held responsible for any loss or damage 
+# arising from the use of the information contained in these reports.
+# 
+# APNIC endeavours to the best of its ability to ensure the accuracy 
+# of these reports; however, APNIC makes no guarantee in this regard.
+# 
+# In particular, it should be noted that these reports seek to 
+# indicate where resources were first allocated or assigned. It is not
+# intended that these reports be considered as an authoritative 
+# statement of the location in which any specific resource may 
+# currently be in use.
+# 
+# For more information see: 
+#
+#       http://www.apnic.net/db/rir-stats-format.html
+# or
+#	ftp://ftp.apnic.net/pub/apnic/stats/apnic/README-EXTENDED.TXT
+#
+######################################################################
+#
+2.3|apnic|20260929|5||20260928|+1000
+apnic|*|asn|*|1|summary
+apnic|*|ipv4|*|3|summary
+apnic|*|ipv6|*|1|summary
+apnic|AU|ipv4|1.0.0.0|256|20110811|assigned|A91872ED
+apnic||ipv4|14.102.240.0|4096||available|
+apnic||ipv4|163.61.160.0|64||available|
+apnic||ipv6|2001:7fa::|64||reserved|
+apnic|TW|asn|1768|2|20020801|allocated|A91BDB29

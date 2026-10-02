@@ -1,0 +1,47 @@
+# collector-iana: importa periodicamente os registros de numeração da IANA
+# (blocos de ASN e IP por RIR, special-purpose e bootstrap RDAP; 10 arquivos
+# tratados como um dataset) para as tabelas iana_* do PostgreSQL.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Não tem porta nem
+# API HTTP: o estado fica nas tabelas iana_run e jobs, e nos logs.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-iana
+
+services:
+  collector-iana:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-iana:${COLLECTOR_IANA_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_IANA_TAG:-dev}
+    container_name: badblock-collector-iana
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senha só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      SYNC_INTERVAL: ${COLLECTOR_IANA_SYNC_INTERVAL:-6h}
+      RETRY_INTERVAL: ${COLLECTOR_IANA_RETRY_INTERVAL:-5m}
+      RUN_TIMEOUT: ${COLLECTOR_IANA_RUN_TIMEOUT:-10m}
+      IANA_BASE_URL: ${COLLECTOR_IANA_IANA_BASE_URL:-https://www.iana.org/assignments}
+      RDAP_BASE_URL: ${COLLECTOR_IANA_RDAP_BASE_URL:-https://data.iana.org/rdap}
+      REMOVAL_THRESHOLD: ${COLLECTOR_IANA_REMOVAL_THRESHOLD:-0.05}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

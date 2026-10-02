@@ -1,4 +1,4 @@
-# Valkey do BadBlock: cache cache-aside da registry-api.
+# Valkey do BadBlock: cache cache-aside das APIs.
 #
 # Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
 # desta pasta, com um .env próprio (copie o .env.example). Não publica porta no
@@ -11,22 +11,27 @@ services:
     image: valkey/valkey:9-alpine
     container_name: badblock-valkey
     restart: unless-stopped
+    # Com VALKEY_PASSWORD vazio o Valkey sobe sem senha (só a rede badblock o
+    # alcança); com valor, exige autenticação.
     command:
-      - valkey-server
-      - /usr/local/etc/valkey/valkey.conf
-      - --requirepass
-      - ${VALKEY_PASSWORD:?defina VALKEY_PASSWORD no .env}
-      - --maxmemory
-      - ${VALKEY_MAXMEMORY:-256mb}
+      - sh
+      - -c
+      - exec valkey-server /usr/local/etc/valkey/valkey.conf --maxmemory "$$VALKEY_MAXMEMORY" $${VALKEY_PASSWORD:+--requirepass "$$VALKEY_PASSWORD"}
     environment:
-      VALKEYCLI_AUTH: ${VALKEY_PASSWORD:?defina VALKEY_PASSWORD no .env}
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
+      VALKEY_MAXMEMORY: ${VALKEY_MAXMEMORY:-256mb}
+      VALKEYCLI_AUTH: ${VALKEY_PASSWORD:-}
     volumes:
       - ./valkey.conf:/usr/local/etc/valkey/valkey.conf:ro
     networks:
       badblock:
         aliases: [badblock-valkey]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
     healthcheck:
-      test: ["CMD-SHELL", "valkey-cli ping | grep -q PONG"]
+      # VALKEYCLI_AUTH vazio faria o valkey-cli tentar um AUTH sem senha.
+      test: ["CMD-SHELL", "[ -n \"$$VALKEYCLI_AUTH\" ] || unset VALKEYCLI_AUTH; valkey-cli ping | grep -q PONG"]
       interval: 5s
       timeout: 3s
       retries: 20

@@ -1,12 +1,12 @@
-# BadBlock
+@AGENTS.md
 
-As instruções deste repositório estão em [`AGENTS.md`](AGENTS.md) — leia antes
-de mexer em qualquer coisa.
+## Claude Code
 
-O que mais dá errado quando ignorado:
-
-- **Todo SQL de schema mora em `database/postgresql/`** (bootstrap e
-  migrations). Os apps só leem e escrevem dados; a registry-api só enxerga as
-  views do schema `api`.
-- **O repositório é público.** Nenhum segredo no git; valores reais só no `.env`.
-- As decisões de desenho estão em [`docs/decisoes-fase-1.md`](docs/decisoes-fase-1.md).
+- **Sub-agentes**: `.claude/agents/<app>.md`, um por app (o tipo do agente é o
+  nome do app, ex.: `collector-cgibr`). Delegue a eles o trabalho de um app;
+  o que cruza apps (padrões, integração na raiz, specs de projeto e
+  plataforma) fica com a sessão principal, que distribui o trabalho de cada
+  app ao sub-agente dele. Os sub-agentes também recebem este arquivo.
+- **Skills** do MCP `badblock-dev` (`.mcp.json`, fora do git):
+  `postgres-table-style`, `postgres-uuidv7`, `postgres-url-standalone` e
+  `redis-url-standalone`. Use-as ao mexer em schema e em conexões.

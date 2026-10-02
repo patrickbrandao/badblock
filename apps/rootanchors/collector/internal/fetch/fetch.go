@@ -1,0 +1,221 @@
+// Package fetch baixa o root-anchors.xml e o checksums-sha256.txt publicado
+// pela IANA na mesma pasta.
+//
+// O download é condicional (If-None-Match / If-Modified-Since com os
+// validadores do último arquivo aplicado): um 304 significa "nada mudou" sem
+// transferir o arquivo.
+package fetch
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"path"
+	"regexp"
+	"strings"
+	"time"
+)
+
+// Validators são os cabeçalhos do último arquivo aplicado.
+type Validators struct {
+	ETag         string
+	LastModified string
+}
+
+// Download é o resultado de um GET do arquivo.
+type Download struct {
+	URL          string
+	Status       int
+	NotModified  bool // 304
+	Body         []byte
+	SHA256       string
+	ETag         string
+	LastModified string
+}
+
+// Fetcher faz as requisições HTTP.
+type Fetcher struct {
+	Client     *http.Client
+	UserAgent  string
+	MaxBytes   int64
+	Retries    int           // tentativas extras em erro de rede ou 5xx
+	RetryDelay time.Duration // espera entre tentativas
+}
+
+// NewHTTPClient cria o cliente com timeouts de conexão; o limite total de cada
+// requisição vem do contexto.
+func NewHTTPClient() *http.Client {
+	return &http.Client{Transport: &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   15 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: 60 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		MaxIdleConnsPerHost:   2,
+	}}
+}
+
+// Linhas aceitas no arquivo de hashes: GNU ("<hash>  <arquivo>", com "*"
+// opcional antes do nome no modo binário) e BSD ("SHA256 (<arquivo>) = <hash>").
+var (
+	gnuLine = regexp.MustCompile(`^([0-9a-fA-F]{64})[ \t]+\*?(\S.*)$`)
+	bsdLine = regexp.MustCompile(`^SHA256 ?\((.+)\) ?= ?([0-9a-fA-F]{64})$`)
+)
+
+// FindSHA256 procura, no conteúdo de um arquivo de hashes, a linha do arquivo
+// name (comparado pelo último segmento do caminho) e devolve o hash em hex
+// minúsculo, ou "" se não houver.
+func FindSHA256(content, name string) string {
+	for line := range strings.Lines(content) {
+		line = strings.TrimSpace(line)
+		var h, file string
+		if m := gnuLine.FindStringSubmatch(line); m != nil {
+			h, file = m[1], m[2]
+		} else if m := bsdLine.FindStringSubmatch(line); m != nil {
+			file, h = m[1], m[2]
+		} else {
+			continue
+		}
+		if path.Base(strings.TrimSpace(file)) == name {
+			return strings.ToLower(h)
+		}
+	}
+	return ""
+}
+
+// PublishedSHA256 baixa o arquivo de hashes (checksums-sha256.txt, com uma
+// linha por arquivo da pasta) e devolve o hash do arquivo name.
+func (f *Fetcher) PublishedSHA256(ctx context.Context, url, name string) (string, error) {
+	var hash string
+	err := f.retry(ctx, func() error {
+		resp, err := f.get(ctx, url, Validators{})
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if err := statusError(resp.StatusCode); err != nil {
+			return err
+		}
+		raw, err := readLimited(resp.Body, 4096)
+		if err != nil {
+			return retryable{err}
+		}
+		if hash = FindSHA256(string(raw), name); hash == "" {
+			return fmt.Errorf("sem hash SHA-256 de %s em %s", name, url)
+		}
+		return nil
+	})
+	return hash, err
+}
+
+// Download baixa o arquivo com GET condicional.
+func (f *Fetcher) Download(ctx context.Context, url string, prev Validators) (*Download, error) {
+	var d *Download
+	err := f.retry(ctx, func() error {
+		resp, err := f.get(ctx, url, prev)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusNotModified {
+			d = &Download{URL: url, Status: resp.StatusCode, NotModified: true,
+				ETag: prev.ETag, LastModified: prev.LastModified}
+			return nil
+		}
+		if err := statusError(resp.StatusCode); err != nil {
+			return err
+		}
+		body, err := readLimited(resp.Body, f.MaxBytes)
+		if err != nil {
+			return retryable{err}
+		}
+		sum := sha256.Sum256(body)
+		d = &Download{
+			URL:          url,
+			Status:       resp.StatusCode,
+			Body:         body,
+			SHA256:       hex.EncodeToString(sum[:]),
+			ETag:         resp.Header.Get("ETag"),
+			LastModified: resp.Header.Get("Last-Modified"),
+		}
+		return nil
+	})
+	return d, err
+}
+
+func (f *Fetcher) get(ctx context.Context, url string, prev Validators) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", f.UserAgent)
+	if prev.ETag != "" {
+		req.Header.Set("If-None-Match", prev.ETag)
+	}
+	if prev.LastModified != "" {
+		req.Header.Set("If-Modified-Since", prev.LastModified)
+	}
+	resp, err := f.Client.Do(req)
+	if err != nil {
+		return nil, retryable{err}
+	}
+	return resp, nil
+}
+
+// retryable marca falhas que valem nova tentativa (rede, 5xx).
+type retryable struct{ error }
+
+func (e retryable) Unwrap() error { return e.error }
+
+func statusError(code int) error {
+	switch {
+	case code == http.StatusOK:
+		return nil
+	case code >= 500:
+		return retryable{fmt.Errorf("HTTP %d", code)}
+	default:
+		return fmt.Errorf("HTTP %d", code)
+	}
+}
+
+func (f *Fetcher) retry(ctx context.Context, fn func() error) error {
+	var err error
+	for attempt := 0; attempt <= f.Retries; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(f.RetryDelay):
+			}
+		}
+		if err = fn(); err == nil {
+			return nil
+		}
+		if _, ok := errors.AsType[retryable](err); !ok {
+			return err
+		}
+	}
+	return err
+}
+
+func readLimited(r io.Reader, max int64) ([]byte, error) {
+	if max <= 0 {
+		max = 64 << 20
+	}
+	body, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > max {
+		return nil, fmt.Errorf("resposta maior que %d bytes", max)
+	}
+	return body, nil
+}

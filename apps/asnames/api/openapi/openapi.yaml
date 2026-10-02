@@ -1,0 +1,1107 @@
+openapi: 3.1.0
+info:
+  title: api-asnames
+  version: '0.1.0'
+  description: |-
+    API HTTP (JSON), só de leitura, com o nome e o país de **todos os ASNs
+    alocados** por todos os RIRs, a partir do arquivo
+    [`asn.txt`](https://ftp.ripe.net/ripe/asnames/asn.txt) do RIPE NCC
+    (~122 mil ASNs), que o `collector-asnames` grava nas tabelas `asnames_*`.
+    Consultas por número de ASN, por país, por handle (as-name) e busca por
+    trecho de texto na descrição original. Pública, sem chave; rate limit por
+    IP no proxy.
+
+    - `description` é o texto original da linha do `asn.txt` (fonte da
+      verdade). `handle`, `name` e `country` são derivados dela e saem `null`
+      quando a linha não os traz; o handle **não é único**.
+    - `country` tem duas letras maiúsculas e inclui os códigos regionais `EU` e
+      `AP` dos RIRs, que não são países ISO 3166.
+    - Versões são servidores: as rotas de dados respondem no servidor sem
+      versão (versão atual, hoje v1) e no servidor `/v1` (v1 fixa), com o
+      mesmo conteúdo, o mesmo ETag e a mesma chave de cache. Saúde
+      (`/health`, `/status`, `/ping`) e `/openapi.yaml` ficam fora do
+      versionamento: só existem no servidor sem versão (declaram `servers`
+      próprios).
+    - Toda rota com `GET` também aceita `HEAD`; `OPTIONS` responde o preflight
+      de CORS (204, `GET, HEAD, OPTIONS`). `/asnames` redireciona (301) para
+      `/asnames/`; qualquer outro caminho responde 404 em JSON.
+    - Todas as respostas levam `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin`,
+      `Access-Control-Expose-Headers: ETag, X-Cache, X-Dataset-Version` e
+      `Server: badblock-api-asnames/<versão>`.
+    - Erros sempre em JSON `{"error": {"code", "message"}}`, com
+      `Cache-Control: no-store`. A validação vem antes de tudo: um pedido
+      inválido recebe 400 mesmo antes da primeira carga dos dados.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/asnames
+servers:
+  - url: https://api.badblock.net.br/asnames
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/asnames/v1
+    description: Produção, v1 fixa (só rotas de dados)
+  - url: http://127.0.0.1:8108/asnames
+    description: Desenvolvimento local, versão atual
+  - url: http://127.0.0.1:8108/asnames/v1
+    description: Desenvolvimento local, v1 fixa (só rotas de dados)
+tags:
+  - name: dados
+    description: Consultas aos ASNs do asn.txt (com ETag e cache no Valkey).
+  - name: meta
+    description: Índice, estado dos dados e este manifesto.
+  - name: saúde
+    description: Saúde do serviço, fora do versionamento.
+paths:
+  /:
+    get:
+      operationId: getIndex
+      tags: [meta]
+      summary: Índice da API
+      description: |-
+        App, versão do build, caminho de base, versões da API e rotas.
+        Responde igual nos dois servidores (`/asnames/` e `/asnames/v1/`);
+        não consulta o banco nem o Valkey.
+      responses:
+        '200':
+          description: O índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-asnames
+                version: '0.1.0'
+                base_path: /asnames
+                versions: [v1]
+                endpoints:
+                  - /asnames/asn/{asn}
+                  - /asnames/country/{cc}
+                  - /asnames/handle/{handle}
+                  - /asnames/search?q={texto}
+                  - /asnames/meta
+                  - /asnames/status
+                  - /asnames/openapi.yaml
+                source: https://ftp.ripe.net/ripe/asnames/asn.txt
+  /asn/{asn}:
+    get:
+      operationId: getASN
+      tags: [dados]
+      summary: Um ASN pelo número
+      description: |-
+        Handle, nome, país e a linha original do `asn.txt` de um ASN. Aceita
+        o número com ou sem o prefixo `AS`, sem diferenciar maiúsculas
+        (`15169`, `AS15169`, `as15169`), de 0 a 4294967295. `handle`, `name`
+        e `country` saem `null` quando a linha da fonte não os traz. 404 se o
+        ASN não consta no arquivo.
+      parameters:
+        - $ref: '#/components/parameters/ASN'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: O ASN.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ASNResponse'
+              examples:
+                google:
+                  summary: GET /asnames/asn/15169
+                  value:
+                    asn: 15169
+                    handle: GOOGLE
+                    name: Google LLC
+                    country: US
+                    description: GOOGLE - Google LLC, US
+                    first_seen: '2026-09-29T00:43:39Z'
+                    updated_at: '2026-09-29T00:43:39Z'
+                    dataset:
+                      version: 01a0ea9e-0f44-7227-8b1e-7d4919aae5cf
+                      updated_at: '2026-09-29T00:43:39Z'
+                linha_incompleta:
+                  summary: GET /asnames/asn/7901 (linha incompleta na fonte)
+                  value:
+                    asn: 7901
+                    handle: null
+                    name: null
+                    country: NZ
+                    description: '- , NZ'
+                    first_seen: '2026-09-29T00:43:39Z'
+                    updated_at: '2026-09-29T00:43:39Z'
+                    dataset:
+                      version: 01a0ea9e-0f44-7227-8b1e-7d4919aae5cf
+                      updated_at: '2026-09-29T00:43:39Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /country/{cc}:
+    get:
+      operationId: getCountry
+      tags: [dados]
+      summary: ASNs de um país
+      description: |-
+        Todos os ASNs de um país, em ordem numérica, com a lista completa (sem
+        paginação nem parâmetro de limite: `US` tem 32.219 ASNs, ~2,2 MB).
+        O código do país não diferencia maiúsculas e é normalizado para
+        maiúsculas (`us`, `US` e `Us` são a mesma consulta, com o mesmo ETag).
+        Valem também `EU` e `AP`. 404 se o país não tem nenhum ASN.
+      parameters:
+        - $ref: '#/components/parameters/CountryCode'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Os ASNs do país.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryResponse'
+              examples:
+                angola:
+                  summary: GET /asnames/country/AO (lista cortada nos 3 primeiros dos 79)
+                  value:
+                    country: AO
+                    count: 79
+                    asns:
+                      - asn: 11259
+                        handle: Angola Telecom
+                        name: Angola Telecom
+                      - asn: 17400
+                        handle: MSTelcom-Mercury Servicos de Telecomunicacoes, S.A.R.L
+                        name: MSTelcom-Mercury Servicos de Telecomunicacoes, S.A.R.L
+                      - asn: 32717
+                        handle: SNET ANGOLA
+                        name: SNET ANGOLA
+                    dataset:
+                      version: 01a0ea9e-0f44-7227-8b1e-7d4919aae5cf
+                      updated_at: '2026-09-29T00:43:39Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /handle/{handle}:
+    get:
+      operationId: getHandle
+      tags: [dados]
+      summary: ASNs com um handle
+      description: |-
+        ASNs cujo handle é **igual** ao pedido, sem diferenciar maiúsculas
+        (não é prefixo nem trecho: para isso use `/search`). O handle não é
+        único na fonte, então a resposta é sempre uma lista, em ordem
+        numérica. `handle` na resposta é o termo consultado em minúsculas.
+        404 se nenhum ASN tem esse handle.
+      parameters:
+        - $ref: '#/components/parameters/Handle'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Os ASNs com esse handle.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandleResponse'
+              examples:
+                google:
+                  summary: GET /asnames/handle/GOOGLE
+                  value:
+                    handle: google
+                    count: 6
+                    asns:
+                      - asn: 15169
+                        handle: GOOGLE
+                        name: Google LLC
+                        country: US
+                        description: GOOGLE - Google LLC, US
+                      - asn: 22859
+                        handle: GOOGLE
+                        name: Google LLC
+                        country: US
+                        description: GOOGLE - Google LLC, US
+                      - asn: 32381
+                        handle: GOOGLE
+                        name: CLOUD NETWORKING - Google Access LLC
+                        country: US
+                        description: GOOGLE CLOUD NETWORKING - Google Access LLC, US
+                      - asn: 36039
+                        handle: GOOGLE
+                        name: Google LLC
+                        country: US
+                        description: GOOGLE - Google LLC, US
+                      - asn: 394507
+                        handle: GOOGLE
+                        name: Google LLC
+                        country: US
+                        description: GOOGLE - Google LLC, US
+                      - asn: 394639
+                        handle: GOOGLE
+                        name: Google LLC
+                        country: US
+                        description: GOOGLE - Google LLC, US
+                    dataset:
+                      version: 01a0ea9e-0f44-7227-8b1e-7d4919aae5cf
+                      updated_at: '2026-09-29T00:43:39Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /search:
+    get:
+      operationId: searchASNs
+      tags: [dados]
+      summary: Busca por trecho da descrição
+      description: |-
+        ASNs cuja `description` contém o trecho `q`, sem diferenciar
+        maiúsculas, em ordem numérica, com no máximo **100** resultados (sem
+        paginação nem parâmetro de limite). `truncated: true` quando havia
+        mais de 100; `count` é o número de itens devolvidos. Sem resultado:
+        200 com `count: 0` e `asns: []` (não é 404).
+      parameters:
+        - $ref: '#/components/parameters/SearchQuery'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Os ASNs encontrados (até 100).
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              examples:
+                google_llc:
+                  summary: GET /asnames/search?q=google+llc (lista cortada nos 3 primeiros dos 26)
+                  value:
+                    query: google llc
+                    count: 26
+                    truncated: false
+                    asns:
+                      - asn: 13949
+                        handle: SLIDE-INC
+                        name: Google LLC
+                        country: US
+                        description: SLIDE-INC - Google LLC, US
+                      - asn: 15169
+                        handle: GOOGLE
+                        name: Google LLC
+                        country: US
+                        description: GOOGLE - Google LLC, US
+                      - asn: 16550
+                        handle: GOOGLE-PRIVATE-CLOUD
+                        name: Google LLC
+                        country: US
+                        description: GOOGLE-PRIVATE-CLOUD - Google LLC, US
+                    dataset:
+                      version: 01a0ea9e-0f44-7227-8b1e-7d4919aae5cf
+                      updated_at: '2026-09-29T00:43:39Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /meta:
+    get:
+      operationId: getMeta
+      tags: [meta]
+      summary: Estado dos dados
+      description: |-
+        Último arquivo aplicado e a linha do `collector-asnames` na tabela
+        `jobs`, lidos na hora (sem Valkey e sem ETag). `dataset` e
+        `collector` são `null` antes da primeira carga.
+      responses:
+        '200':
+          description: O estado dos dados.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                carregado:
+                  summary: Com dados carregados
+                  value:
+                    app: api-asnames
+                    version: '0.1.0'
+                    dataset:
+                      version: 01a0ea9e-0f44-7227-8b1e-7d4919aae5cf
+                      updated_at: '2026-09-29T00:43:39Z'
+                      source: https://ftp.ripe.net/ripe/asnames/asn.txt
+                      sha256: ac06c215f3847712397fd9781b4d68a804197e5d3670658f9abab3d3cecc12e4
+                      asns: 122591
+                    collector:
+                      app: collector-asnames
+                      last_sync_at: '2026-09-29T00:43:39Z'
+                      last_check_at: '2026-09-29T00:43:39Z'
+                      consolidated: false
+                antes_da_primeira_carga:
+                  summary: Antes da primeira carga do collector
+                  value:
+                    app: api-asnames
+                    version: '0.1.0'
+                    dataset: null
+                    collector: null
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/asnames
+        description: Produção
+      - url: http://127.0.0.1:8108/asnames
+        description: Desenvolvimento local
+    get:
+      operationId: getHealth
+      tags: [saúde]
+      summary: Saúde do serviço
+      description: |-
+        Mesmo conteúdo de `/status`. Confere o PostgreSQL, o Valkey e se já
+        há dados carregados; nunca usa o cache.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+    post:
+      operationId: postHealth
+      tags: [saúde]
+      summary: Saúde do serviço (POST)
+      description: Igual ao `GET /health`; o corpo do pedido é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/asnames
+        description: Produção
+      - url: http://127.0.0.1:8108/asnames
+        description: Desenvolvimento local
+    get:
+      operationId: getStatus
+      tags: [saúde]
+      summary: Estado do serviço
+      description: |-
+        `ok` com tudo no ar; `starting` antes da primeira carga do collector;
+        `degraded` com o Valkey fora (a API segue sem cache); `error` (HTTP
+        503, `success: false`) com o PostgreSQL fora.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+    post:
+      operationId: postStatus
+      tags: [saúde]
+      summary: Estado do serviço (POST)
+      description: Igual ao `GET /status`; o corpo do pedido é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/asnames
+        description: Produção
+      - url: http://127.0.0.1:8108/asnames
+        description: Desenvolvimento local
+    get:
+      operationId: ping
+      tags: [saúde]
+      summary: pong
+      description: |-
+        Responde o texto `pong` sem consultar nada. É o healthcheck do Docker
+        (a cada 15 s) e fica fora do log de acesso.
+      responses:
+        '200':
+          description: O texto `pong`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/asnames
+        description: Produção
+      - url: http://127.0.0.1:8108/asnames
+        description: Desenvolvimento local
+    get:
+      operationId: getOpenAPI
+      tags: [meta]
+      summary: Este manifesto OpenAPI
+      description: |-
+        O contrato da API em OpenAPI 3.1, embutido no binário (mesmo conteúdo
+        de `openapi/openapi.yaml` no repositório). Não usa o Valkey.
+      responses:
+        '200':
+          description: O manifesto em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  parameters:
+    ASN:
+      name: asn
+      in: path
+      required: true
+      description: |-
+        Número do ASN, de 0 a 4294967295, com ou sem o prefixo `AS` (sem
+        diferenciar maiúsculas). Fora disso: 400.
+      schema:
+        type: string
+        pattern: '^([Aa][Ss])?[0-9]+$'
+      example: '15169'
+    CountryCode:
+      name: cc
+      in: path
+      required: true
+      description: |-
+        Código de duas letras (ISO 3166-1 alfa-2, mais os códigos regionais
+        `EU` e `AP` dos RIRs), sem diferenciar maiúsculas; a consulta usa o
+        código em maiúsculas. Outro formato: 400.
+      schema:
+        type: string
+        pattern: '^[A-Za-z]{2}$'
+      example: BR
+    Handle:
+      name: handle
+      in: path
+      required: true
+      description: |-
+        Handle (as-name) procurado. Depois de tirar os espaços das pontas: de 1
+        a 255 caracteres (contados em caracteres, não bytes), UTF-8 válido e
+        nenhum caractere de controle; senão 400. Espaços e não-ASCII vão
+        codificados na URL (`Orange%20C%C3%B4te%20d'Ivoire`) e `/` vai como
+        `%2F` (`ICE%2FHT`); se um proxy no caminho recusar `%2F`, use
+        `/search`.
+      schema:
+        type: string
+        minLength: 1
+      example: GOOGLE
+    SearchQuery:
+      name: q
+      in: query
+      required: true
+      description: |-
+        Trecho procurado na `description`, como **texto literal** (`%`, `_` e
+        `\` não são curingas: `100%` procura "100%"). Antes de tudo o termo é
+        normalizado: espaços das pontas removidos, espaços internos (inclusive
+        tab) colapsados em um e texto em minúsculas (`%20Google%20%20LLC` e
+        `google+llc` são a mesma consulta, com o mesmo ETag). Depois de
+        normalizado, precisa ter de 3 a 100 caracteres (contados em
+        caracteres, não bytes), UTF-8 válido e nenhum caractere de controle.
+        Ausente, curto, longo ou inválido: 400. Vários `q`: vale o primeiro.
+      schema:
+        type: string
+        minLength: 3
+      example: google llc
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |-
+        ETag de uma resposta anterior (fraco ou forte, vários separados por
+        vírgula, ou `*`). Se algum bater com o ETag atual, a resposta é 304
+        sem corpo e sem consultar nada.
+      schema:
+        type: string
+      example: 'W/"8c3f1e2a9b7d4c60"'
+  headers:
+    ETag:
+      description: |-
+        ETag fraco, `W/"<hash da versão do dataset + consulta normalizada>"`.
+        Igual com e sem `/v1` e muda quando a versão dos dados muda.
+      schema:
+        type: string
+      example: 'W/"8c3f1e2a9b7d4c60"'
+    CacheControlPublic:
+      description: Cache por 5 minutos em clientes e proxies.
+      schema:
+        type: string
+        const: public, max-age=300
+    CacheControlNoStore:
+      description: Não guardar em cache.
+      schema:
+        type: string
+        const: no-store
+    XCache:
+      description: |-
+        `HIT` (veio do Valkey, ou 304), `MISS` (consultou o PostgreSQL) ou
+        `BYPASS` (cache desligado).
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS]
+    XDatasetVersion:
+      description: Versão dos dados usada na resposta (uuid da última carga aplicada).
+      schema:
+        type: string
+        format: uuid
+      example: 01a0ea9e-0f44-7227-8b1e-7d4919aae5cf
+  responses:
+    NotModified:
+      description: |-
+        O `If-None-Match` bate com o ETag atual: sem corpo e sem consultar o
+        banco nem o Valkey.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+        X-Dataset-Version:
+          $ref: '#/components/headers/XDatasetVersion'
+    BadRequest:
+      description: Parâmetro inválido (`bad_request`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: ASN inválido (/asn/{asn})
+              value:
+                error:
+                  code: bad_request
+                  message: 'ASN inválido: use um número de 0 a 4294967295, com ou sem o prefixo AS'
+            country:
+              summary: País inválido (/country/{cc})
+              value:
+                error:
+                  code: bad_request
+                  message: 'país inválido: use o código de duas letras (ex.: BR, US, EU)'
+            handle:
+              summary: Handle inválido (/handle/{handle})
+              value:
+                error:
+                  code: bad_request
+                  message: 'handle inválido: use de 1 a 255 caracteres, sem caracteres de controle'
+            search:
+              summary: Termo de busca inválido (/search)
+              value:
+                error:
+                  code: bad_request
+                  message: 'use o parâmetro q com um trecho de 3 a 100 caracteres, sem caracteres de controle (ex.: ?q=google)'
+    NotFound:
+      description: Nenhum registro para a consulta (`not_found`); não entra no cache.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: ASN fora do asn.txt (/asn/{asn})
+              value:
+                error:
+                  code: not_found
+                  message: AS4294967295 não consta no asn.txt do RIPE NCC
+            country:
+              summary: País sem ASN (/country/{cc})
+              value:
+                error:
+                  code: not_found
+                  message: nenhum ASN do país ZZ no asn.txt do RIPE NCC
+            handle:
+              summary: Handle sem ASN (/handle/{handle})
+              value:
+                error:
+                  code: not_found
+                  message: nenhum ASN com o handle nada-disso no asn.txt do RIPE NCC
+    ServiceUnavailable:
+      description: |-
+        `dataset_not_ready` antes da primeira carga do collector, ou
+        `database_unavailable` quando o PostgreSQL falha.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes da primeira carga
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: a primeira sincronização do collector-asnames ainda não terminou; tente em alguns minutos
+            database_unavailable:
+              summary: PostgreSQL fora
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no PostgreSQL (`database_unavailable`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (`timeout`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: Panic no servidor, registrado no log (`internal_error`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: Serviço no ar (`ok`, `starting` ou `degraded`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: true
+            status: ok
+            timestamp: '2026-09-29T00:48:15Z'
+            message: api-asnames operacional
+            checks:
+              dataset: ok
+              postgres: ok
+              valkey: ok
+    StatusError:
+      description: PostgreSQL fora (`status` = `error`, `success` = false).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-09-29T00:48:15Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+  schemas:
+    Dataset:
+      type: object
+      description: Versão dos dados usada na resposta; acompanha toda resposta de dados.
+      required: [version, updated_at]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da última carga aplicada pelo collector-asnames (`asnames_run`).
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando essa carga foi aplicada (UTC).
+    ASNResponse:
+      type: object
+      description: Um ASN (`GET /asn/{asn}`).
+      required: [asn, handle, name, country, description, first_seen, updated_at, dataset]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Número do ASN.
+        handle:
+          type: [string, 'null']
+          description: Handle (as-name) derivado da linha; `null` quando ausente. Não é único.
+        name:
+          type: [string, 'null']
+          description: Nome da organização derivado da linha; `null` quando ausente.
+        country:
+          type: [string, 'null']
+          pattern: '^[A-Z]{2}$'
+          description: País (duas letras maiúsculas, inclui `EU` e `AP`); `null` quando ausente.
+        description:
+          type: string
+          description: Texto original da linha do asn.txt, depois do número (fonte da verdade).
+        first_seen:
+          type: string
+          format: date-time
+          description: Quando o ASN apareceu pela primeira vez na fonte (UTC).
+        updated_at:
+          type: string
+          format: date-time
+          description: Última mudança de `description`, `handle`, `name` ou `country` (UTC).
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    ASNBrief:
+      type: object
+      description: Um ASN na lista por país.
+      required: [asn, handle, name]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Número do ASN.
+        handle:
+          type: [string, 'null']
+          description: Handle (as-name); `null` quando ausente.
+        name:
+          type: [string, 'null']
+          description: Nome da organização; `null` quando ausente.
+    ASNEntry:
+      type: object
+      description: Um ASN nas listas por handle e na busca.
+      required: [asn, handle, name, country, description]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: Número do ASN.
+        handle:
+          type: [string, 'null']
+          description: Handle (as-name); `null` quando ausente.
+        name:
+          type: [string, 'null']
+          description: Nome da organização; `null` quando ausente.
+        country:
+          type: [string, 'null']
+          pattern: '^[A-Z]{2}$'
+          description: País (duas letras maiúsculas, inclui `EU` e `AP`); `null` quando ausente.
+        description:
+          type: string
+          description: Texto original da linha do asn.txt.
+    CountryResponse:
+      type: object
+      description: ASNs de um país (`GET /country/{cc}`).
+      required: [country, count, asns, dataset]
+      properties:
+        country:
+          type: string
+          pattern: '^[A-Z]{2}$'
+          description: País consultado, em maiúsculas.
+        count:
+          type: integer
+          minimum: 1
+          description: Número de ASNs na lista.
+        asns:
+          type: array
+          description: Todos os ASNs do país, em ordem numérica.
+          items:
+            $ref: '#/components/schemas/ASNBrief'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    HandleResponse:
+      type: object
+      description: ASNs com um handle (`GET /handle/{handle}`).
+      required: [handle, count, asns, dataset]
+      properties:
+        handle:
+          type: string
+          description: Handle consultado, sem os espaços das pontas e em minúsculas.
+        count:
+          type: integer
+          minimum: 1
+          description: Número de ASNs na lista.
+        asns:
+          type: array
+          description: ASNs com esse handle, em ordem numérica.
+          items:
+            $ref: '#/components/schemas/ASNEntry'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    SearchResponse:
+      type: object
+      description: Resultado da busca (`GET /search?q=`).
+      required: [query, count, truncated, asns, dataset]
+      properties:
+        query:
+          type: string
+          description: Termo normalizado (pontas sem espaço, espaços colapsados, minúsculas).
+        count:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Número de itens devolvidos.
+        truncated:
+          type: boolean
+          description: '`true` quando havia mais de 100 resultados.'
+        asns:
+          type: array
+          maxItems: 100
+          description: ASNs encontrados, em ordem numérica; lista vazia quando não há resultado.
+          items:
+            $ref: '#/components/schemas/ASNEntry'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    MetaResponse:
+      type: object
+      description: Estado dos dados (`GET /meta`).
+      required: [app, version, dataset, collector]
+      properties:
+        app:
+          type: string
+          const: api-asnames
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+        dataset:
+          description: Último arquivo aplicado; `null` antes da primeira carga.
+          oneOf:
+            - $ref: '#/components/schemas/MetaDataset'
+            - type: 'null'
+        collector:
+          description: Linha do collector-asnames em `jobs`; `null` antes da primeira execução.
+          oneOf:
+            - $ref: '#/components/schemas/Collector'
+            - type: 'null'
+    MetaDataset:
+      type: object
+      description: O arquivo asn.txt aplicado por último.
+      required: [version, updated_at, source, sha256, asns]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da carga (`asnames_run`); é a versão usada no cache e no ETag.
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando a carga foi aplicada (UTC).
+        source:
+          type: string
+          format: uri
+          description: URL de onde o arquivo foi baixado.
+        sha256:
+          type: string
+          description: SHA-256 do arquivo, em hexadecimal.
+        asns:
+          type: integer
+          minimum: 0
+          description: Número de ASNs no arquivo.
+    Collector:
+      type: object
+      description: Linha do collector-asnames na tabela central `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          const: collector-asnames
+          description: Nome do app coletor.
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última sincronização realizada (UTC); `null` se ainda não houve.
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última verificação da fonte (UTC); `null` se ainda não houve.
+        consolidated:
+          type: boolean
+          description: '`true` depois que a consolidação (fase 2) copiou os dados atuais.'
+    Status:
+      type: object
+      description: Saúde do serviço (`/health` e `/status`).
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só quando o PostgreSQL está fora.'
+        status:
+          type: string
+          enum: [ok, starting, degraded, error]
+          description: |-
+            `ok` tudo no ar; `starting` ainda sem dados; `degraded` Valkey fora
+            (segue sem cache); `error` PostgreSQL fora (HTTP 503).
+        timestamp:
+          type: string
+          format: date-time
+          description: Hora da verificação (UTC).
+        message:
+          type: string
+          description: Descrição do estado, em PT-BR.
+        checks:
+          $ref: '#/components/schemas/StatusChecks'
+    StatusChecks:
+      type: object
+      description: Resultado de cada verificação.
+      required: [dataset, postgres, valkey]
+      properties:
+        dataset:
+          type: string
+          enum: [ok, empty]
+          description: '`empty` antes da primeira carga do collector.'
+        postgres:
+          type: string
+          enum: [ok, error]
+          description: Ping no PostgreSQL.
+        valkey:
+          type: string
+          enum: [ok, error, disabled]
+          description: Ping no Valkey; `disabled` com o cache desligado.
+    IndexResponse:
+      type: object
+      description: Índice da API (`GET /`, nos dois servidores).
+      required: [app, version, base_path, versions, endpoints, source]
+      properties:
+        app:
+          type: string
+          const: api-asnames
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+        base_path:
+          type: string
+          description: Caminho de base (`BASE_PATH`).
+        versions:
+          type: array
+          description: Versões da API servidas; a última é a das rotas sem versão.
+          items:
+            type: string
+        endpoints:
+          type: array
+          description: Rotas principais, já com o caminho de base.
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: URL do arquivo da fonte.
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error]
+              description: Código estável do erro (use este para decidir no cliente).
+            message:
+              type: string
+              description: Explicação para pessoas, em PT-BR.

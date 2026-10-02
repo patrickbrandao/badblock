@@ -1,0 +1,67 @@
+# api-afrinic: API HTTP dos dados coletados pelo collector-afrinic.
+#
+# Dona do caminho /afrinic no host da API (api.badblock.net.br/afrinic/...): o
+# Traefik encaminha tudo desse caminho para cá, sem remover o prefixo, e a
+# própria API responde /afrinic/asn/..., /afrinic/v1/asn/... etc.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinha, a partir
+# desta pasta, com um .env próprio (copie o .env.example). Na rede do Traefik
+# (TRAEFIK_NETWORK, padrão network_public) para ser publicada, e na rede
+# badblock para alcançar Postgres e Valkey. A porta no loopback do host é só
+# para testes locais sem Traefik.
+
+name: badblock-api-afrinic
+
+services:
+  api-afrinic:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-api-afrinic:${API_AFRINIC_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${API_AFRINIC_TAG:-dev}
+    container_name: badblock-api-afrinic
+    restart: unless-stopped
+    environment:
+      # Usuário postgres no banco badblock. Senhas só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      REDIS_URL: ${API_AFRINIC_REDIS_URL:-redis://:${VALKEY_PASSWORD:-}@badblock-valkey:6379/0}
+      REDIS_CACHE_ENABLED: ${API_AFRINIC_CACHE_ENABLED:-true}
+      REDIS_KEY_TTL: ${API_AFRINIC_CACHE_TTL:-3600}
+      HTTP_PORT: "8080"
+      BASE_PATH: /afrinic
+      TRUSTED_PROXIES: ${API_TRUSTED_PROXIES:-127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
+      DB_POOL_MAX: ${API_AFRINIC_DB_POOL_MAX:-10}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    ports:
+      - "127.0.0.1:${API_AFRINIC_HOST_PORT:-8102}:8080"
+    networks: [badblock, traefik]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-network_public}
+
+      traefik.http.services.badblock-api-afrinic.loadbalancer.server.port: "8080"
+
+      traefik.http.routers.badblock-api-afrinic.rule: Host(`${API_FQDN:-api.badblock.net.br}`) && (Path(`/afrinic`) || PathPrefix(`/afrinic/`))
+      traefik.http.routers.badblock-api-afrinic.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.badblock-api-afrinic.tls: "true"
+      traefik.http.routers.badblock-api-afrinic.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      traefik.http.routers.badblock-api-afrinic.service: badblock-api-afrinic
+      traefik.http.routers.badblock-api-afrinic.middlewares: badblock-api-afrinic-ratelimit
+
+      traefik.http.middlewares.badblock-api-afrinic-ratelimit.ratelimit.average: ${API_RATE_AVERAGE:-5}
+      traefik.http.middlewares.badblock-api-afrinic-ratelimit.ratelimit.burst: ${API_RATE_BURST:-20}
+      traefik.http.middlewares.badblock-api-afrinic-ratelimit.ratelimit.period: 1s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true
+  traefik:
+    name: ${TRAEFIK_NETWORK:-network_public}
+    external: true

@@ -1,0 +1,1100 @@
+openapi: 3.1.0
+info:
+  title: api-rootzone
+  version: '0.1.0'
+  summary: A zona raiz do DNS (root.zone da InterNIC) em JSON — TLDs delegados, servidores de nome, glue e DS.
+  description: |-
+    API HTTP (JSON), só de leitura, com a **zona raiz do DNS**, a partir do
+    arquivo [`root.zone`](https://www.internic.net/domain/root.zone) da
+    InterNIC (~1,4 mil TLDs delegados, ~22 mil registros), que o
+    `collector-rootzone` grava nas tabelas `rootzone_*`. Lista os TLDs
+    delegados e mostra a delegação de cada um: os servidores de nome (NS),
+    o glue A/AAAA de cada servidor e os DS (a cadeia DNSSEC a partir da
+    raiz). Pública, sem chave; rate limit por IP no proxy.
+
+    - Nomes em minúsculas e sem o ponto final; IDN na forma ASCII (`xn--p1ai`)
+      e, em `tld_unicode`, na forma Unicode (`рф`). IPv6 na forma canônica da
+      RFC 5952; digest do DS em hexadecimal maiúsculo.
+    - O bloco `zone` das rotas de dados traz o `serial` do SOA da zona que
+      está no banco (o mesmo da versão do dataset e do ETag); o SOA inteiro
+      está em `/meta`. Os RRSIG não são guardados.
+    - Versões são servidores: as rotas de dados respondem no servidor sem
+      versão (versão atual, hoje v1) e no servidor `/v1` (v1 fixa), com o
+      mesmo conteúdo, o mesmo ETag e a mesma chave de cache. Saúde
+      (`/health`, `/status`, `/ping`) e `/openapi.yaml` ficam fora do
+      versionamento: só existem no servidor sem versão (declaram `servers`
+      próprios).
+    - Toda rota com `GET` também aceita `HEAD`; `OPTIONS` responde o preflight
+      de CORS (204, `GET, HEAD, OPTIONS`). `/rootzone` redireciona (301) para
+      `/rootzone/`; qualquer outro caminho responde 404 em JSON.
+    - Todas as respostas levam `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin`,
+      `Access-Control-Expose-Headers: ETag, X-Cache, X-Dataset-Version` e
+      `Server: badblock-api-rootzone/<versão>`.
+    - Erros sempre em JSON `{"error": {"code", "message"}}`, com
+      `Cache-Control: no-store`. A validação vem antes de tudo: um pedido
+      inválido recebe 400 mesmo antes da primeira carga dos dados.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/rootzone
+servers:
+  - url: https://api.badblock.net.br/rootzone
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/rootzone/v1
+    description: Produção, v1 fixa
+  - url: http://127.0.0.1:8110/rootzone
+    description: Desenvolvimento local, versão atual (porta publicada no loopback pelo docker-compose.yml)
+  - url: http://127.0.0.1:8110/rootzone/v1
+    description: Desenvolvimento local, v1 fixa
+tags:
+  - name: dados
+    description: Consultas à zona raiz (com ETag e cache no Valkey).
+  - name: meta
+    description: Índice, estado dos dados (com o SOA) e este manifesto.
+  - name: saúde
+    description: Saúde do serviço, fora do versionamento.
+paths:
+  /:
+    get:
+      operationId: getIndex
+      tags: [meta]
+      summary: Índice da API
+      description: |-
+        App, versão do build, caminho de base, versões da API e rotas.
+        Responde igual nos dois servidores (`/rootzone/` e `/rootzone/v1/`);
+        não consulta o banco nem o Valkey.
+      responses:
+        '200':
+          description: O índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-rootzone
+                version: '0.1.0'
+                base_path: /rootzone
+                versions: [v1]
+                endpoints:
+                  - /rootzone/tlds
+                  - /rootzone/tld/{tld}
+                  - /rootzone/meta
+                  - /rootzone/status
+                  - /rootzone/openapi.yaml
+                source: https://www.internic.net/domain/root.zone
+  /tlds:
+    get:
+      operationId: listTLDs
+      tags: [dados]
+      summary: Todos os TLDs delegados
+      description: |-
+        Os TLDs delegados na zona raiz (~1,4 mil, ~160 KB), em ordem de
+        nome, com as contagens da delegação: servidores de nome, quantos
+        deles têm glue IPv4 e IPv6, e quantos DS (0 = TLD sem DNSSEC). O
+        bloco `zone` traz o serial do SOA da zona.
+      parameters:
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: A lista de TLDs.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TLDsResponse'
+              examples:
+                trecho:
+                  summary: GET /rootzone/tlds (trecho — 5 dos 1.438 itens da resposta real)
+                  value:
+                    zone:
+                      serial: 2026092901
+                    count: 1438
+                    tlds:
+                      - tld: aaa
+                        tld_unicode: aaa
+                        nameservers: 6
+                        nameservers_ipv4: 6
+                        nameservers_ipv6: 6
+                        ds_records: 1
+                      - tld: aarp
+                        tld_unicode: aarp
+                        nameservers: 6
+                        nameservers_ipv4: 6
+                        nameservers_ipv6: 6
+                        ds_records: 1
+                      - tld: br
+                        tld_unicode: br
+                        nameservers: 6
+                        nameservers_ipv4: 6
+                        nameservers_ipv6: 6
+                        ds_records: 1
+                      - tld: xn--p1ai
+                        tld_unicode: рф
+                        nameservers: 6
+                        nameservers_ipv4: 6
+                        nameservers_ipv6: 6
+                        ds_records: 1
+                      - tld: zw
+                        tld_unicode: zw
+                        nameservers: 5
+                        nameservers_ipv4: 5
+                        nameservers_ipv6: 5
+                        ds_records: 0
+                    dataset:
+                      version: 01a0f073-f7ab-73d8-bf10-586563066827
+                      updated_at: '2026-09-30T03:55:26Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /tld/{tld}:
+    get:
+      operationId: getTLD
+      tags: [dados]
+      summary: A delegação de um TLD
+      description: |-
+        Os servidores de nome (NS, com TTL) do TLD, o glue A/AAAA que a zona
+        raiz traz de cada servidor (com TTL; lista vazia quando não há) e os
+        DS (lista vazia = TLD sem DNSSEC). O TLD vale em qualquer caixa, com
+        ou sem o ponto final, em ASCII (`br`, `xn--p1ai`) ou em Unicode
+        (`рф`, codificado na URL); todas as formas caem na mesma consulta,
+        com o mesmo ETag. `first_seen` e `updated_at` são datas deste banco
+        (`rootzone_tld`), não da delegação. 404 se o TLD não está delegado.
+      parameters:
+        - $ref: '#/components/parameters/TLD'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: A delegação do TLD.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Dataset-Version:
+              $ref: '#/components/headers/XDatasetVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TLDResponse'
+              examples:
+                br:
+                  summary: GET /rootzone/tld/br
+                  value:
+                    tld: br
+                    tld_unicode: br
+                    nameservers:
+                      - name: a.dns.br
+                        ttl: 172800
+                        ipv4:
+                          - address: 200.219.148.10
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:12f8:6::10'
+                            ttl: 172800
+                      - name: b.dns.br
+                        ttl: 172800
+                        ipv4:
+                          - address: 200.189.41.10
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:12f8:8::10'
+                            ttl: 172800
+                      - name: c.dns.br
+                        ttl: 172800
+                        ipv4:
+                          - address: 200.192.233.10
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:12f8:a::10'
+                            ttl: 172800
+                      - name: d.dns.br
+                        ttl: 172800
+                        ipv4:
+                          - address: 200.219.154.10
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:12f8:4::10'
+                            ttl: 172800
+                      - name: e.dns.br
+                        ttl: 172800
+                        ipv4:
+                          - address: 200.229.248.10
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:12f8:2::10'
+                            ttl: 172800
+                      - name: f.dns.br
+                        ttl: 172800
+                        ipv4:
+                          - address: 200.219.159.10
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:12f8:c::10'
+                            ttl: 172800
+                    ds:
+                      - key_tag: 38298
+                        algorithm: 13
+                        digest_type: 2
+                        digest: 9F2D4993F47B0F2751DE0007D70A2754EE532FE373761154D9EA7A8CB9D8EA18
+                        ttl: 86400
+                    first_seen: '2026-09-30T03:55:26Z'
+                    updated_at: '2026-09-30T03:55:26Z'
+                    zone:
+                      serial: 2026092901
+                    dataset:
+                      version: 01a0f073-f7ab-73d8-bf10-586563066827
+                      updated_at: '2026-09-30T03:55:26Z'
+                bo:
+                  summary: GET /rootzone/tld/bo (sem DNSSEC; um servidor sem IPv6; glue sob outro TLD)
+                  value:
+                    tld: bo
+                    tld_unicode: bo
+                    nameservers:
+                      - name: anycast.ns.nic.bo
+                        ttl: 172800
+                        ipv4:
+                          - address: 204.61.216.48
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:500:14:6048:ad::1'
+                            ttl: 172800
+                      - name: ns2.nic.fr
+                        ttl: 172800
+                        ipv4:
+                          - address: 192.93.0.4
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:660:3005:1::1:2'
+                            ttl: 172800
+                      - name: ns.dns.br
+                        ttl: 172800
+                        ipv4:
+                          - address: 200.160.0.5
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:12ff:0:a20::5'
+                            ttl: 172800
+                      - name: ns.nic.bo
+                        ttl: 172800
+                        ipv4:
+                          - address: 166.114.1.40
+                            ttl: 172800
+                        ipv6: []
+                    ds: []
+                    first_seen: '2026-09-30T03:55:26Z'
+                    updated_at: '2026-09-30T03:55:26Z'
+                    zone:
+                      serial: 2026092901
+                    dataset:
+                      version: 01a0f073-f7ab-73d8-bf10-586563066827
+                      updated_at: '2026-09-30T03:55:26Z'
+                idn:
+                  summary: GET /rootzone/tld/рф (= /rootzone/tld/xn--p1ai; trecho — 1 dos 6 servidores)
+                  value:
+                    tld: xn--p1ai
+                    tld_unicode: рф
+                    nameservers:
+                      - name: a.dns.ripn.net
+                        ttl: 172800
+                        ipv4:
+                          - address: 193.232.128.6
+                            ttl: 172800
+                        ipv6:
+                          - address: '2001:678:17:0:193:232:128:6'
+                            ttl: 172800
+                    ds:
+                      - key_tag: 60491
+                        algorithm: 8
+                        digest_type: 2
+                        digest: 87F1F8C82EC00047C43AC499A73CC9BEB4FC1503E8558F086DCFB614405F7F21
+                        ttl: 86400
+                    first_seen: '2026-09-30T03:55:26Z'
+                    updated_at: '2026-09-30T03:55:26Z'
+                    zone:
+                      serial: 2026092901
+                    dataset:
+                      version: 01a0f073-f7ab-73d8-bf10-586563066827
+                      updated_at: '2026-09-30T03:55:26Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /meta:
+    get:
+      operationId: getMeta
+      tags: [meta]
+      summary: Estado dos dados
+      description: |-
+        A zona aplicada por último (versão, URL, SHA-256, serial e SOA,
+        contagens) e a linha do collector em `jobs`, lidas direto do banco,
+        sem cache. Antes da primeira carga responde 200 com `dataset` e
+        `collector` nulos.
+      responses:
+        '200':
+          description: O estado dos dados.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                carregado:
+                  summary: Com a zona carregada
+                  value:
+                    app: api-rootzone
+                    version: '0.1.0'
+                    dataset:
+                      version: 01a0f073-f7ab-73d8-bf10-586563066827
+                      updated_at: '2026-09-30T03:55:26Z'
+                      source: https://www.internic.net/domain/root.zone
+                      sha256: 78e2a7f6f7c151534979196f781ba5ce7c5d9b8ce84eee84372d60fd86bda8ec
+                      serial: 2026092901
+                      soa:
+                        mname: a.root-servers.net
+                        rname: nstld.verisign-grs.com
+                        refresh: 1800
+                        retry: 900
+                        expire: 604800
+                        minimum: 86400
+                      tlds: 1438
+                      records: 22131
+                      rrsigs: 2794
+                    collector:
+                      app: collector-rootzone
+                      last_sync_at: '2026-09-30T03:55:26Z'
+                      last_check_at: '2026-09-30T03:55:26Z'
+                      consolidated: false
+                antes_da_primeira_carga:
+                  summary: Antes da primeira carga do collector
+                  value:
+                    app: api-rootzone
+                    version: '0.1.0'
+                    dataset: null
+                    collector: null
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/rootzone
+        description: Produção
+      - url: http://127.0.0.1:8110/rootzone
+        description: Desenvolvimento local
+    get:
+      operationId: getHealth
+      tags: [saúde]
+      summary: Saúde do serviço
+      description: |-
+        Mesmo conteúdo de `/status`. Confere o PostgreSQL, o Valkey e se já
+        há dados carregados; nunca usa o cache.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+    post:
+      operationId: postHealth
+      tags: [saúde]
+      summary: Saúde do serviço (POST)
+      description: Igual ao `GET /health`; o corpo do pedido é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/rootzone
+        description: Produção
+      - url: http://127.0.0.1:8110/rootzone
+        description: Desenvolvimento local
+    get:
+      operationId: getStatus
+      tags: [saúde]
+      summary: Estado do serviço
+      description: |-
+        Precedência `error` > `degraded` > `starting` > `ok`: `error` (HTTP
+        503, `success: false`) com o PostgreSQL fora; `degraded` com o Valkey
+        fora (a API segue sem cache); `starting` antes da primeira carga do
+        collector; `ok` com tudo no ar.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+    post:
+      operationId: postStatus
+      tags: [saúde]
+      summary: Estado do serviço (POST)
+      description: Igual ao `GET /status`; o corpo do pedido é ignorado.
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '503':
+          $ref: '#/components/responses/StatusError'
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/rootzone
+        description: Produção
+      - url: http://127.0.0.1:8110/rootzone
+        description: Desenvolvimento local
+    get:
+      operationId: ping
+      tags: [saúde]
+      summary: pong
+      description: |-
+        Responde o texto `pong` sem consultar nada. É o healthcheck do Docker
+        (a cada 15 s) e fica fora do log de acesso.
+      responses:
+        '200':
+          description: O texto `pong`.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/rootzone
+        description: Produção
+      - url: http://127.0.0.1:8110/rootzone
+        description: Desenvolvimento local
+    get:
+      operationId: getOpenAPI
+      tags: [meta]
+      summary: Este manifesto OpenAPI
+      description: |-
+        O contrato da API em OpenAPI 3.1, embutido no binário (mesmo conteúdo
+        de `openapi/openapi.yaml` no repositório). Não usa o Valkey.
+      responses:
+        '200':
+          description: O manifesto em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  parameters:
+    TLD:
+      name: tld
+      in: path
+      required: true
+      description: |-
+        Nome do TLD, um rótulo só, em qualquer caixa e com ou sem um ponto
+        final. Em ASCII: letras, dígitos, `-` e `_`, de 1 a 63 caracteres
+        (`br`, `BR.`, `xn--p1ai`). Em Unicode (`рф`, `РФ`, `中国`): só letras,
+        marcas e dígitos fora do ASCII; passa a minúsculas e vira o rótulo
+        `xn--` pelo punycode (RFC 3492), sem o mapeamento completo da UTS #46
+        nem normalização NFC. Fora disso (ponto no meio, espaço, outro
+        caractere, mais de 63 caracteres depois de codificar): 400.
+      schema:
+        type: string
+        minLength: 1
+      examples:
+        ascii:
+          value: br
+        idn_ascii:
+          value: xn--p1ai
+        idn_unicode:
+          value: рф
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: |-
+        ETag de uma resposta anterior (fraco ou forte, vários separados por
+        vírgula, ou `*`). Se algum bater com o ETag atual, a resposta é 304
+        sem corpo e sem consultar nada.
+      schema:
+        type: string
+      example: 'W/"c378da2e80b8654"'
+  headers:
+    ETag:
+      description: |-
+        ETag fraco, `W/"<FNV-1a de 64 bits da versão do dataset + consulta
+        normalizada>"` (ex.: o de `/rootzone/tld/br` na versão dos exemplos).
+        Igual com e sem `/v1` e muda quando a versão dos dados muda.
+      schema:
+        type: string
+      example: 'W/"c378da2e80b8654"'
+    CacheControlPublic:
+      description: Cache por 5 minutos em clientes e proxies.
+      schema:
+        type: string
+        const: public, max-age=300
+    CacheControlNoStore:
+      description: Não guardar em cache.
+      schema:
+        type: string
+        const: no-store
+    XCache:
+      description: |-
+        `HIT` (veio do Valkey, ou 304), `MISS` (consultou o PostgreSQL) ou
+        `BYPASS` (cache desligado).
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS]
+    XDatasetVersion:
+      description: Versão dos dados usada na resposta (uuid da última zona aplicada).
+      schema:
+        type: string
+        format: uuid
+      example: 01a0f073-f7ab-73d8-bf10-586563066827
+  responses:
+    NotModified:
+      description: |-
+        O `If-None-Match` bate com o ETag atual: sem corpo e sem consultar o
+        banco nem o Valkey.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+        X-Dataset-Version:
+          $ref: '#/components/headers/XDatasetVersion'
+    BadRequest:
+      description: Parâmetro inválido (`bad_request`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            tld:
+              summary: TLD inválido (/tld/a.b)
+              value:
+                error:
+                  code: bad_request
+                  message: 'TLD inválido: use um rótulo só, em ASCII (letras, dígitos, - e _, até 63 caracteres; ex.: br, xn--p1ai) ou em Unicode (ex.: рф), com ou sem o ponto final'
+    NotFound:
+      description: TLD não delegado (`not_found`); não entra no cache.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            tld:
+              summary: TLD válido que não está na zona (/tld/nada-disso)
+              value:
+                error:
+                  code: not_found
+                  message: o TLD nada-disso não está delegado na zona raiz
+    ServiceUnavailable:
+      description: |-
+        `dataset_not_ready` antes da primeira carga do collector, ou
+        `database_unavailable` quando o PostgreSQL falha.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes da primeira carga
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: a primeira sincronização do collector-rootzone ainda não terminou; tente em alguns minutos
+            database_unavailable:
+              summary: PostgreSQL fora
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no PostgreSQL (`database_unavailable`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (`timeout`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: |-
+        Panic no servidor, ou registro do banco fora do formato gravado pelo
+        coletor (ex.: um DS que não se decompõe), registrado no log
+        (`internal_error`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: Serviço no ar (`ok`, `starting` ou `degraded`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: true
+            status: ok
+            timestamp: '2026-09-30T04:08:14Z'
+            message: api-rootzone operacional
+            checks:
+              dataset: ok
+              postgres: ok
+              valkey: ok
+    StatusError:
+      description: PostgreSQL fora (`status` = `error`, `success` = false).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-09-30T04:08:22Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+  schemas:
+    Dataset:
+      type: object
+      description: Versão dos dados usada na resposta.
+      required: [version, updated_at]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da zona aplicada (`rootzone_run`); é a versão usada no cache e no ETag.
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando a zona foi aplicada (UTC).
+    Zone:
+      type: object
+      description: A versão da zona raiz dos dados da resposta.
+      required: [serial]
+      properties:
+        serial:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 4294967295
+          description: Serial do SOA (`AAAAMMDDNN`) da zona aplicada; `null` só numa execução fora do padrão.
+    TLDsResponse:
+      type: object
+      description: Todos os TLDs delegados (`GET /tlds`).
+      required: [zone, count, tlds, dataset]
+      properties:
+        zone:
+          $ref: '#/components/schemas/Zone'
+        count:
+          type: integer
+          minimum: 0
+          description: Quantidade de TLDs na lista.
+        tlds:
+          type: array
+          description: Os TLDs, em ordem de nome.
+          items:
+            $ref: '#/components/schemas/TLDSummary'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    TLDSummary:
+      type: object
+      description: Um TLD na lista, com as contagens de `rootzone_tld`.
+      required: [tld, tld_unicode, nameservers, nameservers_ipv4, nameservers_ipv6, ds_records]
+      properties:
+        tld:
+          type: string
+          pattern: '^[a-z0-9_-]{1,63}$'
+          description: Nome em ASCII, minúsculas, sem o ponto final (`br`, `xn--p1ai`).
+        tld_unicode:
+          type: string
+          minLength: 1
+          description: Forma Unicode (punycode decodificado, `рф`); igual a `tld` nos ASCII.
+        nameservers:
+          type: integer
+          minimum: 1
+          description: Servidores de nome (NS) da delegação.
+        nameservers_ipv4:
+          type: integer
+          minimum: 0
+          description: Quantos desses servidores têm glue A na zona raiz.
+        nameservers_ipv6:
+          type: integer
+          minimum: 0
+          description: Quantos têm glue AAAA.
+        ds_records:
+          type: integer
+          minimum: 0
+          description: DS da delegação (0 = TLD sem DNSSEC).
+    TLDResponse:
+      type: object
+      description: A delegação de um TLD (`GET /tld/{tld}`).
+      required: [tld, tld_unicode, nameservers, ds, first_seen, updated_at, zone, dataset]
+      properties:
+        tld:
+          type: string
+          pattern: '^[a-z0-9_-]{1,63}$'
+          description: Nome em ASCII, minúsculas, sem o ponto final (a forma normalizada do pedido).
+        tld_unicode:
+          type: string
+          minLength: 1
+          description: Forma Unicode; igual a `tld` nos ASCII.
+        nameservers:
+          type: array
+          minItems: 1
+          description: Os NS da delegação, na ordem do banco (nome do servidor).
+          items:
+            $ref: '#/components/schemas/Nameserver'
+        ds:
+          type: array
+          description: Os DS da delegação (vazia = TLD sem DNSSEC), em ordem de rdata.
+          items:
+            $ref: '#/components/schemas/DS'
+        first_seen:
+          type: string
+          format: date-time
+          description: '`rootzone_tld.created_at`: quando este banco viu o TLD pela primeira vez (não é a data da delegação).'
+        updated_at:
+          type: string
+          format: date-time
+          description: '`rootzone_tld.updated_at`: última mudança nas contagens ou na forma Unicode.'
+        zone:
+          $ref: '#/components/schemas/Zone'
+        dataset:
+          $ref: '#/components/schemas/Dataset'
+    Nameserver:
+      type: object
+      description: Um servidor de nome da delegação, com o glue que a zona raiz traz dele.
+      required: [name, ttl, ipv4, ipv6]
+      properties:
+        name:
+          type: string
+          description: Nome do servidor, minúsculas, sem o ponto final (`a.dns.br`).
+        ttl:
+          type: integer
+          minimum: 0
+          description: TTL do registro NS, em segundos.
+        ipv4:
+          type: array
+          description: Glue A (vazia quando não há).
+          items:
+            $ref: '#/components/schemas/Address'
+        ipv6:
+          type: array
+          description: Glue AAAA, na forma canônica da RFC 5952 (vazia quando não há).
+          items:
+            $ref: '#/components/schemas/Address'
+    Address:
+      type: object
+      description: Um registro de glue.
+      required: [address, ttl]
+      properties:
+        address:
+          type: string
+          description: Endereço IPv4 ou IPv6.
+        ttl:
+          type: integer
+          minimum: 0
+          description: TTL do registro A/AAAA, em segundos.
+    DS:
+      type: object
+      description: Um registro DS (RFC 4034), decomposto.
+      required: [key_tag, algorithm, digest_type, digest, ttl]
+      properties:
+        key_tag:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Key tag da DNSKEY do TLD.
+        algorithm:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Algoritmo da chave (8 = RSA/SHA-256, 13 = ECDSA P-256…).
+        digest_type:
+          type: integer
+          minimum: 0
+          maximum: 255
+          description: Tipo do digest (2 = SHA-256, 4 = SHA-384…).
+        digest:
+          type: string
+          pattern: '^[0-9A-F]+$'
+          description: Digest em hexadecimal maiúsculo.
+        ttl:
+          type: integer
+          minimum: 0
+          description: TTL do DS, em segundos.
+    MetaResponse:
+      type: object
+      description: Estado dos dados (`GET /meta`).
+      required: [app, version, dataset, collector]
+      properties:
+        app:
+          type: string
+          const: api-rootzone
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+        dataset:
+          description: Última zona aplicada; `null` antes da primeira carga.
+          oneOf:
+            - $ref: '#/components/schemas/MetaDataset'
+            - type: 'null'
+        collector:
+          description: Linha do collector-rootzone em `jobs`; `null` antes da primeira execução.
+          oneOf:
+            - $ref: '#/components/schemas/Collector'
+            - type: 'null'
+    MetaDataset:
+      type: object
+      description: A zona aplicada por último (linha de `rootzone_run`).
+      required: [version, updated_at, source, sha256, serial, soa, tlds, records, rrsigs]
+      properties:
+        version:
+          type: string
+          format: uuid
+          description: uuid da carga (`rootzone_run`); é a versão usada no cache e no ETag.
+        updated_at:
+          type: string
+          format: date-time
+          description: Quando a zona foi aplicada (UTC).
+        source:
+          type: string
+          format: uri
+          description: URL de onde o arquivo foi baixado.
+        sha256:
+          type: string
+          description: SHA-256 do arquivo, em hexadecimal.
+        serial:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 4294967295
+          description: Serial do SOA (`AAAAMMDDNN`).
+        soa:
+          description: O SOA da zona (sem o serial, que está acima); `null` só numa execução fora do padrão.
+          oneOf:
+            - $ref: '#/components/schemas/SOA'
+            - type: 'null'
+        tlds:
+          type: [integer, 'null']
+          minimum: 0
+          description: TLDs delegados no arquivo.
+        records:
+          type: [integer, 'null']
+          minimum: 0
+          description: Registros guardados (todos menos RRSIG).
+        rrsigs:
+          type: [integer, 'null']
+          minimum: 0
+          description: RRSIG do arquivo (contados, não guardados).
+    SOA:
+      type: object
+      description: SOA da zona raiz, com os nomes normalizados.
+      required: [mname, rname, refresh, retry, expire, minimum]
+      properties:
+        mname:
+          type: string
+          description: Servidor primário (`a.root-servers.net`).
+        rname:
+          type: [string, 'null']
+          description: Caixa do responsável em forma de nome DNS (`nstld.verisign-grs.com`).
+        refresh:
+          type: [integer, 'null']
+          description: REFRESH, em segundos.
+        retry:
+          type: [integer, 'null']
+          description: RETRY, em segundos.
+        expire:
+          type: [integer, 'null']
+          description: EXPIRE, em segundos.
+        minimum:
+          type: [integer, 'null']
+          description: MINIMUM (TTL de respostas negativas), em segundos.
+    Collector:
+      type: object
+      description: Linha do collector-rootzone na tabela central `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          const: collector-rootzone
+          description: Nome do app coletor.
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última sincronização realizada (UTC); `null` se ainda não houve.
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última verificação da fonte (UTC); `null` se ainda não houve.
+        consolidated:
+          type: boolean
+          description: '`true` depois que a consolidação (fase 2) copiou os dados atuais.'
+    Status:
+      type: object
+      description: Saúde do serviço (`/health` e `/status`).
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só quando o PostgreSQL está fora.'
+        status:
+          type: string
+          enum: [ok, starting, degraded, error]
+          description: |-
+            `ok` tudo no ar; `starting` ainda sem dados; `degraded` Valkey fora
+            (segue sem cache); `error` PostgreSQL fora (HTTP 503).
+        timestamp:
+          type: string
+          format: date-time
+          description: Hora da verificação (UTC).
+        message:
+          type: string
+          description: Descrição do estado, em PT-BR.
+        checks:
+          $ref: '#/components/schemas/StatusChecks'
+    StatusChecks:
+      type: object
+      description: Resultado de cada verificação.
+      required: [dataset, postgres, valkey]
+      properties:
+        dataset:
+          type: string
+          enum: [ok, empty]
+          description: '`empty` antes da primeira carga do collector.'
+        postgres:
+          type: string
+          enum: [ok, error]
+          description: Ping no PostgreSQL.
+        valkey:
+          type: string
+          enum: [ok, error, disabled]
+          description: Ping no Valkey; `disabled` com o cache desligado.
+    IndexResponse:
+      type: object
+      description: Índice da API (`GET /`, nos dois servidores).
+      required: [app, version, base_path, versions, endpoints, source]
+      properties:
+        app:
+          type: string
+          const: api-rootzone
+          description: Nome do app.
+        version:
+          type: string
+          description: Versão do build da API.
+        base_path:
+          type: string
+          description: Caminho de base (`BASE_PATH`).
+        versions:
+          type: array
+          description: Versões da API servidas; a última é a das rotas sem versão.
+          items:
+            type: string
+        endpoints:
+          type: array
+          description: Rotas principais, já com o caminho de base.
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: URL do arquivo da fonte.
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error]
+              description: Código estável do erro (use este para decidir no cliente).
+            message:
+              type: string
+              description: Explicação para pessoas, em PT-BR.

@@ -1,0 +1,13 @@
+node_modules
+dist
+.next
+.vite
+.src-work
+*.log
+.env
+.env.*
+README.md
+Makefile
+docker-compose.yml
+tests
+.DS_Store
