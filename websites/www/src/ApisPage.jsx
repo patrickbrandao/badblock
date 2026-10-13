@@ -10,7 +10,7 @@ export function ApisPage() {
       <div className="px-5 md:px-8">
         <PageHeader
           title="APIs do Badblock"
-          sub="Dados públicos da internet — ASNs, blocos IP, a raiz do DNS e as prestadoras de telecomunicações — coletados das fontes oficiais, atualizados sozinhos e servidos em JSON, cada um num caminho de api.badblock.net.br."
+          sub="Dados públicos da internet — ASNs, blocos IP, a raiz e o reverso do DNS e as prestadoras de telecomunicações — coletados das fontes oficiais, atualizados sozinhos e servidos em JSON, cada um num caminho de api.badblock.net.br."
         />
         {API_GROUPS.map((g) => (
           <section key={g.id} className="max-w-container mx-auto mb-20">

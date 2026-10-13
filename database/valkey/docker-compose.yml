@@ -1,4 +1,4 @@
-# Valkey do BadBlock: cache cache-aside das APIs.
+# Valkey do BadBlock: cache cache-aside das APIs e fila de tempo real do rdns.
 #
 # Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
 # desta pasta, com um .env próprio (copie o .env.example). Não publica porta no

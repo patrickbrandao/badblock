@@ -13,7 +13,9 @@ em `database/postgres/`; os apps só leem e escrevem dados.
   Sem `POSTGRES_URL`, os composes a montam com `POSTGRES_PASSWORD`.
 - **Não há** roles por app, `GRANT`, `CREATE ROLE` nem bootstrap. APIs não
   escrevem por disciplina de código; cada coletor só escreve nas próprias
-  tabelas, na própria linha de `jobs` e em tabelas temporárias.
+  tabelas, na própria linha de `jobs` e em tabelas temporárias. Fora dos
+  apps, só o sistema de gestão do administrador escreve, em `rdns_prefix` e
+  `rdns_config` ([../fontes/rdns/dados.md](../fontes/rdns/dados.md#o-que-o-administrador-grava)).
 - **Sem backup**: os dados vêm das fontes externas e são descartáveis.
   Apagar o volume e subir de novo recarrega tudo (`make clean-data`).
 - Senha só com letras e números (entra na URL sem codificação).
@@ -28,7 +30,7 @@ Projeto compose `badblock-postgres`; sobe sozinho a partir da pasta (com o
 | Serviço / container | `postgres` / `badblock-postgres` (alias `badblock-postgres` na rede `badblock`) |
 | Imagem | `postgres:18-trixie` |
 | Ambiente | `POSTGRES_USER=postgres`, `POSTGRES_PASSWORD` (obrigatória), `POSTGRES_DB=badblock` |
-| Parâmetros | `shared_buffers=${POSTGRES_SHARED_BUFFERS:-512MB}`, `work_mem=32MB`, `maintenance_work_mem=256MB`, `max_connections=${POSTGRES_MAX_CONNECTIONS:-200}` |
+| Parâmetros | `shared_buffers=${POSTGRES_SHARED_BUFFERS:-2GB}`, `work_mem=32MB`, `maintenance_work_mem=256MB`, `max_connections=${POSTGRES_MAX_CONNECTIONS:-200}` |
 | Porta | `127.0.0.1:${POSTGRES_HOST_PORT:-5433}:5432` — só loopback (admin local ou túnel SSH) |
 | Volume | `badblock-postgres-data` em `/var/lib/postgresql` (no PG 18 o `PGDATA` é `/var/lib/postgresql/18/docker`) |
 | Healthcheck | `pg_isready -h 127.0.0.1 -U postgres -d badblock` (TCP: no initdb o servidor temporário só escuta no socket), a cada 5 s, prazo de 5 s, 30 tentativas, 60 s de início |
@@ -36,7 +38,13 @@ Projeto compose `badblock-postgres`; sobe sozinho a partir da pasta (com o
 
 `database/postgres/.env.example` (usado só quando a pasta sobe sozinha):
 `POSTGRES_PASSWORD=`, `# POSTGRES_URL=`, `POSTGRES_HOST_PORT=5433`,
-`POSTGRES_SHARED_BUFFERS=512MB`, `POSTGRES_MAX_CONNECTIONS=200`.
+`POSTGRES_SHARED_BUFFERS=2GB`, `POSTGRES_MAX_CONNECTIONS=200`.
+
+`shared_buffers` padrão de **2 GB** (era 512 MB até 2026-10-10): o
+`rdns_ptr`, com ~10 GB e ~1,2 GB de índice, é a maior tabela do banco
+([../fontes/rdns/dados.md](../fontes/rdns/dados.md#tamanho); decisão #31 em
+[../projeto/decisoes.md](../projeto/decisoes.md)). O host precisa dessa
+memória livre; numa máquina menor, baixe `POSTGRES_SHARED_BUFFERS` no `.env`.
 
 ## Migrations
 
@@ -47,7 +55,9 @@ Projeto compose `badblock-postgres`; sobe sozinho a partir da pasta (com o
   `CREATE EXTENSION IF NOT EXISTS` e **não** sai no down, porque é do banco
   inteiro e outras pastas podem usá-la.
 - Pastas: `central/` (função `set_updated_at()` e tabela `jobs`) e **uma pasta
-  por fonte** (`database/postgres/<fonte>/`, só com tabelas `<fonte>_*`).
+  por fonte** (`database/postgres/<fonte>/`, só com tabelas `<fonte>_*` e,
+  quando a fonte tem triggers próprios, funções `<fonte>_*`, como
+  `rdns_prefix_split()`).
 - Cada pasta tem a própria tabela de controle, `<pasta>_schema_migrations`:
   as fontes evoluem o schema sem conflito entre si.
 - Serviço `migrate` do compose (container `badblock-postgres-migrate`,
@@ -108,7 +118,8 @@ Siga as skills `postgres-table-style` e `postgres-uuidv7` do MCP
   `created_at` e `updated_at` `NOT NULL DEFAULT NOW()`, com o trigger
   `trg_<tabela>_updated_at BEFORE UPDATE ... EXECUTE FUNCTION set_updated_at()`.
 - Colunas alinhadas; constraints **nomeadas** — `uq_<tabela>_<coluna>`,
-  `fk_<tabela>_<referência>`, `chk_<tabela>_<regra>` —, índices
+  `fk_<tabela>_<referência>`, `chk_<tabela>_<regra>`,
+  `ex_<tabela>_<regra>` (exclusão, ex.: `ex_rdns_prefix_overlap`) —, índices
   `ix_<tabela>_<coluna>` e triggers `trg_<tabela>_<evento>`. A PK é declarada
   inline (`uuid uuid PRIMARY KEY DEFAULT uuidv7()`) e fica com o nome padrão
   do Postgres, `<tabela>_pkey`.

@@ -27,6 +27,10 @@ Passo a passo para acrescentar uma fonte. As specs vêm antes do código.
    Meça o arquivo real e registre os fatos com data.
 2. Linha da fonte na tabela de [../fontes/README.md](../fontes/README.md) e no
    mapa de [../README.md](../README.md#fontes).
+3. Enquanto os apps não existem, o `README.md` da fonte traz a linha
+   `> **Estado:** só specs` — sem ela, o `make specs-check` recusa a pasta sem
+   `apps/<fonte>/` ([../README.md](../README.md#verificação)). Quem cria os
+   apps (passo 4) apaga a linha.
 
 ## 3. Banco
 
@@ -59,6 +63,7 @@ repetir o conteúdo das specs.
 | Onde | O quê |
 |---|---|
 | `docker-compose.yml` | include do coletor com `compose.wait-migrate/collector-<fonte>.yml` e include da API, em ordem alfabética |
+| `run-build.sh`, `run-buildx.sh`, `run-hub.sh` (fora do git) | os blocos de build e de push das duas imagens, junto com o `docker-compose.yml` ([../plataforma/publicacao.md](../plataforma/publicacao.md#scripts-do-mantenedor)) |
 | `compose.wait-migrate/collector-<fonte>.yml` | o override de espera ([../plataforma/docker.md](../plataforma/docker.md#compose-da-raiz-docker-composeyml)) |
 | `.env.example` | tags, variáveis do coletor, porta e TTL da API |
 | `release-images.sh` | os dois apps em `APPS` |
@@ -66,7 +71,7 @@ repetir o conteúdo das specs.
 | `README.md` | a linha da fonte na tabela |
 | `AGENTS.md` | a linha da fonte na tabela "Fontes, apps e sub-agentes" |
 | `.gitleaks.toml` | nada, se as fixtures ficam em `testdata/` |
-| `run-prod.sh`, `run-builder.sh` | um bloco por app — **só o mantenedor edita**: descreva o bloco no relatório |
+| `run-server.sh` | um bloco por app — **só o mantenedor edita**: descreva o bloco no relatório |
 
 ## 7. Conferir
 

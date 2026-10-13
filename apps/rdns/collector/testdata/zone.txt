@@ -1,0 +1,59 @@
+; Respostas do servidor DNS falso dos testes do collector-rdns
+; (specs/fontes/rdns/fonte.md#fixtures). Formato de arquivo de zona
+; (RFC 1035), lido pela miekg/dns; o servidor falso responde como um
+; resolvedor recursivo: segue o CNAME e devolve NXDOMAIN para o nome que não
+; está aqui e NODATA para o nome que está, mas sem PTR.
+;
+; Linhas ";! <nome> <comportamento>" (comentários para a zona) dão a um nome
+; um comportamento sintético que o DNS real não garante:
+;   servfail  responde SERVFAIL
+;   refused   responde REFUSED
+;   silent    não responde (o cliente esgota o prazo)
+;   truncate  por UDP responde vazio com TC ligado; por TCP, os registros
+;   wrongq    responde com outra pergunta na seção de pergunta
+$TTL 86400
+
+; --- Reais: 200.160.2.0/24 do AS22548 (NIC.br), consultados em 2026-10-10
+; pelo 1.1.1.1. 200.160.2.0, 200.160.2.2 e 200.160.2.255 respondem NXDOMAIN
+; (não estão aqui). O .5 tem dois PTR.
+1.2.160.200.in-addr.arpa.    IN PTR ae1-0.ar1.vr.registro.br.
+3.2.160.200.in-addr.arpa.    IN PTR registro.br.
+4.2.160.200.in-addr.arpa.    IN PTR clone.registro.br.
+5.2.160.200.in-addr.arpa.    IN PTR mailx.registro.br.
+5.2.160.200.in-addr.arpa.    IN PTR mailexploder.registro.br.
+6.2.160.200.in-addr.arpa.    IN PTR beta.registro.br.
+7.2.160.200.in-addr.arpa.    IN PTR reports.epp.registro.br.
+8.2.160.200.in-addr.arpa.    IN PTR ftp.registro.br.
+10.2.160.200.in-addr.arpa.   IN PTR reth0-0.pinky.registro.br.
+
+; --- Real: 177.85.0.1 (2026-10-10, pelo 1.1.1.1).
+1.0.85.177.in-addr.arpa.     IN PTR 177-85-0-1-server.onnettelecom.com.br.
+
+; --- Real, RFC 2317: 64.62.200.0/24 (Hurricane Electric) delega o reverso por
+; CNAME para outra zona; o resolvedor segue a cadeia e responde o CNAME e o
+; PTR do destino (2026-10-10, pelo 1.1.1.1).
+2.200.62.64.in-addr.arpa.          IN CNAME 2.subnet0.200.62.64.in-addr.arpa.
+2.subnet0.200.62.64.in-addr.arpa.  IN PTR   ipv6.he.net.
+
+; --- Sintéticos, em 192.0.2.0/24 (TEST-NET-1, RFC 5737).
+; Letras maiúsculas.
+1.2.0.192.in-addr.arpa.      IN PTR Mail.EXAMPLE.net.
+; Bytes fora do ASCII (o UTF-8 de "é"): ficam \195\169.
+2.2.0.192.in-addr.arpa.      IN PTR caf\195\169.example.net.
+; O mesmo nome duas vezes (só a caixa muda): conta uma vez.
+3.2.0.192.in-addr.arpa.      IN PTR a.example.net.
+3.2.0.192.in-addr.arpa.      IN PTR A.EXAMPLE.NET.
+; NODATA: o nome existe, sem PTR.
+4.2.0.192.in-addr.arpa.      IN TXT "sem PTR"
+; Truncada por UDP; inteira por TCP.
+5.2.0.192.in-addr.arpa.      IN PTR truncado.example.net.
+;! 5.2.0.192.in-addr.arpa. truncate
+;! 6.2.0.192.in-addr.arpa. servfail
+;! 7.2.0.192.in-addr.arpa. refused
+;! 8.2.0.192.in-addr.arpa. silent
+9.2.0.192.in-addr.arpa.      IN PTR trocado.example.net.
+;! 9.2.0.192.in-addr.arpa. wrongq
+; Ponto dentro de um rótulo: fica \.
+10.2.0.192.in-addr.arpa.     IN PTR host\.um.example.net.
+; PTR para a raiz: fica ".".
+11.2.0.192.in-addr.arpa.     IN PTR .

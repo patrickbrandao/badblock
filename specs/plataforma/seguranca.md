@@ -37,7 +37,7 @@ que é dado público ou falso:
 | `apps/<fonte>/<tipo>/testdata/` | recortes dos arquivos públicos das fontes |
 | `apps/<fonte>/<tipo>/vendor/` | código de terceiros (dependências Go vendorizadas), com chaves e tokens de exemplo dos próprios testes e docs |
 | `old/`, `tmp/`, `.mcp.json`, `.env` | fora do git (o scan `dir` também os vê) |
-| `websites/<site>/{node_modules,dist}/` | dependências (código de terceiros) e build dos sites, fora do git |
+| `websites/<site>/{node_modules,dist,.next}/` | dependências (código de terceiros) e build dos sites, fora do git (`.next/` é de um build antigo em Next.js) |
 | as regexes `(collector\|api\|owner\|test)pw` e `POSTGRES_PASSWORD=pg\b` | senhas fixas e óbvias dos containers descartáveis dos testes |
 
 Faz parte do que se roda antes de um PR ([../processos/testes.md](../processos/testes.md#antes-de-um-pr)).

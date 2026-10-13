@@ -9,7 +9,8 @@
 #   - uma fonte em apps/ (apps/<fonte>/ ou apps/<site>/<conjunto>/) não tem
 #     specs/fontes/<fonte>/ com os cinco arquivos, database/postgres/<fonte>/,
 #     os dois apps e os dois sub-agentes, com o nome na forma de cada lugar
-#     (ou sobra pasta de spec sem app);
+#     (ou sobra pasta de spec sem app, salvo a de uma fonte só especificada,
+#     com a linha "> **Estado:** só specs" no README.md dela);
 #   - sobra uma pasta specs/ dentro de um app, ou algum arquivo (docs,
 #     sub-agentes, código, manifestos, Makefiles, SQL) ainda cita o caminho
 #     antigo apps/<fonte>/<tipo>/specs/;
@@ -207,7 +208,14 @@ for d in specs/fontes/*/; do
 	fonte=$(basename "$d")
 	[ "$fonte" = rir ] && continue
 	if [ -f "specs/fontes/$fonte/fonte.md" ]; then
-		[ -d "apps/$fonte" ] || falha "specs/fontes/$fonte/ sem apps/$fonte/"
+		# Fonte só especificada (spec antes do código): o README.md dela
+		# traz a linha "> **Estado:** só specs" até os apps existirem.
+		if [ ! -d "apps/$fonte" ] && ! grep -qF '> **Estado:** só specs' "specs/fontes/$fonte/README.md" 2>/dev/null; then
+			falha "specs/fontes/$fonte/ sem apps/$fonte/"
+		fi
+		if [ -d "apps/$fonte" ] && grep -qF '> **Estado:** só specs' "specs/fontes/$fonte/README.md" 2>/dev/null; then
+			falha "specs/fontes/$fonte/README.md ainda diz só specs, mas apps/$fonte/ existe"
+		fi
 		continue
 	fi
 	# Pasta de site: só o README.md e uma pasta por conjunto.

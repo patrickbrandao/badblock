@@ -16,7 +16,8 @@
   | Módulo | Versão | Quem usa |
   |---|---|---|
   | `github.com/jackc/pgx/v5` | v5.11 | todos |
-  | `github.com/redis/go-redis/v9` | v9.22 | APIs (Valkey) |
+  | `github.com/redis/go-redis/v9` | v9.22 | APIs e `collector-rdns` (Valkey) |
+  | `github.com/miekg/dns` | v1.1.73 | só `collector-rdns` (decisão #32) |
   | `golang.org/x/sync` | v0.23 | APIs (`singleflight`) |
   | `github.com/testcontainers/testcontainers-go` (+ `modules/postgres`) | v0.44 | só testes de integração |
 

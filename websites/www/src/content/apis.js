@@ -8,7 +8,7 @@ export const API_HOST = 'https://api.badblock.net.br';
 // Rotas que toda API tem (specs/padroes/api.md), abaixo do caminho base.
 export const COMMON_ROUTES = [
   { path: '/', desc: 'Índice: versão da API, caminho base e a lista de endpoints.' },
-  { path: '/meta', desc: 'Versão do dataset carregado, origem dos dados e o estado do coletor.' },
+  { path: '/meta', desc: 'Estado dos dados — de onde vieram e quando foram atualizados — e o do coletor.' },
   { path: '/status', desc: 'Saúde da API (também em /health); 503 quando o banco está fora.' },
   { path: '/ping', desc: 'Responde pong, em texto puro.' },
   { path: '/openapi.yaml', desc: 'Manifesto OpenAPI 3.1 da API.' },
@@ -182,6 +182,25 @@ export const APIS = [
     routes: [
       { path: '/rootanchors/keys', desc: 'Todas as chaves do arquivo.', example: '/rootanchors/keys' },
       { path: '/rootanchors/key/{key_tag}', desc: 'Uma chave pela key tag.', example: '/rootanchors/key/20326' },
+    ],
+  },
+  {
+    slug: 'rdns',
+    path: '/rdns',
+    name: 'DNS reverso (PTR)',
+    group: 'dns',
+    menuDesc: 'O PTR de cada IPv4 dos blocos brasileiros, também na hora',
+    summary: 'O DNS reverso (PTR) de cada endereço IPv4 dos blocos brasileiros do NIC.br, consultado pelo próprio BadBlock, com a data da varredura e a opção de resolver na hora.',
+    about: [
+      'Não há arquivo publicado: o BadBlock pergunta ele mesmo o PTR de cada endereço (em in-addr.arpa) a resolvedores recursivos e guarda o nome — ou a falha (SERVFAIL, REFUSED, timeout). Os prefixos vêm dos blocos IPv4 do NIC.br, quebrados em /24 (cerca de 308 mil, 79 milhões de endereços), e cada um é varrido de novo de tempos em tempos.',
+      'A API responde o PTR de um IPv4 ou de todos os endereços de um prefixo de /24 a /31, cada um com o estado (ptr, no_ptr, servfail, refused, timeout ou not_scanned) e a data da última varredura do prefixo. Uma falha nunca apaga um nome já conhecido.',
+      'Com ?live=true, /rdns/ip pede ao coletor uma consulta na hora e espera até 5 s; passou disso, responde o dado guardado. Esse modo tem um limite de pedidos por IP mais apertado, e a resposta não tem cache nem ETag. Sem ele, a resposta em cache pode estar até 1 hora atrás da varredura.',
+    ],
+    data: ['PTR de cada IPv4 dos blocos do NIC.br', 'Estado da consulta (ptr, no_ptr, falhas)', 'Data da última varredura do prefixo', 'Consulta na hora (live=true)'],
+    source: 'https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/rdns',
+    routes: [
+      { path: '/rdns/ip/{ip}?live=true', desc: 'O PTR do IPv4 e a varredura do prefixo; live=true (opcional) resolve na hora, com espera de até 5 s.', example: '/rdns/ip/200.160.2.3' },
+      { path: '/rdns/prefix/{ip}/{len}', desc: 'O PTR de todos os endereços de um prefixo de /24 a /31, com a contagem por estado.', example: '/rdns/prefix/200.160.2.0/24' },
     ],
   },
   {

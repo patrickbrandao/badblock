@@ -1,11 +1,12 @@
 # BadBlock
 
-Dados públicos sobre ASNs, blocos IP, a raiz do DNS e prestadoras de telecomunicações, servidos por uma API HTTP aberta em
+Dados públicos sobre ASNs, blocos IP, a raiz do DNS, o DNS reverso dos IPv4 brasileiros e prestadoras de telecomunicações, servidos por uma API HTTP aberta em
 `https://api.badblock.net.br`.
 
 Cada fonte de dados tem um par de apps: um **coletor**, que importa o arquivo
 da fonte para o PostgreSQL só quando ele muda, e uma **API**, dona de um
-caminho próprio no host da API.
+caminho próprio no host da API. O `rdns` é a exceção: não há arquivo, e o
+coletor dele é uma sonda que pergunta o PTR de cada endereço, sem parar.
 
 | Fonte | Coletor | API |
 |---|---|---|
@@ -21,6 +22,7 @@ caminho próprio no host da API.
 | InterNIC `root.zone` — a zona raiz do DNS: TLDs, servidores, glue e DS | [`collector-rootzone`](apps/rootzone/collector/) | [`api-rootzone`](apps/rootzone/api/) em `/rootzone/` |
 | IANA `root-anchors.xml` — âncoras de confiança DNSSEC da raiz | [`collector-rootanchors`](apps/rootanchors/collector/) | [`api-rootanchors`](apps/rootanchors/api/) em `/rootanchors/` |
 | Anatel — prestadoras de serviços de telecomunicações (CNPJ) e serviços notificados (SCM, STFC, SMP…) | [`collector-anatel-pst`](apps/anatel/pst/collector/) | [`api-anatel-pst`](apps/anatel/pst/api/) em `/anatel/pst/` |
+| BadBlock (sonda ativa) — DNS reverso (PTR) de todo IPv4 dos blocos do NIC.br, em /24, com resolução em tempo real | [`collector-rdns`](apps/rdns/collector/) | [`api-rdns`](apps/rdns/api/) em `/rdns/` |
 
 ```bash
 curl https://api.badblock.net.br/cgibr/asn/61610
@@ -33,6 +35,7 @@ curl https://api.badblock.net.br/roothints/server/K.ROOT-SERVERS.NET.
 curl https://api.badblock.net.br/rootzone/tld/br
 curl https://api.badblock.net.br/rootanchors/key/20326
 curl https://api.badblock.net.br/anatel/pst/provider/02558157000162
+curl https://api.badblock.net.br/rdns/ip/200.160.2.3
 ```
 
 Toda API responde também `/<fonte>/v1/...` (versão fixa), `/<fonte>/meta`
@@ -54,13 +57,15 @@ Precisa de Docker e, para os testes, Go 1.27.
 
 ```bash
 make up                                    # gera .env, cria as redes, sobe tudo
-curl http://127.0.0.1:8101/cgibr/status    # portas 8101 a 8112, uma por API
+curl http://127.0.0.1:8101/cgibr/status    # portas 8101 a 8113, uma por API
 make test test-int lint vet                # testes e lint de todos os apps
 make specs-check                           # links, estrutura e mapa das specs
 ```
 
 A primeira carga de cada coletor leva menos de um minuto depois que o
-Postgres fica pronto. A porta de cada API está em
+Postgres fica pronto. O `collector-rdns` precisa dos resolvedores DNS do host
+em `COLLECTOR_RDNS_DNS_SERVERS` no `.env` (sem eles, só ele não sobe) e varre
+sem parar. A porta de cada API está em
 [`specs/fontes/README.md`](specs/fontes/README.md).
 
 ## Estrutura
@@ -70,7 +75,7 @@ Postgres fica pronto. A porta de cada API está em
   `api/`, cada um com deploy e container próprios.
 - `database/postgres/` — todo o SQL de schema: `central/` (tabela `jobs`) e
   uma pasta por fonte.
-- `database/valkey/` — cache das APIs.
+- `database/valkey/` — cache das APIs e fila de tempo real do `rdns`.
 
 ## Licença
 

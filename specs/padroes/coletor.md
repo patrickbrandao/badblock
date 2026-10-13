@@ -9,6 +9,10 @@ fonte diz outra coisa, vale a da fonte — e ela diz por quê.
 Dono: sessão principal. Mudar este arquivo muda **todos** os coletores: a
 mesma mudança vai para o código de cada um (não há código compartilhado).
 
+O coletor de sonda ativa (`collector-rdns`), que mede em vez de baixar um
+arquivo, segue também [sonda.md](sonda.md), que diz o que daqui vale para
+ele.
+
 ## Papel
 
 - Importa a fonte externa para as tabelas `<fonte>_*` do PostgreSQL. Não tem

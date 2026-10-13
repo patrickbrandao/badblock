@@ -1,0 +1,30 @@
+# golangci-lint v2 — linters padrão mais alguns que pegam erros reais de HTTP,
+# SQL e tratamento de erro.
+version: "2"
+
+run:
+  build-tags: [integration]
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - nilerr
+    - unconvert
+    - copyloopvar
+    - rowserrcheck
+  settings:
+    errcheck:
+      exclude-functions:
+        # Rollback depois do Commit devolve ErrTxClosed por definição.
+        - (github.com/jackc/pgx/v5.Tx).Rollback
+        - (*github.com/jackc/pgx/v5.Conn).Close
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives
+
+formatters:
+  enable:
+    - gofmt

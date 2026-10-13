@@ -67,7 +67,7 @@ PLATFORMS=linux/amd64 ./release-images.sh   # uma arquitetura só
 VERSION=0.0.2 ./release-images.sh           # outra versão que a última tag
 ```
 
-1. `APPS` lista os 25 apps (24 de fontes + `website-www`); nome desconhecido
+1. `APPS` lista os 27 apps (26 de fontes + `website-www`); nome desconhecido
    é erro. A pasta de cada um sai do nome: `collector-<fonte>` →
    `apps/<fonte>/collector` (numa fonte de dois níveis o `-` vira `/`:
    `collector-anatel-pst` → `apps/anatel/pst/collector`), `website-<site>` →
@@ -98,15 +98,35 @@ também publica sozinho com `make -C apps/<fonte>/<tipo> push` (site:
 
 ## Scripts do mantenedor
 
-Na raiz, **fora do git** (valores do ambiente dele): `build.sh` (compose
-build), `destroy.sh`, `hub.sh` (push das `latest`), `run-local.sh` (tudo, ou
-um serviço), `run-rebuild.sh`, `sync.sh` (rsync para o servidor de testes),
-`run-commit.sh` (branch de release, commit, merge e tag), `run-builder.sh` e
-`run-prod.sh` (`docker run` sem compose, com as labels do Traefik).
+Na raiz, **fora do git** — são privados e locais do desenvolvedor (valores
+do ambiente dele); todo `run-*.sh` fica no `.gitignore` e nenhum entra em
+commit:
 
-- `run-prod.sh` e `run-builder.sh` **não se editam sem pedido explícito do
-  usuário**. Um app novo precisa de um bloco neles — quem integra descreve o
-  bloco e o mantenedor aplica.
+- `run-build.sh` — `docker build` de cada imagem na arquitetura local, tag
+  `yyyy-mm-dd-HHMM` e `latest`. `VERSION` e `BUILD_DATE` são valores fixos,
+  editados à mão só quando sai uma versão nova: como entram no `go build`
+  por `--build-arg`, valores que mudam a cada execução derrubariam o cache.
+- `run-buildx.sh` — o mesmo conteúdo e a mesma sintaxe do `run-build.sh`, com
+  `docker buildx build --platform linux/amd64,linux/arm64 --load` (o `--load`
+  multi-arch exige o image store containerd do Docker).
+- `run-local.sh` (tudo, ou um serviço), `run-rebuild.sh`, `run-commit.sh`
+  (branch de release, commit, merge e tag) e `run-server.sh` (`docker run`
+  sem compose, com as labels do Traefik).
+- `run-hub.sh` — `docker push` de todas as imagens na tag `latest`; acompanha
+  o `run-build.sh` (mesmas imagens, mesma ordem).
+- `destroy.sh` e `sync.sh` (rsync para o
+  servidor de testes).
+
+Regras:
+
+- `run-server.sh` **não se edita sem pedido explícito do usuário**. Um app
+  novo precisa de um bloco nele — quem integra descreve o bloco e o
+  mantenedor aplica.
+- `run-build.sh` e `run-buildx.sh` **acompanham o `docker-compose.yml` da
+  raiz**: toda mudança que inclui, remove ou renomeia um app no compose
+  atualiza o bloco dele nos dois scripts (`echo "Construindo imagem …"`, o
+  build, linha em branco entre imagens), na mesma ordem; o `run-hub.sh`
+  ganha ou perde o `docker push` da imagem.
 - Nenhum outro arquivo do projeto depende desses scripts.
 
 ## Produção

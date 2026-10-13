@@ -67,14 +67,16 @@ src/
   rótulo (sem o caminho da API). Os itens ficam em 1 ou 2 colunas,
   preenchendo por coluna (ceil(n/2) na esquerda): `columns` no grupo fixa o
   número (BGP: 2 colunas, RPKI e IRR na esquerda, Blackhole e Flowspec na
-  direita; CGI.br: 2 colunas, "ASNs do Brasil" e "Prefixos IPv4 e IPv6" na
-  esquerda, "Sites críticos" e "PTTs (IX)" na direita; Governamental: 2
-  colunas, "Anatel PST" e "Receita Federal" lado a lado e "Anablock
+  direita; CGI.br: 2 colunas, "ASNs do Brasil", "Prefixos IPv4 e IPv6" e "RDAP" na
+  esquerda, "PTTs (IX)" e "WHOIS" na direita; Governamental: 2
+  colunas, "Anatel PST" e "Sites críticos" na esquerda, "Receita Federal" na
+  direita e "Anablock
   (bloqueios judiciais)" com `span: 'full'`, numa linha inteira embaixo); sem ele, grupo com mais de 4 itens (IANA, DNS) usa 2 e os outros,
   1. Cada grupo tem um único handle, no lado voltado para o node central
   "BadBlock", na altura do título, e uma edge até um
   handle próprio do node central. Item sem API (Receita Federal, Anablock, Prefixos IPv4 e IPv6,
-  Sites críticos, PTTs (IX), TopSites, Open Resolvers e todos os de BGP e CyberOps) aparece igual aos outros. Sem
+  Sites críticos, RDAP, PTTs (IX), WHOIS, TopSites, Open Resolvers, DNSBL and RBL e todos os de BGP e
+  CyberOps) aparece igual aos outros; "Reverse (PTR)" é a API `rdns`. Sem
   texto fora dos nodes.
   - Grupos, itens, rótulos, ícones, cores e colunas: `content/datasources.js`
     (`icon`: quadradinho ou estrela; `tone`: token de cor — pink, blue, cyan,

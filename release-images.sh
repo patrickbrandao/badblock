@@ -11,7 +11,7 @@
 #
 # Cada imagem sai com DUAS tags: a versão e `latest`. A de versão existe porque
 # `latest` é sobrescrita e não deixa cópia; o caminho de volta é
-# API_CGIBR_TAG=<versão anterior> no .env do servidor (ou TAG no run-prod.sh).
+# API_CGIBR_TAG=<versão anterior> no .env do servidor (ou TAG no run-server.sh).
 #
 # A `latest` só anda no fim, e de uma vez. O laço de build publica apenas a tag
 # de versão; só depois que TODAS as imagens pedidas estão no Hub um segundo
@@ -45,6 +45,7 @@ APPS="$APPS collector-lacnic api-lacnic collector-ripencc api-ripencc"
 APPS="$APPS collector-rootanchors api-rootanchors collector-roothints api-roothints"
 APPS="$APPS collector-rootzone api-rootzone"
 APPS="$APPS collector-anatel-pst api-anatel-pst"
+APPS="$APPS collector-rdns api-rdns"
 APPS="$APPS website-www"
 
 # Arquiteturas do manifesto publicado: servidor comum é amd64 e quem publica

@@ -38,13 +38,24 @@ export function Navbar() {
         <div className="max-w-container w-full mx-auto">
           <div className="flex justify-between items-center">
             <Logo />
-            <button
-              onClick={toggleTheme}
-              className="flex items-center justify-center p-2 rounded-md hover:bg-gray-50 dark:hover:bg-white/5 h-10 w-10"
-              aria-label={dark ? 'Mudar para o tema claro' : 'Mudar para o tema escuro'}
-            >
-              {dark ? <Icon name="sun" /> : <Icon name="moon" />}
-            </button>
+            <div className="flex items-center gap-1">
+              <a
+                href="https://github.com/patrickbrandao/badblock"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center p-2 rounded-md hover:bg-gray-50 dark:hover:bg-white/5 h-10 w-10"
+                aria-label="Projeto no GitHub (abre em nova guia)"
+              >
+                <img src={dark ? '/landing-2/logos/comp/logo-github-dark.svg' : '/landing-2/logos/comp/logo-github-light.svg'} alt="" className="h-5 w-5" />
+              </a>
+              <button
+                onClick={toggleTheme}
+                className="flex items-center justify-center p-2 rounded-md hover:bg-gray-50 dark:hover:bg-white/5 h-10 w-10"
+                aria-label={dark ? 'Mudar para o tema claro' : 'Mudar para o tema escuro'}
+              >
+                {dark ? <Icon name="sun" /> : <Icon name="moon" />}
+              </button>
+            </div>
           </div>
         </div>
       </div>

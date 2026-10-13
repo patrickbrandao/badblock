@@ -42,7 +42,7 @@ Fora do git (no `.gitignore`), presentes só na máquina do mantenedor:
 | `.env` (e qualquer `.env.*` que não seja `.env.example`) | valores reais: senhas, domínio |
 | `.mcp.json` | servidores MCP do projeto (skills `badblock-dev`), com token |
 | `old/`, `tmp/` | versão anterior do projeto e material de referência. **Não são lidas** sem pedido explícito do usuário |
-| `build.sh`, `destroy.sh`, `hub.sh`, `sync.sh`, `run-*.sh`, `Update_and_fixes` | scripts de operação do mantenedor ([../plataforma/publicacao.md](../plataforma/publicacao.md#scripts-do-mantenedor)) |
+| `destroy.sh`, `sync.sh`, `run-*.sh` (inclui `run-build.sh`, `run-buildx.sh` e `run-hub.sh`; privados, nunca no git), `Update_and_fixes` | scripts de operação do mantenedor ([../plataforma/publicacao.md](../plataforma/publicacao.md#scripts-do-mantenedor)) |
 | `bin/`, `dist/`, `coverage.out`, `*.test` | artefatos de build e teste |
 | `websites/*/node_modules/`, `dist/`, `*.log` | dependências, build e logs locais dos sites |
 
@@ -78,7 +78,7 @@ O nome da fonte é a chave de tudo: um token minúsculo, **sem hífen**
 | Module Go | `github.com/patrickbrandao/badblock/apps/<fonte>/<collector\|api>` | `.../apps/cgibr/api` |
 | Binário e `cmd/` | `cmd/<app>/main.go` → `/<app>` na imagem | `/api-cgibr` |
 | Imagem | `tmsoftbrasil/badblock-<app>` | `tmsoftbrasil/badblock-api-cgibr` |
-| Container | `badblock-<app>` | `badblock-collector-cgibr` |
+| Container | `badblock-<app>` (o `collector-rdns`, com réplicas: `<projeto>-collector-rdns-<n>`) | `badblock-collector-cgibr` |
 | Serviço e projeto compose | serviço `<app>`, projeto `badblock-<app>` | `api-cgibr` |
 | Tag de release | `<app>/vX.Y.Z` | `api-cgibr/v0.1.0` |
 | Tabelas | `<fonte>_<tabela>` | `cgibr_asn`, `cgibr_run` |
