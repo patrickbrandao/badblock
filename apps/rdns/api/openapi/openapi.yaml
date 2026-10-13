@@ -1,0 +1,1264 @@
+openapi: 3.1.0
+info:
+  title: api-rdns
+  version: '0.1.0'
+  summary: DNS reverso (PTR) dos IPv4 varridos pelo BadBlock, com resolução em tempo real.
+  description: |
+    API HTTP (JSON), pública, do DNS reverso (PTR) de todo IPv4 dos prefixos
+    que o BadBlock varre. Não há arquivo publicado: o `collector-rdns` é uma
+    sonda ativa que pergunta o PTR de cada endereço a resolvedores recursivos
+    e grava o nome — ou a falha — nas tabelas `rdns_*` do PostgreSQL. Os
+    prefixos são os blocos IPv4 do `cgibr` (NIC.br), quebrados em /24, e os
+    que o administrador cadastra. Esta API lê essas tabelas e, com
+    `live=true`, pede ao coletor uma resolução na hora.
+
+    - Cada endereço tem um estado: `ptr` (tem nome), `no_ptr` (NXDOMAIN ou
+      sem PTR), `servfail`, `refused`, `timeout` (falhas da consulta) ou
+      `not_scanned` (o prefixo nunca foi varrido). Uma falha nunca apaga um
+      PTR: o IP com nome continua com o nome até um NXDOMAIN ou um nome novo.
+    - O bloco `scan` de cada resposta é o prefixo cadastrado que contém o
+      pedido e `checked_at`, a data da última varredura completa dele: é a
+      data do dado de todos os IPs do prefixo (não há data por IP).
+    - Cache sem versão de dataset: o dado muda um prefixo de cada vez, o dia
+      inteiro, então a resposta em cache pode ter até 1 h (`REDIS_KEY_TTL`)
+      de atraso em relação ao banco. O ETag é o hash do corpo; não existe
+      `X-Dataset-Version`.
+    - `live=true` (só em `/ip`) põe o IP na fila de tempo real e espera até
+      5 s pela resposta do coletor; estourou, responde o dado frio com
+      `live.status` `timeout`. Os estados do bloco `live` estão em
+      `components.schemas.Live`. No Traefik, `live=true` tem rate limit
+      próprio, mais apertado (1 req/s por IP, rajada 5).
+    - Não há rota por ASN (um ASN chega a dezenas de milhares de /24).
+    - A API é dona de tudo abaixo do caminho de base (`BASE_PATH`, padrão
+      `/rdns`), que já está nos `servers`. As rotas de dados respondem sem
+      versão (versão atual, hoje v1) e no servidor `.../rdns/v1` (v1 fixa),
+      com o mesmo conteúdo, a mesma chave de cache e o mesmo ETag.
+    - Saúde (`/health`, `/status`, `/ping`) e este manifesto (`/openapi.yaml`)
+      ficam fora do versionamento: só existem nos servidores sem `/v1`.
+    - Toda rota `GET` também responde `HEAD`; `OPTIONS` em qualquer caminho
+      responde o preflight de CORS (204).
+    - Todas as respostas levam `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin`
+      (`CORS_ORIGIN`, padrão `*`), `Access-Control-Expose-Headers: ETag,
+      X-Cache` e `Server: badblock-api-rdns/<versão>`.
+    - Erros são sempre JSON `{"error": {"code", "message"}}` com
+      `Cache-Control: no-store`. O caminho de base sem barra redireciona (301)
+      para o índice; qualquer outro caminho inexistente responde 404
+      `not_found`.
+    - Sem chave de acesso; o Traefik aplica rate limit por IP.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/rdns
+servers:
+  - url: https://api.badblock.net.br/rdns
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/rdns/v1
+    description: Produção, v1 fixa (só rotas de dados)
+  - url: http://127.0.0.1:8113/rdns
+    description: Desenvolvimento local, versão atual (porta API_RDNS_HOST_PORT no loopback)
+  - url: http://127.0.0.1:8113/rdns/v1
+    description: Desenvolvimento local, v1 fixa (só rotas de dados)
+tags:
+  - name: dados
+    description: O reverso de um IP ou de um prefixo, cacheado no Valkey e com ETag (ou em tempo real).
+  - name: meta
+    description: Índice, estado da varredura e este manifesto.
+  - name: saúde
+    description: Verificações de saúde, fora do versionamento.
+paths:
+  /:
+    get:
+      operationId: getIndex
+      summary: Índice da API
+      description: >-
+        Nome do app, versão do build, caminho de base, versões da API, lista
+        de rotas, a spec da fonte (`source`) e as fontes de onde vêm os
+        prefixos derivados (`derived_from`). Não consulta o banco.
+      tags: [meta]
+      responses:
+        '200':
+          description: Índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-rdns
+                version: 0.1.0
+                base_path: /rdns
+                versions: [v1]
+                endpoints:
+                  - /rdns/ip/{ip}
+                  - /rdns/prefix/{ip}/{len}
+                  - /rdns/meta
+                  - /rdns/status
+                  - /rdns/openapi.yaml
+                source: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/rdns
+                derived_from: [cgibr]
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /ip/{ip}:
+    get:
+      operationId: getIP
+      summary: PTR de um IPv4
+      description: >-
+        O PTR de um IPv4 que está num prefixo cadastrado (ativo ou não), com
+        o estado da última consulta e o bloco `scan` do prefixo. Sem
+        `live`, vem do cache (ou do banco) com ETag. Com `live=true`, pede ao
+        `collector-rdns` uma resolução na hora e espera até `LIVE_TIMEOUT`
+        (5 s): a resposta traz o bloco `live`, sai com `Cache-Control:
+        no-store`, `X-Cache: LIVE` e sem ETag (`If-None-Match` é ignorado);
+        o mesmo IP resolvido há menos de `LIVE_MIN_AGE` (60 s) responde
+        `recent` sem consulta nova; a fila cheia responde 503
+        `live_queue_full`.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/IP'
+        - $ref: '#/components/parameters/Live'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: IP num prefixo cadastrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPResponse'
+              examples:
+                ptr:
+                  summary: Com PTR
+                  value:
+                    ip: 200.160.2.3
+                    status: ptr
+                    name: registro.br
+                    names: [registro.br]
+                    first_seen: '2026-10-10T17:26:56Z'
+                    updated_at: '2026-10-10T17:26:56Z'
+                    scan:
+                      prefix: 200.160.2.0/24
+                      asn: 22548
+                      source: cgibr
+                      active: true
+                      checked_at: '2026-10-10T17:26:56Z'
+                no_ptr:
+                  summary: Sem PTR (NXDOMAIN), prefixo já varrido
+                  value:
+                    ip: 200.160.2.2
+                    status: no_ptr
+                    name: null
+                    names: []
+                    first_seen: null
+                    updated_at: null
+                    scan:
+                      prefix: 200.160.2.0/24
+                      asn: 22548
+                      source: cgibr
+                      active: true
+                      checked_at: '2026-10-10T17:26:56Z'
+                live:
+                  summary: Com live=true, resolvido na hora (dois PTR)
+                  value:
+                    ip: 200.160.2.5
+                    status: ptr
+                    name: mailexploder.registro.br
+                    names: [mailexploder.registro.br, mailx.registro.br]
+                    first_seen: '2026-10-10T17:26:56Z'
+                    updated_at: '2026-10-10T17:26:56Z'
+                    scan:
+                      prefix: 200.160.2.0/24
+                      asn: 22548
+                      source: cgibr
+                      active: true
+                      checked_at: '2026-10-10T17:26:56Z'
+                    live:
+                      status: resolved
+                      result: ptr
+                      checked_at: '2026-10-10T17:27:21Z'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/LiveQueueFull'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /prefix/{ip}/{len}:
+    get:
+      operationId: getPrefix
+      summary: PTR de todos os endereços de um prefixo
+      description: >-
+        Todos os endereços de um prefixo de /24 a /31, em ordem, cada um com o
+        estado e os nomes, e a contagem por estado. Os bits de host são
+        zerados (`/prefix/200.160.2.77/24` consulta `200.160.2.0/24`). O
+        prefixo pedido tem de estar contido num prefixo cadastrado. Um /24
+        sai com 256 itens (~20 KB). `live` não vale aqui (400).
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/PrefixIP'
+        - $ref: '#/components/parameters/PrefixLength'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Prefixo contido num prefixo cadastrado.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrefixResponse'
+              example:
+                prefix: 200.160.2.0/30
+                scan:
+                  prefix: 200.160.2.0/24
+                  asn: 22548
+                  source: cgibr
+                  active: true
+                  checked_at: '2026-10-10T17:26:56Z'
+                counts:
+                  ptr: 2
+                  no_ptr: 2
+                  servfail: 0
+                  refused: 0
+                  timeout: 0
+                  not_scanned: 0
+                items:
+                  - ip: 200.160.2.0
+                    status: no_ptr
+                    name: null
+                    names: []
+                  - ip: 200.160.2.1
+                    status: ptr
+                    name: ae1-0.ar1.vr.registro.br
+                    names: [ae1-0.ar1.vr.registro.br]
+                  - ip: 200.160.2.2
+                    status: no_ptr
+                    name: null
+                    names: []
+                  - ip: 200.160.2.3
+                    status: ptr
+                    name: registro.br
+                    names: [registro.br]
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /meta:
+    get:
+      operationId: getMeta
+      summary: Estado da varredura
+      description: >-
+        Resumo de `rdns_prefix` (fila, prefixos vencidos, fora da regra,
+        somas da última varredura), a configuração em `rdns_config`, a última
+        derivação aplicada de cada origem, as instâncias do `collector-rdns`
+        com sinal nas últimas 24 h, a linha dele em `jobs` e o tamanho da fila
+        de tempo real. Consulta o banco a cada requisição (sem cache, sem
+        ETag) e responde 200 mesmo antes do primeiro prefixo.
+      tags: [meta]
+      responses:
+        '200':
+          description: Estado da varredura.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                carregado:
+                  summary: Com a primeira derivação feita (stack local, 2026-10-10)
+                  value:
+                    app: api-rdns
+                    version: 0.1.0
+                    scan:
+                      prefixes: 308529
+                      active: 308529
+                      static: 0
+                      out_of_rule: 0
+                      addresses: 78983424
+                      never_scanned: 308521
+                      overdue: 0
+                      rescan: 0
+                      scanning: 4
+                      oldest_scan_at: '2026-10-10T17:26:56Z'
+                      ptr: 91
+                      no_ptr: 1957
+                      failed: 0
+                    config:
+                      rate_limit: null
+                      scan_interval: null
+                    derivations:
+                      - source: cgibr
+                        version: 01a126dc-3c4f-7299-b5f0-b06cf6f71b18
+                        source_version: 01a126d2-2925-7580-bf16-b8315a3c65c9
+                        source_updated_at: '2026-10-10T17:17:49Z'
+                        created_at: '2026-10-10T17:27:45Z'
+                        blocks: 13048
+                        units: 308529
+                        inserted: 0
+                        asn_updated: 0
+                        covered: 308529
+                        not_in_source: 0
+                    workers:
+                      - host: 14a62ed1f89f
+                        version: 0.1.0
+                        started_at: '2026-10-10T17:23:42Z'
+                        seen_at: '2026-10-10T17:28:42Z'
+                        alive: true
+                        rate_limit: 20
+                        queries: 2311
+                        live_queries: 4
+                        prefixes: 8
+                    collector:
+                      app: collector-rdns
+                      last_sync_at: '2026-10-10T17:26:56Z'
+                      last_check_at: '2026-10-10T17:27:45Z'
+                      consolidated: false
+                    live:
+                      queue: 0
+                vazio:
+                  summary: Antes do primeiro prefixo, sem Valkey
+                  value:
+                    app: api-rdns
+                    version: 0.1.0
+                    scan:
+                      prefixes: 0
+                      active: 0
+                      static: 0
+                      out_of_rule: 0
+                      addresses: 0
+                      never_scanned: 0
+                      overdue: 0
+                      rescan: 0
+                      scanning: 0
+                      oldest_scan_at: null
+                      ptr: 0
+                      no_ptr: 0
+                      failed: 0
+                    config:
+                      rate_limit: null
+                      scan_interval: null
+                    derivations: []
+                    workers: []
+                    collector: null
+                    live:
+                      queue: null
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/rdns
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8113/rdns
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getHealth
+      summary: Saúde da API
+      description: >-
+        Confere o PostgreSQL, o Valkey e se já há algum prefixo cadastrado.
+        Mesma resposta de `/status`. Sem cache. Precedência: `error`
+        (PostgreSQL fora) > `degraded` (Valkey fora) > `starting` (sem
+        prefixos) > `ok`.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postHealth
+      summary: Saúde da API (POST)
+      description: Igual ao `GET /health`; o corpo da requisição é ignorado.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/rdns
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8113/rdns
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getStatus
+      summary: Estado da API
+      description: >-
+        Confere o PostgreSQL, o Valkey e se já há algum prefixo cadastrado.
+        Mesma resposta de `/health`. Sem cache.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postStatus
+      summary: Estado da API (POST)
+      description: Igual ao `GET /status`; o corpo da requisição é ignorado.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/rdns
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8113/rdns
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: ping
+      summary: Ping
+      description: >-
+        Responde o texto `pong` sem consultar nada. É o healthcheck do Docker
+        (`api-rdns healthcheck`) e fica fora do log de acesso.
+      tags: [saúde]
+      responses:
+        '200':
+          description: Processo no ar.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/rdns
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8113/rdns
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getOpenAPI
+      summary: Manifesto OpenAPI
+      description: >-
+        Este manifesto (OpenAPI 3.1), embutido no binário: o mesmo conteúdo de
+        `openapi/openapi.yaml` no repositório. Não consulta o banco nem o
+        Valkey.
+      tags: [meta]
+      responses:
+        '200':
+          description: Manifesto em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  parameters:
+    IP:
+      name: ip
+      in: path
+      required: true
+      description: >-
+        Endereço IPv4. O IPv4 mapeado em IPv6 (`::ffff:200.160.2.3`) vira
+        IPv4. IPv6 responde 400 `o rdns varre só IPv4`; o resto, 400
+        `endereço IP inválido`.
+      schema:
+        type: string
+        format: ipv4
+      example: 200.160.2.3
+    PrefixIP:
+      name: ip
+      in: path
+      required: true
+      description: >-
+        Endereço do prefixo, IPv4 (as mesmas regras de `ip`). Os bits de host
+        são zerados (`200.160.2.77/24` vira `200.160.2.0/24`).
+      schema:
+        type: string
+        format: ipv4
+      example: 200.160.2.0
+    PrefixLength:
+      name: len
+      in: path
+      required: true
+      description: >-
+        Tamanho do prefixo, de 24 a 31 (o /32 é a rota `/ip`). Fora da faixa
+        ou não numérico responde 400.
+      schema:
+        type: integer
+        minimum: 24
+        maximum: 31
+      example: 24
+    Live:
+      name: live
+      in: query
+      required: false
+      description: >-
+        `true` pede ao `collector-rdns` uma resolução na hora (até 5 s);
+        ausente ou `false`, o dado frio. Só essas grafias, uma vez só:
+        `live=1`, `live=TRUE` ou `live` repetido respondem 400 (o rate limit
+        do Traefik casa só `live=true`).
+      schema:
+        type: string
+        enum: ['true', 'false']
+      example: 'true'
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        ETag de uma resposta anterior (lista separada por vírgula, ou `*`; a
+        comparação ignora o `W/`). Se bater com o ETag do corpo atual, responde
+        304 sem corpo. O corpo é lido do cache (ou do banco) para comparar.
+        Ignorado com `live=true`.
+      schema:
+        type: string
+      example: W/"45ffd25bc351c624"
+  headers:
+    ETag:
+      description: >-
+        ETag fraco, `W/"<hash>"`: o FNV-1a de 64 bits do corpo, em
+        hexadecimal minúsculo. Muda quando o corpo muda.
+      schema:
+        type: string
+      example: W/"45ffd25bc351c624"
+    CacheControlPublic:
+      description: Resposta cacheável por 5 minutos.
+      schema:
+        type: string
+        const: public, max-age=300
+      example: public, max-age=300
+    CacheControlNoStore:
+      description: Resposta que não deve ser guardada em cache.
+      schema:
+        type: string
+        const: no-store
+      example: no-store
+    XCache:
+      description: >-
+        Origem da resposta: `HIT` (Valkey), `MISS` (lida do banco agora e
+        guardada no Valkey), `BYPASS` (cache desligado) ou `LIVE` (resposta
+        de `live=true`). No 304, de onde veio o corpo comparado.
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS, LIVE]
+      example: MISS
+  responses:
+    NotModified:
+      description: O ETag enviado em `If-None-Match` é o do corpo atual; sem corpo.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+    BadRequest:
+      description: Parâmetro inválido (IP, tamanho de prefixo ou live).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            ip:
+              summary: IP inválido
+              value:
+                error:
+                  code: bad_request
+                  message: endereço IP inválido
+            ipv6:
+              summary: IPv6
+              value:
+                error:
+                  code: bad_request
+                  message: o rdns varre só IPv4
+            prefix:
+              summary: Tamanho de prefixo inválido
+              value:
+                error:
+                  code: bad_request
+                  message: 'tamanho de prefixo inválido: use de 24 a 31'
+            live:
+              summary: live mal escrito ou repetido
+              value:
+                error:
+                  code: bad_request
+                  message: 'live inválido: use true ou false'
+            live_prefix:
+              summary: live em /prefix
+              value:
+                error:
+                  code: bad_request
+                  message: live só vale em /rdns/ip
+    NotFound:
+      description: Fora de qualquer prefixo cadastrado.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            ip:
+              summary: IP fora dos prefixos
+              value:
+                error:
+                  code: not_found
+                  message: 8.8.8.8 não está em nenhum prefixo do rdns
+            prefix:
+              summary: Prefixo fora dos prefixos
+              value:
+                error:
+                  code: not_found
+                  message: 8.8.8.0/24 não está contido em nenhum prefixo do rdns
+    DataUnavailable:
+      description: >-
+        Dados indisponíveis: nenhum prefixo cadastrado ainda
+        (`dataset_not_ready`) ou o PostgreSQL falhou (`database_unavailable`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes do primeiro prefixo
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: 'nenhum prefixo cadastrado ainda: a primeira derivação do collector-rdns não terminou; tente em alguns minutos'
+            database_unavailable:
+              summary: Falha no PostgreSQL
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    LiveQueueFull:
+      description: >-
+        503 de `/ip`: os de `DataUnavailable` e, com `live=true`, a fila de
+        tempo real acima de `LIVE_QUEUE_MAX` ou mais de 128 esperas na
+        instância (`live_queue_full`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            live_queue_full:
+              summary: Fila de tempo real cheia
+              value:
+                error:
+                  code: live_queue_full
+                  message: fila de tempo real cheia; tente sem live=true ou mais tarde
+            dataset_not_ready:
+              summary: Antes do primeiro prefixo
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: 'nenhum prefixo cadastrado ainda: a primeira derivação do collector-rdns não terminou; tente em alguns minutos'
+            database_unavailable:
+              summary: Falha no PostgreSQL
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no PostgreSQL.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (padrão 5s).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: Panic no handler (registrado no log).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: >-
+        API no ar: `ok`, `starting` (nenhum prefixo ainda) ou `degraded`
+        (Valkey fora; a API segue sem cache e sem tempo real).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          examples:
+            ok:
+              summary: Tudo no ar
+              value:
+                success: true
+                status: ok
+                timestamp: '2026-10-10T17:27:11Z'
+                message: api-rdns operacional
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: ok
+            starting:
+              summary: Nenhum prefixo ainda
+              value:
+                success: true
+                status: starting
+                timestamp: '2026-10-10T17:27:11Z'
+                message: aguardando a primeira derivação do collector-rdns
+                checks:
+                  dataset: empty
+                  postgres: ok
+                  valkey: ok
+            degraded:
+              summary: Valkey fora
+              value:
+                success: true
+                status: degraded
+                timestamp: '2026-10-10T17:27:11Z'
+                message: Valkey indisponível; respondendo sem cache e sem tempo real
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: error
+    StatusError:
+      description: PostgreSQL fora (`success` é `false`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-10-10T17:27:11Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+  schemas:
+    Scan:
+      type: object
+      description: >-
+        O prefixo cadastrado que contém o pedido e a data da varredura dele;
+        acompanha toda resposta de dados (no lugar do `dataset` das outras
+        APIs).
+      required: [prefix, asn, source, active, checked_at]
+      properties:
+        prefix:
+          type: string
+          description: Prefixo de `rdns_prefix` que contém o pedido, em CIDR.
+          example: 200.160.2.0/24
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: ASN do prefixo; 0 = sem ASN.
+          example: 22548
+        source:
+          type: string
+          enum: [cgibr, static]
+          description: '`cgibr` = derivado dos blocos do cgibr; `static` = cadastrado pelo administrador.'
+          example: cgibr
+        active:
+          type: boolean
+          description: '`false` = fora da varredura e do tempo real; os resultados continuam servidos.'
+          example: true
+        checked_at:
+          type: [string, 'null']
+          format: date-time
+          description: Fim da última varredura completa do prefixo (a data do dado); `null` = nunca varrido.
+          example: '2026-10-10T17:26:56Z'
+    Live:
+      type: object
+      description: >-
+        Bloco de `/ip` com `live=true`. `status`: `resolved` (o coletor
+        respondeu em até `LIVE_TIMEOUT`; o corpo é o IP relido do banco
+        depois da gravação), `recent` (este IP foi resolvido há menos de
+        `LIVE_MIN_AGE`; nada é pedido), `timeout` (sem resposta no prazo; o
+        dado frio), `unavailable` (Valkey desligado ou fora; o dado frio) ou
+        `not_allowed` (o prefixo está inativo ou fora da regra, IPv4 de /22 a
+        /24; nada é pedido). Uma falha não apaga um PTR: `status` do corpo
+        pode seguir `ptr` com `result` `timeout`.
+      required: [status, result, checked_at]
+      properties:
+        status:
+          type: string
+          enum: [resolved, recent, timeout, unavailable, not_allowed]
+          example: resolved
+        result:
+          type: [string, 'null']
+          enum: [ptr, no_ptr, servfail, refused, timeout, null]
+          description: O que a consulta achou; `null` sem consulta.
+          example: ptr
+        checked_at:
+          type: [string, 'null']
+          format: date-time
+          description: Quando o IP foi resolvido; `null` sem consulta.
+          example: '2026-10-10T17:27:21Z'
+    IPResponse:
+      type: object
+      description: Resposta de `GET /ip/{ip}`.
+      required: [ip, status, name, names, first_seen, updated_at, scan]
+      properties:
+        ip:
+          type: string
+          format: ipv4
+          description: O IPv4 consultado, normalizado.
+          example: 200.160.2.3
+        status:
+          type: string
+          enum: [ptr, no_ptr, servfail, refused, timeout, not_scanned]
+          description: >-
+            Estado da última consulta; sem linha em `rdns_ptr`, `no_ptr` se o
+            prefixo já foi varrido e `not_scanned` se nunca foi.
+          example: ptr
+        name:
+          type: [string, 'null']
+          description: O primeiro PTR em ordem de bytes; `null` fora do `ptr`.
+          example: registro.br
+        names:
+          type: array
+          description: >-
+            Todos os PTR, em ordem de bytes: minúsculas, sem o ponto final,
+            bytes fora do ASCII como `\DDD`; `[]` fora do `ptr`.
+          items:
+            type: string
+          example: [registro.br]
+        first_seen:
+          type: [string, 'null']
+          format: date-time
+          description: Primeira vez que o IP teve linha em `rdns_ptr`; `null` sem linha.
+          example: '2026-10-10T17:26:56Z'
+        updated_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última mudança do registro (estado ou nomes); `null` sem linha.
+          example: '2026-10-10T17:26:56Z'
+        scan:
+          $ref: '#/components/schemas/Scan'
+        live:
+          $ref: '#/components/schemas/Live'
+    PrefixItem:
+      type: object
+      description: Um endereço de `GET /prefix/{ip}/{len}` (as regras de `/ip`).
+      required: [ip, status, name, names]
+      properties:
+        ip:
+          type: string
+          format: ipv4
+          example: 200.160.2.1
+        status:
+          type: string
+          enum: [ptr, no_ptr, servfail, refused, timeout, not_scanned]
+          example: ptr
+        name:
+          type: [string, 'null']
+          example: ae1-0.ar1.vr.registro.br
+        names:
+          type: array
+          items:
+            type: string
+          example: [ae1-0.ar1.vr.registro.br]
+    PrefixCounts:
+      type: object
+      description: Quantos itens em cada estado.
+      required: [ptr, no_ptr, servfail, refused, timeout, not_scanned]
+      properties:
+        ptr:
+          type: integer
+          minimum: 0
+          example: 2
+        no_ptr:
+          type: integer
+          minimum: 0
+          example: 2
+        servfail:
+          type: integer
+          minimum: 0
+          example: 0
+        refused:
+          type: integer
+          minimum: 0
+          example: 0
+        timeout:
+          type: integer
+          minimum: 0
+          example: 0
+        not_scanned:
+          type: integer
+          minimum: 0
+          example: 0
+    PrefixResponse:
+      type: object
+      description: Resposta de `GET /prefix/{ip}/{len}`.
+      required: [prefix, scan, counts, items]
+      properties:
+        prefix:
+          type: string
+          description: O prefixo pedido, com os bits de host zerados.
+          example: 200.160.2.0/30
+        scan:
+          $ref: '#/components/schemas/Scan'
+        counts:
+          $ref: '#/components/schemas/PrefixCounts'
+        items:
+          type: array
+          description: Um item por endereço do prefixo, em ordem (256 num /24).
+          items:
+            $ref: '#/components/schemas/PrefixItem'
+    MetaResponse:
+      type: object
+      description: Resposta de `GET /meta`.
+      required: [app, version, scan, config, derivations, workers, collector, live]
+      properties:
+        app:
+          type: string
+          const: api-rdns
+        version:
+          type: string
+          description: Versão do build da API.
+          example: 0.1.0
+        scan:
+          $ref: '#/components/schemas/MetaScan'
+        config:
+          $ref: '#/components/schemas/MetaConfig'
+        derivations:
+          type: array
+          description: A última derivação aplicada de cada origem; `[]` antes da primeira.
+          items:
+            $ref: '#/components/schemas/MetaDerivation'
+        workers:
+          type: array
+          description: Instâncias do collector-rdns com sinal nas últimas 24 h (sem os servidores DNS).
+          items:
+            $ref: '#/components/schemas/MetaWorker'
+        collector:
+          description: Linha do collector-rdns em `jobs`; `null` se ainda não existe.
+          oneOf:
+            - $ref: '#/components/schemas/MetaCollector'
+            - type: 'null'
+        live:
+          type: object
+          required: [queue]
+          properties:
+            queue:
+              type: [integer, 'null']
+              minimum: 0
+              description: Pedidos na fila de tempo real (`LLEN`); `null` sem Valkey.
+              example: 0
+    MetaScan:
+      type: object
+      description: >-
+        Resumo de `rdns_prefix`. `never_scanned`, `overdue`, `rescan`,
+        `addresses` e `oldest_scan_at` contam só os prefixos ativos na regra
+        (IPv4 de /22 a /24, os que a fila pega); `overdue` usa
+        `config.scan_interval` ou, sem ele, 24h. As somas `ptr`, `no_ptr` e
+        `failed` são da última varredura de cada prefixo.
+      required: [prefixes, active, static, out_of_rule, addresses, never_scanned, overdue, rescan, scanning, oldest_scan_at, ptr, no_ptr, failed]
+      properties:
+        prefixes:
+          type: integer
+          description: Linhas de `rdns_prefix`.
+        active:
+          type: integer
+          description: Prefixos ativos.
+        static:
+          type: integer
+          description: Prefixos cadastrados pelo administrador.
+        out_of_rule:
+          type: integer
+          description: Prefixos fora da regra (IPv6, mais curtos que /22, mais longos que /24), nunca varridos.
+        addresses:
+          type: integer
+          format: int64
+          description: Endereços dos prefixos ativos na regra.
+        never_scanned:
+          type: integer
+        overdue:
+          type: integer
+          description: Prefixos cuja última varredura é mais velha que `scan_interval`.
+        rescan:
+          type: integer
+          description: Pedidos de nova varredura pendentes.
+        scanning:
+          type: integer
+          description: Prefixos com uma instância varrendo (`scan_worker`).
+        oldest_scan_at:
+          type: [string, 'null']
+          format: date-time
+          description: A varredura completa mais antiga; `null` sem nenhuma.
+        ptr:
+          type: integer
+          format: int64
+        no_ptr:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+    MetaConfig:
+      type: object
+      description: >-
+        `rdns_config`; `null` = sem linha (ou valor inválido): cada coletor
+        usa a reserva do ambiente (`RATE_LIMIT`, `SCAN_INTERVAL`).
+      required: [rate_limit, scan_interval]
+      properties:
+        rate_limit:
+          type: [integer, 'null']
+          minimum: 1
+          description: Consultas DNS por segundo, por coletor.
+          example: 512
+        scan_interval:
+          type: [string, 'null']
+          description: Meta por prefixo, em duração Go.
+          example: 24h
+    MetaDerivation:
+      type: object
+      description: A última derivação aplicada de uma origem (linha de `rdns_run`).
+      required: [source, version, source_version, source_updated_at, created_at, blocks, units, inserted, asn_updated, covered, not_in_source]
+      properties:
+        source:
+          type: string
+          enum: [cgibr]
+        version:
+          type: string
+          format: uuid
+          description: '`rdns_run.uuid`.'
+        source_version:
+          type: string
+          format: uuid
+          description: A versão da origem que foi lida (`cgibr_run.uuid`).
+        source_updated_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        blocks:
+          type: integer
+          description: Blocos IPv4 lidos da origem.
+        units:
+          type: integer
+          description: /24 derivados.
+        inserted:
+          type: integer
+        asn_updated:
+          type: integer
+        covered:
+          type: integer
+        not_in_source:
+          type: integer
+          description: Linhas `cgibr` que esta versão não traz mais (continuam cadastradas).
+    MetaWorker:
+      type: object
+      description: Uma instância do collector-rdns.
+      required: [host, version, started_at, seen_at, alive, rate_limit, queries, live_queries, prefixes]
+      properties:
+        host:
+          type: string
+          description: Hostname da instância (no Docker, o ID curto do container).
+        version:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        seen_at:
+          type: string
+          format: date-time
+          description: Último sinal (a batida é a cada 30 s).
+        alive:
+          type: boolean
+          description: Sinal há menos de 90 s.
+        rate_limit:
+          type: integer
+          description: Taxa em vigor, em consultas por segundo.
+        queries:
+          type: integer
+          format: int64
+          description: Consultas DNS enviadas desde a subida.
+        live_queries:
+          type: integer
+          format: int64
+          description: Pedidos de tempo real atendidos desde a subida.
+        prefixes:
+          type: integer
+          format: int64
+          description: Prefixos varridos até o fim desde a subida.
+    MetaCollector:
+      type: object
+      description: Linha do collector-rdns na tabela central `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          const: collector-rdns
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última mudança gravada (derivação, varredura ou tempo real).
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última passada da derivação.
+        consolidated:
+          type: boolean
+    Status:
+      type: object
+      description: Resposta de `/health` e `/status`.
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só quando o PostgreSQL está fora.'
+        status:
+          type: string
+          enum: [ok, starting, degraded, error]
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+        checks:
+          $ref: '#/components/schemas/StatusChecks'
+    StatusChecks:
+      type: object
+      required: [postgres, valkey, dataset]
+      properties:
+        postgres:
+          type: string
+          enum: [ok, error]
+        valkey:
+          type: string
+          enum: [ok, error, disabled]
+          description: '`disabled` sem cache e sem tempo real.'
+        dataset:
+          type: string
+          enum: [ok, empty]
+          description: '`empty` enquanto não há nenhum prefixo cadastrado.'
+    IndexResponse:
+      type: object
+      description: Resposta do índice (`GET /`, na versão atual e na v1 fixa).
+      required: [app, version, base_path, versions, endpoints, source, derived_from]
+      properties:
+        app:
+          type: string
+          const: api-rdns
+        version:
+          type: string
+        base_path:
+          type: string
+          example: /rdns
+        versions:
+          type: array
+          items:
+            type: string
+        endpoints:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: As specs da fonte (não há arquivo publicado).
+        derived_from:
+          type: array
+          description: Fontes de onde vêm os prefixos derivados.
+          items:
+            type: string
+          example: [cgibr]
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error, live_queue_full]
+              example: not_found
+            message:
+              type: string
+              description: Mensagem em português para pessoas.
+              example: 8.8.8.8 não está em nenhum prefixo do rdns

@@ -13,7 +13,6 @@ tmp/
 
 # Scripts de operação do mantenedor na raiz (run-*.sh, sync.sh...): guardam
 # valores do ambiente dele e ficam fora do git.
-/build.sh
 /destroy.sh
 /hub.sh
 /sync.sh

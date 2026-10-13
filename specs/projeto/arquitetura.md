@@ -25,7 +25,10 @@ das decisões está em [decisoes.md](decisoes.md).
    `ETag`/`Last-Modified`, hash do conteúdo). Nunca aplicam dataset parcial ou
    truncado, nem — quando a fonte permite saber (serial ou data no arquivo) —
    mais antigo que o atual
-   ([../padroes/coletor.md](../padroes/coletor.md)).
+   ([../padroes/coletor.md](../padroes/coletor.md)). A exceção é o coletor
+   de **sonda ativa** (`collector-rdns`), que não tem arquivo: mede o dado
+   ele mesmo, sem parar, em várias instâncias
+   ([../padroes/sonda.md](../padroes/sonda.md)).
 5. **Toda fonte tem uma API** puramente HTTP que só lê as tabelas da fonte.
    Ela é dona de tudo abaixo de `https://api.badblock.net.br/<fonte>/`,
    inclusive das versões (`/<fonte>/v1/...`); a rota sem versão é a versão

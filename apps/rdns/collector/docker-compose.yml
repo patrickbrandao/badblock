@@ -1,0 +1,57 @@
+# collector-rdns: varre o DNS reverso (PTR) dos IPv4 cadastrados em
+# rdns_prefix para as tabelas rdns_* do PostgreSQL. Sonda ativa: deriva os
+# prefixos do cgibr, pergunta o PTR de cada endereço aos resolvedores deste
+# host (DNS_SERVERS) e atende o tempo real da api-rdns pelo Valkey.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example) — também noutro
+# host, com DNS_SERVERS daquele host e POSTGRES_URL/REDIS_URL que alcancem o
+# host principal pelo caminho de rede do operador. Não tem porta nem API HTTP.
+#
+# Sem container_name e com deploy.replicas: roda em várias instâncias, que
+# dividem a fila de prefixos pelo Postgres (badblock-collector-rdns-1, -2...
+# no compose da raiz). Sem DNS_SERVERS o container recusa subir (o log diz
+# por quê) e o resto do stack sobe normalmente.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-rdns
+
+services:
+  collector-rdns:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-rdns:${COLLECTOR_RDNS_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_RDNS_TAG:-dev}
+    restart: unless-stopped
+    deploy:
+      replicas: ${COLLECTOR_RDNS_REPLICAS:-1}
+    environment:
+      # Usuário postgres no banco badblock. Senhas só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      # Fila de tempo real (vazia desliga o tempo real).
+      REDIS_URL: ${COLLECTOR_RDNS_REDIS_URL:-redis://:${VALKEY_PASSWORD:-}@badblock-valkey:6379/0}
+      # Resolvedores recursivos deste host; obrigatória (vazia, o app recusa).
+      DNS_SERVERS: ${COLLECTOR_RDNS_DNS_SERVERS:-}
+      RATE_LIMIT: ${COLLECTOR_RDNS_RATE_LIMIT:-256}
+      SCAN_INTERVAL: ${COLLECTOR_RDNS_SCAN_INTERVAL:-24h}
+      DERIVE_INTERVAL: ${COLLECTOR_RDNS_DERIVE_INTERVAL:-5m}
+      SOURCES: ${COLLECTOR_RDNS_SOURCES:-cgibr}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

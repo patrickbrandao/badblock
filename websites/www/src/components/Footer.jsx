@@ -26,7 +26,7 @@ export function Footer() {
             <a href="/apis" aria-label="Dados públicos da internet em APIs abertas. Conheça as APIs." className="py-4 px-6 bg-white/30 dark:bg-gray-50 border border-black/10 dark:border-white/10 rounded-xl hover:border-black/20 hover:dark:border-white/10 group relative">
               <div className="flex flex-col space-y-1 w-full relative z-10">
                 <p className="text-sm font-medium text-gray-700 group-hover:text-gray-900">Dados públicos da internet <span className="dark:text-[#a78bfa]">em APIs abertas</span></p>
-                <p className="text-sm text-gray-600">ASNs, blocos IP, a raiz do DNS e as prestadoras da Anatel, coletados das fontes oficiais e servidos em JSON. <span className="underline decoration-solid underline-offset-2 group-hover:text-gray-900">Conheça as APIs →</span></p>
+                <p className="text-sm text-gray-600">ASNs, blocos IP, a raiz e o reverso do DNS e as prestadoras da Anatel, coletados das fontes oficiais e servidos em JSON. <span className="underline decoration-solid underline-offset-2 group-hover:text-gray-900">Conheça as APIs →</span></p>
               </div>
             </a>
           </div>

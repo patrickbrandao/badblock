@@ -25,6 +25,7 @@ include:
   - path: [apps/cgibr/collector/docker-compose.yml, compose.wait-migrate/collector-cgibr.yml]
   - path: [apps/iana/collector/docker-compose.yml, compose.wait-migrate/collector-iana.yml]
   - path: [apps/lacnic/collector/docker-compose.yml, compose.wait-migrate/collector-lacnic.yml]
+  - path: [apps/rdns/collector/docker-compose.yml, compose.wait-migrate/collector-rdns.yml]
   - path: [apps/ripencc/collector/docker-compose.yml, compose.wait-migrate/collector-ripencc.yml]
   - path: [apps/rootanchors/collector/docker-compose.yml, compose.wait-migrate/collector-rootanchors.yml]
   - path: [apps/roothints/collector/docker-compose.yml, compose.wait-migrate/collector-roothints.yml]
@@ -37,6 +38,7 @@ include:
   - apps/cgibr/api/docker-compose.yml
   - apps/iana/api/docker-compose.yml
   - apps/lacnic/api/docker-compose.yml
+  - apps/rdns/api/docker-compose.yml
   - apps/ripencc/api/docker-compose.yml
   - apps/rootanchors/api/docker-compose.yml
   - apps/roothints/api/docker-compose.yml

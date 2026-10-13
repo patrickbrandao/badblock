@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dist = path.join(root, 'dist');
-const { APIS } = await import(path.join(root, 'src/content/apis.js'));
+const { APIS, COMMON_ROUTES } = await import(path.join(root, 'src/content/apis.js'));
 const { FLOW_GROUPS, FLOW_HUB_ITEMS, FLOW_HUB_LABEL, FLOW_SPLIT } = await import(path.join(root, 'src/content/datasources.js'));
 const slugs = APIS.map((a) => a.slug);
 
@@ -134,11 +134,20 @@ try {
   }
   const gov = FLOW_GROUPS.find((g) => g.id === 'anatel');
   check(gov?.title === 'Governamental' && gov.columns === 2, 'content/datasources.js: grupo "Governamental" em 2 colunas');
-  check(JSON.stringify(gov?.items.map((it) => [it.label, it.slug ?? null, it.span ?? null])) === JSON.stringify([['Anatel PST', 'anatel/pst', null], ['Receita Federal', null, null], ['Anablock (bloqueios judiciais)', null, 'full']]), 'content/datasources.js: itens do Governamental');
+  check(JSON.stringify(gov?.items.map((it) => [it.label, it.slug ?? null, it.span ?? null])) === JSON.stringify([['Anatel PST', 'anatel/pst', null], ['Sites críticos', null, null], ['Receita Federal', null, null], ['Anablock (bloqueios judiciais)', null, 'full']]), 'content/datasources.js: itens do Governamental');
   const cg = FLOW_GROUPS.find((g) => g.id === 'cgibr');
-  check(cg?.columns === 2 && JSON.stringify(cg.items.map((it) => [it.label, it.slug ?? null])) === JSON.stringify([['ASNs do Brasil', 'cgibr'], ['Prefixos IPv4 e IPv6', null], ['Sites críticos', null], ['PTTs (IX)', null]]), 'content/datasources.js: itens do CGI.br em 2 colunas');
+  check(cg?.columns === 2 && JSON.stringify(cg.items.map((it) => [it.label, it.slug ?? null])) === JSON.stringify([['ASNs do Brasil', 'cgibr'], ['Prefixos IPv4 e IPv6', null], ['RDAP', null], ['PTTs (IX)', null], ['WHOIS', null]]), 'content/datasources.js: itens do CGI.br em 2 colunas');
   for (const t of ['Governamental', 'Anatel PST', 'Receita Federal', 'Anablock (bloqueios judiciais)', 'ASNs do Brasil', 'Prefixos IPv4 e IPv6', 'Sites críticos', 'PTTs (IX)']) check(js.includes(t), `bundle com "${t}"`);
-  for (const t of ['TopSites', 'Open Resolvers']) check(FLOW_GROUPS.find((g) => g.id === 'dns').items.some((it) => it.label === t && !it.slug), `content/datasources.js: "${t}" no DNS, sem API`);
+  for (const t of ['TopSites', 'Open Resolvers', 'DNSBL and RBL']) check(FLOW_GROUPS.find((g) => g.id === 'dns').items.some((it) => it.label === t && !it.slug), `content/datasources.js: "${t}" no DNS, sem API`);
+  check(FLOW_GROUPS.find((g) => g.id === 'dns').items.some((it) => it.label === 'Reverse (PTR)' && it.slug === 'rdns'), 'content/datasources.js: "Reverse (PTR)" no DNS, com a API rdns');
+  // rdns: as duas rotas, o live=true citado, e nenhuma rota comum afirma
+  // "versão do dataset" (o rdns não tem: specs/fontes/rdns/api.md).
+  const rdns = APIS.find((a) => a.slug === 'rdns');
+  check(rdns?.group === 'dns' && JSON.stringify(rdns.routes.map((r) => r.path.split('?')[0])) === JSON.stringify(['/rdns/ip/{ip}', '/rdns/prefix/{ip}/{len}']), 'content/apis.js: rdns no grupo dns, com /rdns/ip e /rdns/prefix');
+  check(rdns?.routes[0].path.includes('live=true') && rdns.routes[0].desc.includes('live=true'), 'content/apis.js: /rdns/ip cita live=true');
+  for (const t of ['/rdns/ip/{ip}?live=true', '/rdns/prefix/{ip}/{len}', '/rdns/ip/200.160.2.3', '/rdns/prefix/200.160.2.0/24']) check(js.includes(t), `bundle com "${t}"`);
+  check(COMMON_ROUTES.every((r) => !/dataset/i.test(r.desc)), 'content/apis.js: rotas comuns sem "dataset"');
+  check(!/vers[ãa]o do dataset/i.test(js), 'bundle sem "versão do dataset"');
   // Página inicial só com Hero e quadro de fluxo; navbar só com a marca e o
   // tema. A home anterior está em src/drafts/draft01/, fora do bundle.
   for (const t of ['Ver todas as APIs', 'Abrir o menu', 'Pronto para começar?', 'Build e implantação', 'Segurança e conformidade']) {

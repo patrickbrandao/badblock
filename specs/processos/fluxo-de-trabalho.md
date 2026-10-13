@@ -82,7 +82,7 @@ algo.
 
 - Não leia `old/` nem `tmp/` sem pedido explícito do usuário.
 - Commit, push, tag e publicação de imagem só com pedido explícito.
-- `run-prod.sh` e `run-builder.sh` só mudam com pedido explícito
+- `run-server.sh` só muda com pedido explícito
   ([../plataforma/publicacao.md](../plataforma/publicacao.md#scripts-do-mantenedor)).
 - Nenhum segredo no git ([../plataforma/seguranca.md](../plataforma/seguranca.md)).
 - Todo processo ou container que um agente sobe para testar (um binário da

@@ -18,7 +18,8 @@ das specs: aponte o arquivo.
 4. **O repositório é público**: nenhum segredo no git
    ([segurança](specs/plataforma/seguranca.md)).
 5. **Commit, push, tag e publicação de imagem só com pedido explícito.**
-   `run-prod.sh` e `run-builder.sh` nunca mudam sem pedido explícito.
+   `run-server.sh` nunca muda sem pedido explícito. Os `run-*.sh` são
+   privados do desenvolvedor e ficam fora do git.
 6. **Idioma**: português (PT-BR) em specs, docs, comentários, logs e commits;
    inglês em identificadores, SQL e JSON ([convenções](specs/projeto/convencoes.md)).
 7. **Antes de entregar**: o que [specs/processos/testes.md](specs/processos/testes.md#antes-de-um-pr)
@@ -41,6 +42,7 @@ das specs: aponte o arquivo.
 | Traefik, release de imagens, produção | [specs/plataforma/publicacao.md](specs/plataforma/publicacao.md) |
 | Segredos e gitleaks | [specs/plataforma/seguranca.md](specs/plataforma/seguranca.md) |
 | Padrão de todo coletor | [specs/padroes/coletor.md](specs/padroes/coletor.md) |
+| Padrão do coletor de sonda ativa (`rdns`) | [specs/padroes/sonda.md](specs/padroes/sonda.md) |
 | Padrão de toda API | [specs/padroes/api.md](specs/padroes/api.md) |
 | Manifesto OpenAPI | [specs/padroes/openapi.md](specs/padroes/openapi.md) |
 | Padrão de todo site (`websites/<site>/`) | [specs/padroes/website.md](specs/padroes/website.md) |
@@ -81,3 +83,4 @@ das specs: aponte o arquivo.
 | `anatel/pst` | [specs/fontes/anatel/pst/](specs/fontes/anatel/pst/README.md) | `collector-anatel-pst` | `api-anatel-pst` |
 | `roothints` | [specs/fontes/roothints/](specs/fontes/roothints/README.md) | `collector-roothints` | `api-roothints` |
 | `rootzone` | [specs/fontes/rootzone/](specs/fontes/rootzone/README.md) | `collector-rootzone` | `api-rootzone` |
+| `rdns` | [specs/fontes/rdns/](specs/fontes/rdns/README.md) | `collector-rdns` (sonda ativa, [padrão](specs/padroes/sonda.md)) | `api-rdns` |

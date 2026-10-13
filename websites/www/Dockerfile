@@ -12,7 +12,7 @@ RUN npm run build
 
 FROM alpine:3.20
 
-RUN apk add --no-cache lighttpd
+RUN [ "apk", "add", "--no-cache", "lighttpd" ]
 
 COPY lighttpd.docker.conf /etc/lighttpd/lighttpd.conf
 

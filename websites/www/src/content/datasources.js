@@ -41,8 +41,10 @@ export const FLOW_GROUPS = [
       { slug: 'rootanchors', label: 'Root Anchors', tone: 'cyan' },
       { slug: 'roothints', label: 'Root Hints', tone: 'cyan' },
       { slug: 'rootzone', label: 'Root Zone', tone: 'cyan' },
-      { label: 'TopSites', tone: 'cyan' },
       { label: 'Open Resolvers', tone: 'cyan' },
+      { slug: 'rdns', label: 'Reverse (PTR)', tone: 'cyan' },
+      { label: 'TopSites', tone: 'cyan' },
+      { label: 'DNSBL and RBL', tone: 'cyan' },
     ],
   },
   {
@@ -58,6 +60,7 @@ export const FLOW_GROUPS = [
     id: 'anatel', title: 'Governamental', columns: 2,
     items: [
       { slug: 'anatel/pst', label: 'Anatel PST', tone: 'green' },
+      { label: 'Sites críticos', tone: 'white' },
       { label: 'Receita Federal', tone: 'green' },
       { label: 'Anablock (bloqueios judiciais)', icon: 'star', tone: 'yellow', span: 'full' },
     ],
@@ -67,8 +70,9 @@ export const FLOW_GROUPS = [
     items: [
       { slug: 'cgibr', label: 'ASNs do Brasil', tone: 'green' },
       { label: 'Prefixos IPv4 e IPv6', tone: 'green' },
-      { label: 'Sites críticos', tone: 'white' },
+      { label: 'RDAP', tone: 'green' },
       { label: 'PTTs (IX)', tone: 'green' },
+      { label: 'WHOIS', tone: 'green' },
     ],
   },
   {

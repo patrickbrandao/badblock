@@ -35,6 +35,10 @@
 | **zona raiz** (root zone) | A zona `.` do DNS, com a delegação de cada TLD (NS, glue A/AAAA, DS); o `root.zone` é ela inteira (fonte `rootzone`) |
 | **serial** | Número de versão da zona no registro SOA (`AAAAMMDDNN`); o `named.root` cita o serial da zona com que foi gerado |
 | **âncora de confiança** (trust anchor) | Resumo (DS) da chave KSK da raiz com que um resolvedor valida o DNSSEC; o `root-anchors.xml` publica as KSKs com validade (fonte `rootanchors`) |
+| **sonda ativa** | Coletor que mede a internet ele mesmo (hoje, consultas DNS do `collector-rdns`) em vez de baixar um arquivo publicado ([../padroes/sonda.md](../padroes/sonda.md)) |
+| **reverso / PTR** | O nome DNS de um endereço IP, no registro `PTR` de `<d>.<c>.<b>.<a>.in-addr.arpa` (fonte `rdns`) |
+| **prefixo estático** | Linha `source = 'static'` de `rdns_prefix`, gravada pelo administrador (não vem do `cgibr`) |
+| **lease** | Prazo (`SCAN_LEASE`) em que um prefixo pego por uma instância do coletor de sonda fica fora da fila das outras |
 | **recorte** (fixture) | Trecho real da fonte guardado em `testdata/` para os testes |
 | **cache-aside** | A API procura no Valkey; se não achar, consulta o Postgres e guarda |
 | **fail-open** | Falha do cache vira "não achei": a API segue respondendo pelo banco |

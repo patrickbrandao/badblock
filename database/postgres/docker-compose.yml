@@ -31,7 +31,7 @@ services:
     command:
       - postgres
       - -c
-      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-512MB}
+      - shared_buffers=${POSTGRES_SHARED_BUFFERS:-2GB}
       - -c
       - work_mem=32MB
       - -c

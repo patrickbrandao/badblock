@@ -43,6 +43,7 @@ bastam para reconstruir o projeto se o código for apagado
 | [padroes/api.md](padroes/api.md) | O que toda `api-<fonte>` faz: código, caminho e versões, formato, cache e ETag, rotas comuns, erros, configuração, testes |
 | [padroes/openapi.md](padroes/openapi.md) | Regras do manifesto OpenAPI 3.1 e o teste que o confere |
 | [padroes/website.md](padroes/website.md) | O que todo `website-<site>` faz: nomes, Vite + React estático, lighttpd, imagem, compose e Traefik, testes, Makefile |
+| [padroes/sonda.md](padroes/sonda.md) | Coletor de sonda ativa (hoje só o `collector-rdns`): o que vale do padrão dos coletores, alvos derivados e estáticos, derivação, fila com lease, taxa, instâncias e réplicas, tempo real pelo Valkey |
 
 ### Fontes
 
@@ -69,6 +70,7 @@ bastam para reconstruir o projeto se o código for apagado
 | [fontes/rootanchors/](fontes/rootanchors/README.md) | IANA `root-anchors.xml`: âncoras DNSSEC da raiz |
 | [fontes/anatel/](fontes/anatel/README.md) | Anatel (site): os conjuntos de dados dela |
 | [fontes/anatel/pst/](fontes/anatel/pst/README.md) | Anatel: prestadoras de serviços de telecomunicações |
+| [fontes/rdns/](fontes/rdns/README.md) | DNS reverso (PTR) dos IPv4 cadastrados: sonda ativa, sem arquivo publicado |
 
 Cada pasta de fonte tem `README.md`, `fonte.md`, `dados.md`, `collector.md` e
 `api.md` ([fontes/README.md](fontes/README.md#pasta-de-uma-fonte)).
@@ -87,7 +89,7 @@ Cada pasta de fonte tem `README.md`, `fonte.md`, `dados.md`, `collector.md` e
 | Tarefa | Leia |
 |---|---|
 | Entender o projeto | `projeto/visao-geral.md` → `projeto/arquitetura.md` → `projeto/estrutura.md` |
-| Mexer num coletor | `padroes/coletor.md` → `fontes/<fonte>/README.md`, `fonte.md`, `dados.md`, `collector.md` (RIR: antes os de `fontes/rir/`) |
+| Mexer num coletor | `padroes/coletor.md` → `fontes/<fonte>/README.md`, `fonte.md`, `dados.md`, `collector.md` (RIR: antes os de `fontes/rir/`; sonda ativa: antes `padroes/sonda.md`) |
 | Mexer numa API | `padroes/api.md`, `padroes/openapi.md` → `fontes/<fonte>/README.md`, `dados.md`, `api.md` (RIR: antes os de `fontes/rir/`) |
 | Mudar o schema | `plataforma/postgres.md` → `fontes/<fonte>/dados.md` |
 | Deploy, imagens, Traefik | `plataforma/docker.md`, `plataforma/publicacao.md` |
@@ -130,7 +132,9 @@ Roda [check.sh](check.sh), que falha se:
 - uma fonte em `apps/` (`apps/<fonte>/` ou, de dois níveis,
   `apps/<site>/<conjunto>/`) não tem `specs/fontes/<fonte>/` com os cinco
   arquivos, `database/postgres/<fonte>/` e os dois sub-agentes, com os nomes
-  na forma de cada lugar (ou sobra pasta de spec sem app);
+  na forma de cada lugar (ou sobra pasta de spec sem app — exceto a de uma
+  fonte **só especificada**, cujo `README.md` traz a linha
+  `> **Estado:** só specs`, que quem cria os apps apaga);
 - sobra uma pasta `specs/` dentro de um app, ou algum arquivo ainda cita o
   caminho antigo `apps/<fonte>/<tipo>/specs/`;
 - um arquivo de `specs/` fora das pastas de fonte não aparece no mapa acima,

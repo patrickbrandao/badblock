@@ -1,8 +1,11 @@
 # Valkey
 
-Cache **cache-aside** das APIs (Valkey 9, protocolo Redis). É opcional: sem
-ele, cada API responde direto do Postgres. Como as APIs usam o cache está em
-[../padroes/api.md](../padroes/api.md#cache-valkey-cache-aside-e-servecached).
+Cache **cache-aside** das APIs (Valkey 9, protocolo Redis) e **fila de tempo
+real** do `rdns` (entre a `api-rdns` e o `collector-rdns`). É opcional: sem
+ele, cada API responde direto do Postgres, e o `rdns` só não atende
+`live=true`. Como as APIs usam o cache está em
+[../padroes/api.md](../padroes/api.md#cache-valkey-cache-aside-e-servecached);
+a fila, em [../fontes/rdns/dados.md](../fontes/rdns/dados.md#fila-de-tempo-real-valkey).
 
 ## Servidor (`database/valkey/`)
 
@@ -26,13 +29,19 @@ bind 0.0.0.0 -::*
 port 6379
 save ""
 appendonly no
-maxmemory-policy allkeys-lru
+maxmemory-policy volatile-lru
 lazyfree-lazy-eviction yes
 ```
 
-Nada é persistido: se o container reiniciar, o cache recomeça vazio e as
-APIs voltam a buscar no Postgres. Com a memória cheia, as chaves menos usadas
-saem primeiro.
+Nada é persistido: se o container reiniciar, o cache recomeça vazio, as
+APIs voltam a buscar no Postgres e os pedidos de tempo real na fila se
+perdem (quem esperava recebe o dado frio). Com a memória cheia, saem primeiro
+as chaves **com TTL** menos usadas — todo o cache das APIs e as listas de
+retorno do `rdns` têm TTL. Chaves sem TTL (a fila do `rdns`) nunca são
+despejadas: por isso `volatile-lru` e não `allkeys-lru` (decisão #30 em
+[../projeto/decisoes.md](../projeto/decisoes.md)). Se só restarem chaves sem
+TTL, as escritas falham (`OOM`) — a fila tem no máximo `LIVE_QUEUE_MAX`
+(1000) pedidos de algumas dezenas de bytes, longe disso.
 
 `database/valkey/.env.example`: `VALKEY_PASSWORD=`, `VALKEY_MAXMEMORY=256mb`.
 
@@ -47,7 +56,16 @@ e só a rede `badblock` o alcança. Com senha: só letras e números (entra na
 Cada API usa o prefixo `badblock:api-<fonte>:` e põe a versão do dataset na
 chave (`badblock:api-<fonte>:<versão>:<consulta>`), então dado novo nunca
 serve resposta velha e nada precisa ser apagado: as chaves antigas expiram
-pelo TTL.
+pelo TTL. Toda chave de cache é gravada com TTL (`REDIS_KEY_TTL`).
+
+Exceções do `rdns`:
+
+- a `api-rdns` não tem versão de dataset: as chaves dela são
+  `badblock:api-rdns:<consulta>` e podem ficar até o TTL atrás do banco
+  ([../fontes/rdns/api.md](../fontes/rdns/api.md#desvios-do-padrão));
+- a fila de tempo real, comum aos dois apps da fonte, usa o prefixo
+  `badblock:rdns:live:` (`queue` sem TTL; `inflight:<ip>` e `reply:<ip>` com
+  30 s).
 
 ```bash
 docker exec -it badblock-valkey valkey-cli          # inspecionar

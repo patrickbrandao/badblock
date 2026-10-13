@@ -49,7 +49,10 @@ no `make test-int` com `RIPE_ASNAMES_REAL_FILE=<arquivo>`, e no coletor do rooth
 também, com `ROOTHINTS_REAL_FILE`; no do rootanchors o arquivo real inteiro já
 é a fixture. No coletor do `anatel/pst`, `make -C apps/anatel/pst/collector test-real FILE=<zip ou csv>`
 (variável `ANATEL_PST_REAL_FILE`), e na API dele
-`make -C apps/anatel/pst/api test-real FILE=<zip>` (sem `FILE`, baixa o ZIP do dia). O cgibr ainda não tem teste com o arquivo real.
+`make -C apps/anatel/pst/api test-real FILE=<zip>` (sem `FILE`, baixa o ZIP do dia). O cgibr ainda não tem teste com o arquivo real. O `rdns` não tem arquivo: no coletor dele,
+`make -C apps/rdns/collector test-real DNS_SERVERS=<resolvedor> PREFIX=<um /24>`
+varre um prefixo de verdade, com rede real, a 64 consultas/s
+([../fontes/rdns/collector.md](../fontes/rdns/collector.md#testes-específicos)).
 
 As medições registradas nas specs (tempos, tamanhos, contagens) saem desses
 testes, com a data do arquivo.
