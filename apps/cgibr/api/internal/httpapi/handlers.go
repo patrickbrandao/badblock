@@ -125,17 +125,21 @@ func (a *API) handleDocument(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "documento inválido: use o CNPJ (14 dígitos) ou o identificador estrangeiro (8 dígitos)")
 		return
 	}
-	a.serveCached(w, r, "doc:"+digits, func(ctx context.Context, snap dataset.Snapshot) (any, error) {
-		list, err := a.store.ByDocument(ctx, digits)
+	// "doc2": a revisão 2 do corpo (com prefixes) não reaproveita o cache nem
+	// o ETag do corpo antigo, gravados com "doc" na mesma versão do dataset.
+	a.serveCached(w, r, "doc2:"+digits, func(ctx context.Context, snap dataset.Snapshot) (any, error) {
+		doc, err := a.store.ByDocument(ctx, digits)
 		if err != nil {
 			return nil, err
 		}
-		if len(list) == 0 {
+		if len(doc.ASNs) == 0 {
 			return nil, notFound("nenhum ASN com esse documento no arquivo do NIC.br")
 		}
+		list := doc.ASNs
 		resp := DocumentResponse{
 			Document: list[0].Document, DocumentDigits: digits, DocumentType: documentType(digits),
-			Name: list[0].Name, Count: len(list), ASNs: make([]ASNName, 0, len(list)), Dataset: datasetInfo(snap),
+			Name: list[0].Name, Count: len(list), ASNs: make([]ASNName, 0, len(list)),
+			Prefixes: documentPrefixes(doc.Prefixes), Dataset: datasetInfo(snap),
 		}
 		for _, x := range list {
 			resp.ASNs = append(resp.ASNs, ASNName{ASN: x.ASN, Name: x.Name})

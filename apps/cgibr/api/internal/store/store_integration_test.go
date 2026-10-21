@@ -28,6 +28,9 @@ INSERT INTO cgibr_prefix (prefix, asn_uuid)
       FROM unnest(ARRAY['187.87.28.0/22', '200.225.48.0/21', '2804:8ae0::/32']) AS p;
 INSERT INTO cgibr_prefix (prefix, asn_uuid)
     SELECT '187.87.30.0/24', uuid FROM cgibr_asn WHERE asn = 262287;
+INSERT INTO cgibr_prefix (prefix, asn_uuid)
+    SELECT p::cidr, (SELECT uuid FROM cgibr_asn WHERE asn = 275690)
+      FROM unnest(ARRAY['2001:500:2::/48', '10.0.0.0/24', '9.0.0.0/24', '10.0.0.0/16']) AS p;
 INSERT INTO cgibr_run (status, url, sha256, asns, prefixes_v4, prefixes_v6, started_at)
     VALUES (0, 'https://x/f.txt', NULL, NULL, NULL, NULL, NOW() - interval '2 hours'),
            (1, 'https://x/f.txt', repeat('a', 64), 4, 3, 1, NOW() - interval '1 hour');
@@ -135,9 +138,25 @@ func TestQueries(t *testing.T) {
 		t.Errorf("IP fora: %v", err)
 	}
 
-	list, err := st.ByDocument(ctx, "10996639")
-	if err != nil || len(list) != 2 || list[0].ASN != 275689 {
-		t.Errorf("ByDocument = %+v, err = %v", list, err)
+	// Dois ASNs, só o 275690 com blocos (fora de ordem no seed): os blocos
+	// saem por ASN, família e endereço; o ASN sem bloco fica só em ASNs.
+	doc, err := st.ByDocument(ctx, "10996639")
+	if err != nil || len(doc.ASNs) != 2 || doc.ASNs[0].ASN != 275689 || doc.ASNs[1].ASN != 275690 {
+		t.Fatalf("ByDocument = %+v, err = %v", doc, err)
+	}
+	got = got[:0]
+	for _, p := range doc.Prefixes {
+		got = append(got, strconv.FormatInt(p.ASN, 10)+" "+p.Prefix.String())
+	}
+	if want := "275690 9.0.0.0/24,275690 10.0.0.0/16,275690 10.0.0.0/24,275690 2001:500:2::/48"; strings.Join(got, ",") != want {
+		t.Errorf("ByDocument blocos = %v, quero %s", got, want)
+	}
+	doc, err = st.ByDocument(ctx, "35980592000130")
+	if err != nil || len(doc.ASNs) != 1 || len(doc.Prefixes) != 3 || doc.Prefixes[2].Prefix.String() != "2804:8ae0::/32" {
+		t.Errorf("ByDocument ELEA = %+v, err = %v", doc, err)
+	}
+	if doc, err = st.ByDocument(ctx, "11111111"); err != nil || len(doc.ASNs) != 0 || len(doc.Prefixes) != 0 {
+		t.Errorf("ByDocument inexistente = %+v, err = %v", doc, err)
 	}
 	all, err := st.ListASNs(ctx)
 	if err != nil || len(all) != 4 || all[0].ASN != 61610 {

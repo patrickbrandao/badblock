@@ -177,15 +177,51 @@ func (s *Store) Covering(ctx context.Context, p netip.Prefix) (*Match, error) {
 	return &m, nil
 }
 
-// ByDocument devolve os ASNs de um titular, pelos dígitos do documento.
-func (s *Store) ByDocument(ctx context.Context, digits string) ([]ASNBrief, error) {
+// ASNPrefix é um bloco com o ASN ao qual está vinculado.
+type ASNPrefix struct {
+	ASN    int64
+	Prefix netip.Prefix
+}
+
+// Document são os ASNs de um titular e os blocos deles.
+type Document struct {
+	ASNs     []ASNBrief  // em ordem de ASN
+	Prefixes []ASNPrefix // por ASN, depois família (IPv4 primeiro), depois endereço
+}
+
+// ByDocument devolve os ASNs de um titular, pelos dígitos do documento, com
+// os blocos de cada um. Uma consulta só (LEFT JOIN), para que ASNs e blocos
+// venham do mesmo arquivo aplicado; ASN sem bloco aparece em ASNs e não
+// acrescenta nada a Prefixes. Sem ASN, ASNs sai vazio.
+func (s *Store) ByDocument(ctx context.Context, digits string) (*Document, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT asn, name, document, document_digits
-		  FROM cgibr_asn WHERE document_digits = $1 ORDER BY asn`, digits)
+		SELECT a.asn, a.name, a.document, a.document_digits, p.prefix
+		  FROM cgibr_asn a
+		  LEFT JOIN cgibr_prefix p ON p.asn_uuid = a.uuid
+		 WHERE a.document_digits = $1
+		 ORDER BY a.asn, p.family, p.prefix`, digits)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, pgx.RowToStructByPos[ASNBrief])
+	defer rows.Close()
+	d := &Document{ASNs: []ASNBrief{}, Prefixes: []ASNPrefix{}}
+	for rows.Next() {
+		var b ASNBrief
+		var p *netip.Prefix
+		if err := rows.Scan(&b.ASN, &b.Name, &b.Document, &b.DocumentDigits, &p); err != nil {
+			return nil, err
+		}
+		if n := len(d.ASNs); n == 0 || d.ASNs[n-1].ASN != b.ASN {
+			d.ASNs = append(d.ASNs, b)
+		}
+		if p != nil {
+			d.Prefixes = append(d.Prefixes, ASNPrefix{ASN: b.ASN, Prefix: *p})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 // ListASNs devolve todos os ASNs, em ordem numérica.

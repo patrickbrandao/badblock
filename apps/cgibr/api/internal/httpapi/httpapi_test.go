@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -62,12 +63,29 @@ func (f *fakeStore) Covering(_ context.Context, p netip.Prefix) (*store.Match, e
 	}
 	return nil, store.ErrNotFound
 }
-func (f *fakeStore) ByDocument(_ context.Context, digits string) ([]store.ASNBrief, error) {
+func (f *fakeStore) ByDocument(_ context.Context, digits string) (*store.Document, error) {
 	f.count()
-	if digits == elea.DocumentDigits {
-		return []store.ASNBrief{elea}, nil
+	pfx := func(asn int64, s string) store.ASNPrefix {
+		return store.ASNPrefix{ASN: asn, Prefix: netip.MustParsePrefix(s)}
 	}
-	return nil, nil
+	switch digits {
+	case elea.DocumentDigits:
+		return &store.Document{ASNs: []store.ASNBrief{elea}, Prefixes: []store.ASNPrefix{
+			pfx(61610, "187.87.28.0/22"), pfx(61610, "200.225.48.0/21"), pfx(61610, "2804:8ae0::/32"),
+		}}, nil
+	case "10996639":
+		// Fora de ordem de propósito: a API ordena por ASN, ipv e endereço
+		// (numérico, não textual: 9.x antes de 10.x). O AS275691 não tem
+		// bloco e só aparece em asns.
+		isc := func(asn int64) store.ASNBrief {
+			return store.ASNBrief{ASN: asn, Name: "ISC", Document: "10996639", DocumentDigits: "10996639"}
+		}
+		return &store.Document{ASNs: []store.ASNBrief{isc(275689), isc(275690), isc(275691)}, Prefixes: []store.ASNPrefix{
+			pfx(275690, "2001:500:2::/48"), pfx(275690, "10.0.0.0/24"), pfx(275689, "2001:500:3::/48"),
+			pfx(275690, "9.0.0.0/24"), pfx(275689, "192.5.5.0/24"), pfx(275690, "10.0.0.0/16"),
+		}}, nil
+	}
+	return &store.Document{ASNs: []store.ASNBrief{}, Prefixes: []store.ASNPrefix{}}, nil
 }
 func (f *fakeStore) ListASNs(context.Context) ([]store.ASNBrief, error) {
 	f.count()
@@ -207,6 +225,44 @@ func TestDocumentAcceptsFormatted(t *testing.T) {
 		if rec.Code != 200 || d.Count != 1 || d.ASNs[0].ASN != 61610 || d.DocumentType != "cnpj" {
 			t.Errorf("%s: %d %s", p, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestDocumentPrefixes(t *testing.T) {
+	h, c := newAPI(t, &fakeStore{}, true)
+
+	rec := do(h, "GET", "/cgibr/document/35980592000130")
+	body := rec.Body.String()
+	want := `"asns":[{"asn":61610,"name":"ELEA DATA CENTERS"}],"prefixes":[` +
+		`{"asn":61610,"ipv":4,"prefix":"187.87.28.0/22"},{"asn":61610,"ipv":4,"prefix":"200.225.48.0/21"},` +
+		`{"asn":61610,"ipv":6,"prefix":"2804:8ae0::/32"}],"dataset":`
+	if rec.Code != 200 || !strings.Contains(body, want) {
+		t.Errorf("elea: %d %s", rec.Code, body)
+	}
+
+	rec = do(h, "GET", "/cgibr/v1/document/10996639")
+	var d DocumentResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &d); err != nil || rec.Code != 200 {
+		t.Fatalf("isc: %d %s", rec.Code, rec.Body)
+	}
+	var got []string
+	for _, p := range d.Prefixes {
+		got = append(got, strconv.FormatInt(p.ASN, 10)+" "+strconv.Itoa(p.IPV)+" "+p.Prefix)
+	}
+	wantOrder := "275689 4 192.5.5.0/24,275689 6 2001:500:3::/48," +
+		"275690 4 9.0.0.0/24,275690 4 10.0.0.0/16,275690 4 10.0.0.0/24,275690 6 2001:500:2::/48"
+	if strings.Join(got, ",") != wantOrder || d.Count != 3 || len(d.ASNs) != 3 {
+		t.Errorf("isc: ordem %v, count %d", got, d.Count)
+	}
+
+	// A revisão do corpo entra na chave: nada fica sob a chave antiga "doc:".
+	for k := range c.m {
+		if strings.Contains(k, ":doc:") || !strings.Contains(k, ":doc2:") {
+			t.Errorf("chave de cache de /document: %s", k)
+		}
+	}
+	if e := rec.Header().Get("ETag"); e != etagFor("0192-v1", "doc2:10996639") {
+		t.Errorf("ETag = %s", e)
 	}
 }
 
