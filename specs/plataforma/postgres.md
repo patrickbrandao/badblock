@@ -60,10 +60,19 @@ memória livre; numa máquina menor, baixe `POSTGRES_SHARED_BUFFERS` no `.env`.
   `rdns_prefix_split()`).
 - Cada pasta tem a própria tabela de controle, `<pasta>_schema_migrations`:
   as fontes evoluem o schema sem conflito entre si.
+- Imagem **`tmsoftbrasil/badblock-postgres-migrate`** (app
+  `postgres-migrate`, `database/postgres/Dockerfile`): `FROM` a imagem do
+  dbmate, com o `migrate.sh` e as migrations de todas as pastas copiados para
+  `/db` (o `.dockerignore` só deixa entrar `migrate.sh` e `<pasta>/*.sql`);
+  `ENTRYPOINT ["/bin/sh", "/db/migrate.sh"]`, `CMD ["up"]`. Assim o migrate
+  roda em qualquer servidor só com a imagem, sem montar a pasta do projeto.
+  Publicada pelo `release-images.sh` como os apps
+  ([publicacao.md](publicacao.md#release-das-imagens)); toda migration nova
+  pede uma imagem nova.
 - Serviço `migrate` do compose (container `badblock-postgres-migrate`,
-  `restart: "no"`): espera o Postgres saudável (`depends_on` com
-  `service_healthy`), roda `entrypoint: ["/bin/sh", "/db/migrate.sh"]` com
-  `command: ["up"]` (a pasta montada em `/db`, só leitura) e sai;
+  `restart: "no"`): `image` `${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-postgres-migrate:${POSTGRES_MIGRATE_TAG:-latest}`
+  com `build: .`; espera o Postgres saudável (`depends_on` com
+  `service_healthy`), roda `command: ["up"]` e sai; nada montado do disco;
   `POSTGRES_URL` montada como a dos apps, `DBMATE_WAIT_TIMEOUT=120s`, rede
   `badblock`, `traefik.enable=false`. Roda a cada `up` do stack.
 
@@ -107,7 +116,9 @@ make -C database/postgres test                       # up → rollback de tudo �
 make -C database/postgres psql                       # psql no container
 ```
 
-O `Makefile` usa `docker compose --env-file ../../.env`.
+O `Makefile` usa `docker compose --env-file ../../.env`; `migrate`,
+`status` e `rollback` rodam com `run --build`, para a imagem levar as
+migrations do disco.
 
 ## Estilo das tabelas
 

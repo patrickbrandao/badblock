@@ -8,6 +8,7 @@
 
 ROOT    := ../..
 COMPOSE := docker compose --env-file $(ROOT)/.env
+# As migrations vão dentro da imagem do migrate: --build a refaz com o disco.
 
 .DEFAULT_GOAL := help
 .PHONY: help migrate rollback status new psql test
@@ -16,14 +17,14 @@ help: ## Lista os alvos
 	@grep -E '^[a-z0-9-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  %-10s %s\n", $$1, $$2}'
 
 migrate: ## Aplica as migrations pendentes (central primeiro, depois cada app)
-	$(COMPOSE) run --rm migrate up
+	$(COMPOSE) run --rm --build migrate up
 
 rollback: ## Desfaz a última migration da pasta APP
 	@test -n "$(APP)" || (echo "use: make rollback APP=cgibr" && exit 1)
-	$(COMPOSE) run --rm -e MIGRATE_ONLY=$(APP) migrate rollback
+	$(COMPOSE) run --rm --build -e MIGRATE_ONLY=$(APP) migrate rollback
 
 status: ## Estado das migrations de cada pasta
-	$(COMPOSE) run --rm migrate status
+	$(COMPOSE) run --rm --build migrate status
 
 new: ## Cria uma migration: make new APP=cgibr NAME=descricao
 	@test -n "$(APP)" -a -n "$(NAME)" || (echo "use: make new APP=cgibr NAME=descricao" && exit 1)

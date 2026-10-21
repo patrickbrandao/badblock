@@ -214,7 +214,7 @@ a fonte traz e o padrão das opções vazias. Seções, nesta ordem:
 |---|---|
 | PostgreSQL: acesso | `POSTGRES_PASSWORD`, `# POSTGRES_URL` |
 | Valkey: senha | `VALKEY_PASSWORD` |
-| Imagens | `DOCKERHUB_NAMESPACE=tmsoftbrasil`; `COLLECTOR_<FONTE>_TAG`, `API_<FONTE>_TAG` e `WEBSITE_<SITE>_TAG` (`latest`) de cada app |
+| Imagens | `DOCKERHUB_NAMESPACE=tmsoftbrasil`; `COLLECTOR_<FONTE>_TAG`, `API_<FONTE>_TAG`, `WEBSITE_<SITE>_TAG` e `POSTGRES_MIGRATE_TAG` (`latest`) de cada imagem |
 | PostgreSQL: servidor | `POSTGRES_HOST_PORT=5433`, `POSTGRES_SHARED_BUFFERS=2GB`, `POSTGRES_MAX_CONNECTIONS=200` |
 | Valkey | `VALKEY_MAXMEMORY=256mb` |
 | Coletores | por coletor: `COLLECTOR_<FONTE>_SYNC_INTERVAL`, `_RETRY_INTERVAL`, as opções da fonte e `_REMOVAL_THRESHOLD` |

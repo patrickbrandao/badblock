@@ -1,0 +1,4 @@
+# Só o migrate.sh e as migrations entram na imagem.
+*
+!migrate.sh
+!*/*.sql

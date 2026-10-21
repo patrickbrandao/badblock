@@ -47,6 +47,7 @@ APPS="$APPS collector-rootzone api-rootzone"
 APPS="$APPS collector-anatel-pst api-anatel-pst"
 APPS="$APPS collector-rdns api-rdns"
 APPS="$APPS website-www"
+APPS="$APPS postgres-migrate"
 
 # Arquiteturas do manifesto publicado: servidor comum é amd64 e quem publica
 # costuma estar em arm64.
@@ -170,9 +171,11 @@ for entry in $SELECIONADAS; do
     # collector-<fonte> e api-<fonte> moram em apps/<fonte>/<collector|api>;
     # numa fonte de dois níveis o "-" do nome vira "/" no caminho
     # (collector-anatel-pst → apps/anatel/pst/collector); website-<site>, em
-    # websites/<site>.
+    # websites/<site>; postgres-migrate (dbmate + migrations), em
+    # database/postgres.
     case "$app" in
         website-*) contexto="websites/${app#website-}" ;;
+        postgres-migrate) contexto="database/postgres" ;;
         *) contexto="apps/$(echo "${app#*-}" | tr - /)/${app%%-*}" ;;
     esac
     echo "== build: $image:$versao ($PLATFORMS, contexto: $contexto)"

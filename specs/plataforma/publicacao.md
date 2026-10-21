@@ -67,11 +67,12 @@ PLATFORMS=linux/amd64 ./release-images.sh   # uma arquitetura só
 VERSION=0.0.2 ./release-images.sh           # outra versão que a última tag
 ```
 
-1. `APPS` lista os 27 apps (26 de fontes + `website-www`); nome desconhecido
-   é erro. A pasta de cada um sai do nome: `collector-<fonte>` →
-   `apps/<fonte>/collector` (numa fonte de dois níveis o `-` vira `/`:
-   `collector-anatel-pst` → `apps/anatel/pst/collector`), `website-<site>` →
-   `websites/<site>`.
+1. `APPS` lista as 28 imagens (26 apps de fontes, `website-www` e
+   `postgres-migrate`); nome desconhecido é erro. A pasta de cada uma sai do
+   nome: `collector-<fonte>` → `apps/<fonte>/collector` (numa fonte de dois
+   níveis o `-` vira `/`: `collector-anatel-pst` →
+   `apps/anatel/pst/collector`), `website-<site>` → `websites/<site>`,
+   `postgres-migrate` → `database/postgres`.
 2. Resolve a seleção **antes** da confirmação: sem nomes, todos os apps. A
    versão é `VERSION` ou, sem ela, a última tag `vX.Y.Z` do projeto
    (`git describe --tags --abbrev=0 --match 'v[0-9]*'`), sem o `v`; tem de

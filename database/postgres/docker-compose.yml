@@ -11,7 +11,9 @@
 # descartáveis: vêm das fontes externas, pelos collectors; não há backup.
 #
 # O serviço migrate roda a cada `up`: aplica as migrations pendentes de todas
-# as pastas (central/ e uma por app, via migrate.sh) e sai.
+# as pastas (central/ e uma por app, via migrate.sh) e sai. A imagem dele
+# (badblock-postgres-migrate, o Dockerfile desta pasta) já leva o migrate.sh e
+# as migrations: nada é montado do disco.
 
 name: badblock-postgres
 
@@ -64,19 +66,18 @@ services:
     logging: *logging
 
   migrate:
-    image: ghcr.io/amacneil/dbmate:2.36
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-postgres-migrate:${POSTGRES_MIGRATE_TAG:-latest}
+    build:
+      context: .
     container_name: badblock-postgres-migrate
     restart: "no"
     depends_on:
       postgres:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "/db/migrate.sh"]
     command: ["up"]
     environment:
       POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD}@badblock-postgres:5432/badblock?sslmode=disable}
       DBMATE_WAIT_TIMEOUT: 120s
-    volumes:
-      - ./:/db:ro
     networks: [badblock]
     labels:
       traefik.enable: "false"

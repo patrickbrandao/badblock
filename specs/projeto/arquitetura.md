@@ -61,7 +61,7 @@ das decisões está em [decisoes.md](decisoes.md).
 | Componente | Imagem | Rede | Publica | Depende de |
 |---|---|---|---|---|
 | `badblock-postgres` | `postgres:18-trixie` | `badblock` | `127.0.0.1:5433` (admin) | — |
-| `badblock-postgres-migrate` | `ghcr.io/amacneil/dbmate:2.36` | `badblock` | — | Postgres saudável; roda e sai |
+| `badblock-postgres-migrate` | `tmsoftbrasil/badblock-postgres-migrate` (dbmate 2.36 + migrations) | `badblock` | — | Postgres saudável; roda e sai |
 | `badblock-valkey` | `valkey/valkey:9-alpine` | `badblock` | — | — |
 | `badblock-collector-<fonte>` | `tmsoftbrasil/badblock-collector-<fonte>` | `badblock` | — | Postgres (+ migrations, no compose da raiz) e a fonte externa |
 | `badblock-api-<fonte>` | `tmsoftbrasil/badblock-api-<fonte>` | `badblock` + `TRAEFIK_NETWORK` | Traefik (`/<fonte>/`) e `127.0.0.1:<porta>` | Postgres; Valkey opcional |
