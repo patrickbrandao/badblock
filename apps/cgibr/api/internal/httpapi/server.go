@@ -33,7 +33,7 @@ type Store interface {
 	Job(ctx context.Context) (*store.Job, error)
 	ASN(ctx context.Context, asn int64) (*store.ASN, error)
 	Covering(ctx context.Context, p netip.Prefix) (*store.Match, error)
-	ByDocument(ctx context.Context, digits string) ([]store.ASNBrief, error)
+	ByDocument(ctx context.Context, digits string) (*store.Document, error)
 	ListASNs(ctx context.Context) ([]store.ASNBrief, error)
 }
 

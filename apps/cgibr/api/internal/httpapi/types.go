@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"cmp"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/patrickbrandao/badblock/apps/cgibr/api/internal/dataset"
@@ -62,7 +64,15 @@ type DocumentResponse struct {
 	Name           string      `json:"name"`
 	Count          int         `json:"count"`
 	ASNs           []ASNName   `json:"asns"`
+	Prefixes       []ASNPrefix `json:"prefixes"`
 	Dataset        DatasetInfo `json:"dataset"`
+}
+
+// ASNPrefix é um bloco de /document com o ASN ao qual está vinculado.
+type ASNPrefix struct {
+	ASN    int64  `json:"asn"`
+	IPV    int    `json:"ipv"`
+	Prefix string `json:"prefix"`
 }
 
 // ASNName é um ASN só com número e nome.
@@ -149,6 +159,37 @@ func documentType(digits string) string {
 
 func asnRef(a store.ASNBrief) ASNRef {
 	return ASNRef{ASN: a.ASN, Name: a.Name, Document: a.Document, DocumentType: documentType(a.DocumentDigits)}
+}
+
+// documentPrefixes ordena por ASN, depois versão IP (4 antes de 6), depois
+// endereço numérico e, no empate, o bloco maior primeiro — a mesma ordem do
+// ORDER BY do store, refeita aqui para não depender dele.
+func documentPrefixes(ps []store.ASNPrefix) []ASNPrefix {
+	sorted := slices.Clone(ps)
+	slices.SortStableFunc(sorted, func(x, y store.ASNPrefix) int {
+		if c := cmp.Compare(x.ASN, y.ASN); c != 0 {
+			return c
+		}
+		if c := cmp.Compare(ipVersion(x.Prefix), ipVersion(y.Prefix)); c != 0 {
+			return c
+		}
+		if c := x.Prefix.Addr().Compare(y.Prefix.Addr()); c != 0 {
+			return c
+		}
+		return cmp.Compare(x.Prefix.Bits(), y.Prefix.Bits())
+	})
+	out := make([]ASNPrefix, 0, len(sorted))
+	for _, p := range sorted {
+		out = append(out, ASNPrefix{ASN: p.ASN, IPV: ipVersion(p.Prefix), Prefix: p.Prefix.String()})
+	}
+	return out
+}
+
+func ipVersion(p netip.Prefix) int {
+	if p.Addr().Is4() {
+		return 4
+	}
+	return 6
 }
 
 func splitPrefixes(ps []netip.Prefix) Prefixes {

@@ -164,7 +164,7 @@ comentário da migration indica.
 | bloco `collector` de `/cgibr/meta` | `SELECT last_sync_at, last_check_at, consolidated FROM jobs WHERE app = $1` (`collector-cgibr`) | `uq_jobs_app` |
 | `/cgibr/asn/{asn}` | `SELECT uuid::text, asn, name, document, document_digits, created_at, updated_at FROM cgibr_asn WHERE asn = $1` e depois `SELECT prefix FROM cgibr_prefix WHERE asn_uuid = $1::uuid ORDER BY family, prefix` (IPv4 primeiro, em ordem de endereço) | `uq_cgibr_asn_asn`, `ix_cgibr_prefix_asn` |
 | `/cgibr/ip/{ip}` (o IP vira `/32` ou `/128`) e `/cgibr/prefix/{ip}/{len}` | `SELECT p.prefix, a.asn, a.name, a.document, a.document_digits FROM cgibr_prefix p JOIN cgibr_asn a ON a.uuid = p.asn_uuid WHERE p.prefix >>= $1::cidr ORDER BY masklen(p.prefix) DESC LIMIT 1` (o bloco mais específico) | `ix_cgibr_prefix_prefix_gist` |
-| `/cgibr/document/{documento}` | `SELECT asn, name, document, document_digits FROM cgibr_asn WHERE document_digits = $1 ORDER BY asn` | `ix_cgibr_asn_document_digits` |
+| `/cgibr/document/{documento}` | `SELECT a.asn, a.name, a.document, a.document_digits, p.prefix FROM cgibr_asn a LEFT JOIN cgibr_prefix p ON p.asn_uuid = a.uuid WHERE a.document_digits = $1 ORDER BY a.asn, p.family, p.prefix` (uma linha por bloco, ou uma com `p.prefix` `NULL` para ASN sem bloco; o store agrupa em ASNs e blocos) | `ix_cgibr_asn_document_digits`, `ix_cgibr_prefix_asn` |
 | `/cgibr/asns` | `SELECT asn, name, document, document_digits FROM cgibr_asn ORDER BY asn` | — (a tabela inteira, ~9 mil linhas) |
 
 O que a API deriva dessas colunas: `first_seen` = `cgibr_asn.created_at`;

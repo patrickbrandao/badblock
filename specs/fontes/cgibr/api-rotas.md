@@ -140,7 +140,7 @@ próprio bloco com `exact: true`.
 
 ## Documento — `GET /cgibr/document/{doc}`
 
-ASNs de um titular, pelo documento.
+ASNs de um titular, pelo documento, com os blocos IP vinculados a eles.
 
 - `{doc}`: todo caractere que não é dígito é descartado; sobram 14 dígitos
   (CNPJ) ou 8 (identificador estrangeiro do NIC.br), senão → 400
@@ -149,8 +149,16 @@ ASNs de um titular, pelo documento.
   codificada (`35.980.592%2F0001-30`). Com a barra sem codificar, o caminho
   ganha um segmento e cai no 404 `rota inexistente; veja /cgibr/`. Como os
   não dígitos são descartados, `abc35980592000130` também vale.
-- Chave: `doc:<dígitos>` (`doc:35980592000130`).
-- Consulta: `document_digits` igual, em ordem de ASN.
+- Chave: `doc2:<dígitos>` (`doc2:35980592000130`). O `2` é a revisão do
+  corpo: a chave era `doc:<dígitos>` antes de `prefixes` existir, e trocá-la
+  impede que, na mesma versão do dataset, o Valkey sirva o corpo antigo
+  (gravado com TTL de até 1 h antes do deploy) ou que um `If-None-Match` com
+  o ETag antigo receba 304 — o ETag sai da chave. Acrescentar campo a esta
+  resposta de novo pede `doc3:`, e assim por diante.
+- Consulta: `document_digits` igual, com os blocos de cada ASN num
+  `LEFT JOIN` (uma consulta só, para ASNs e blocos virem do mesmo arquivo
+  aplicado), em ordem de ASN, família e bloco
+  ([consulta](#consulta-de-documentdoc)).
 - 404 (nenhum ASN): `nenhum ASN com esse documento no arquivo do NIC.br`.
 - Manifesto: `getDocument`, tag `dados`; respostas 200, 304, 400, 404, 503, 504, 500.
 
@@ -162,7 +170,39 @@ ASNs de um titular, pelo documento.
 | `name` | texto | nome do titular, do primeiro ASN da lista |
 | `count` | inteiro ≥ 1 | quantidade de ASNs do titular |
 | `asns` | lista de `ASNName` (`asn`, `name`) | os ASNs, em ordem numérica, cada um com o seu nome |
+| `prefixes` | lista de `ASNPrefix` (`asn`, `ipv`, `prefix`) | os blocos de todos os ASNs do titular; `[]` quando nenhum tem bloco |
 | `dataset` | objeto | [padrão](../../padroes/api.md#formato-das-respostas) |
+
+Cada item de `prefixes`:
+
+| Campo | Tipo | Conteúdo |
+|---|---|---|
+| `asn` | inteiro, 0 a 4294967295 | ASN ao qual o bloco está vinculado (`cgibr_prefix.asn_uuid` → `cgibr_asn.asn`): o da linha do arquivo em que o bloco aparece |
+| `ipv` | inteiro, `4` ou `6` | versão IP do bloco (`cgibr_prefix.family`) |
+| `prefix` | CIDR | o bloco, na forma canônica (bits de host zerados; IPv6 curto em minúsculas), como em `/asn` |
+
+Regras de `prefixes`:
+
+- **Ordem**: por `asn` crescente, depois `ipv` (4 antes de 6), depois
+  endereço em ordem numérica (`9.0.0.0/24` antes de `10.0.0.0/16`, não
+  textual); no mesmo endereço, o bloco maior primeiro (`10.0.0.0/16` antes
+  de `10.0.0.0/24`). É a ordem do `ORDER BY a.asn, p.family, p.prefix` do
+  Postgres para `cidr` canônico, e o `httpapi` a refaz em Go para não
+  depender do store.
+- **Bloco sem ASN não existe** nestes dados: `cgibr_prefix.asn_uuid` é
+  `NOT NULL` com FK para `cgibr_asn` (`ON DELETE CASCADE`), e o coletor liga
+  cada bloco ao ASN da linha em que ele aparece ([dados.md](dados.md#cgibr_prefix)).
+  Por isso `asn` nunca é `null`. Bloco repetido em mais de uma linha do
+  arquivo fica só com a primeira ocorrência (`UNIQUE (prefix)`), então cada
+  bloco aparece uma vez só.
+- **ASN sem bloco** (ex.: o AS174 sem IPv4) aparece em `asns` e não
+  acrescenta nada a `prefixes`; um titular cujos ASNs não têm bloco nenhum
+  responde `prefixes: []`.
+- Os blocos são os mesmos de `/cgibr/asn/{asn}` de cada ASN, só que numa
+  lista plana com o ASN em cada item (em `/asn`, `prefixes` é um objeto
+  `{ipv4, ipv6}`: o nome é o mesmo, a forma não, porque aqui há vários ASNs).
+- Sem paginação. O maior titular por número de ASNs, `10996639`, tem 24; a
+  resposta cresce com o total de blocos do titular (~50 bytes por bloco).
 
 ```json
 {
@@ -172,14 +212,41 @@ ASNs de um titular, pelo documento.
   "name": "ELEA DATA CENTERS",
   "count": 1,
   "asns": [{"asn": 61610, "name": "ELEA DATA CENTERS"}],
+  "prefixes": [
+    {"asn": 61610, "ipv": 4, "prefix": "187.87.28.0/22"},
+    {"asn": 61610, "ipv": 4, "prefix": "200.225.48.0/21"},
+    {"asn": 61610, "ipv": 6, "prefix": "2804:8ae0::/32"}
+  ],
   "dataset": {"version": "01a0ea50-add2-7bcf-998a-a2e3b04b8cdc", "updated_at": "2026-09-28T23:19:10Z"}
 }
 ```
+
+Os blocos do exemplo são os de `/cgibr/asn/61610` no mesmo dataset (ver
+[ASN](#asn--get-cgibrasnasn)); em 2026-10-21, no dataset
+`01a15c77-4b35-7b67-b666-de7e897abfb0` de produção, `/cgibr/asn/61610`
+respondia os mesmos três blocos.
 
 Em 2026-09-29, `/cgibr/document/10996639` respondia `document_type`
 `foreign`, `name` `Internet Systems Consortium` e `count` 24 (AS275689 a
 AS275712), os 24 identificadores estrangeiros do arquivo
 ([fonte.md](fonte.md#fatos-medidos-2026-09-28)).
+
+### Consulta de `/document/{doc}`
+
+A consulta da API (a mesma do [dados.md](dados.md#consultas-da-api-cgibr)):
+
+```sql
+SELECT a.asn, a.name, a.document, a.document_digits, p.prefix
+  FROM cgibr_asn a
+  LEFT JOIN cgibr_prefix p ON p.asn_uuid = a.uuid
+ WHERE a.document_digits = $1
+ ORDER BY a.asn, p.family, p.prefix
+```
+
+Índices: `ix_cgibr_asn_document_digits` (o titular) e `ix_cgibr_prefix_asn`
+(os blocos de cada ASN); não precisa de coluna nem de índice novo. Uma
+linha por bloco, ou uma linha com `p.prefix` `NULL` para ASN sem bloco; o
+store agrupa em ASNs (sem repetir) e blocos.
 
 ## Todos os ASNs — `GET /cgibr/asns`
 

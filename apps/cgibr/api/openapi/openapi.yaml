@@ -249,8 +249,11 @@ paths:
       summary: ASNs de um titular
       description: >-
         Todos os ASNs cujo titular tem o documento pedido (CNPJ ou
-        identificador estrangeiro do NIC.br), em ordem numérica. `document`
-        e `name` vêm do primeiro ASN da lista.
+        identificador estrangeiro do NIC.br), em ordem numérica, e os blocos
+        IPv4 e IPv6 vinculados a eles (`prefixes`), ordenados por ASN, depois
+        versão IP (4 antes de 6), depois endereço. `document` e `name` vêm do
+        primeiro ASN da lista. ASN sem bloco aparece em `asns` e não acrescenta
+        nada a `prefixes`.
       tags: [dados]
       parameters:
         - $ref: '#/components/parameters/Document'
@@ -280,6 +283,16 @@ paths:
                 asns:
                   - asn: 61610
                     name: ELEA DATA CENTERS
+                prefixes:
+                  - asn: 61610
+                    ipv: 4
+                    prefix: 187.87.28.0/22
+                  - asn: 61610
+                    ipv: 4
+                    prefix: 200.225.48.0/21
+                  - asn: 61610
+                    ipv: 6
+                    prefix: 2804:8ae0::/32
                 dataset:
                   version: 01a0ea50-add2-7bcf-998a-a2e3b04b8cdc
                   updated_at: '2026-09-28T23:19:10Z'
@@ -590,7 +603,7 @@ components:
         corpo e sem consultar o cache nem o banco.
       schema:
         type: string
-      example: W/"a344bf03cbbadb4a"
+      example: W/"c87c7cc78d84541a"
   headers:
     ETag:
       description: >-
@@ -598,7 +611,7 @@ components:
         normalizada; muda quando o collector aplica um arquivo novo.
       schema:
         type: string
-      example: W/"a344bf03cbbadb4a"
+      example: W/"c87c7cc78d84541a"
     CacheControlPublic:
       description: Resposta cacheável por 5 minutos.
       schema:
@@ -977,7 +990,7 @@ components:
     DocumentResponse:
       type: object
       description: Resposta de `GET /document/{doc}`.
-      required: [document, document_digits, document_type, name, count, asns, dataset]
+      required: [document, document_digits, document_type, name, count, asns, prefixes, dataset]
       properties:
         document:
           type: string
@@ -1007,8 +1020,38 @@ components:
           description: ASNs do titular, em ordem numérica.
           items:
             $ref: '#/components/schemas/ASNName'
+        prefixes:
+          type: array
+          description: >-
+            Blocos de todos os ASNs do titular, cada um com o ASN ao qual está
+            vinculado, em ordem de ASN, depois `ipv` (4 antes de 6), depois
+            endereço numérico (no empate, o bloco maior primeiro). Lista vazia
+            quando nenhum ASN do titular tem bloco.
+          items:
+            $ref: '#/components/schemas/ASNPrefix'
         dataset:
           $ref: '#/components/schemas/Dataset'
+    ASNPrefix:
+      type: object
+      description: Um bloco de `GET /document/{doc}` com o ASN ao qual está vinculado.
+      required: [asn, ipv, prefix]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+          description: ASN da linha do arquivo em que o bloco aparece.
+          example: 61610
+        ipv:
+          type: integer
+          enum: [4, 6]
+          description: Versão IP do bloco.
+          example: 4
+        prefix:
+          type: string
+          description: Bloco em notação CIDR canônica (bits de host zerados).
+          example: 187.87.28.0/22
     ASNListResponse:
       type: object
       description: Resposta de `GET /asns`.

@@ -36,7 +36,7 @@ em `/cgibr/v1/...`; saúde, `ping` e o manifesto existem só sem versão
 | `GET /cgibr/asn/{asn}` | `getASN` | `dados` | `asn:61610` |
 | `GET /cgibr/ip/{ip}` | `getIP` | `dados` | `ip:187.87.29.10`, `ip:2804:8ae0::1` |
 | `GET /cgibr/prefix/{ip}/{len}` | `getPrefix` | `dados` | `prefix:200.225.48.0/24` |
-| `GET /cgibr/document/{doc}` | `getDocument` | `dados` | `doc:35980592000130` |
+| `GET /cgibr/document/{doc}` | `getDocument` | `dados` | `doc2:35980592000130` (revisão 2 do corpo, com `prefixes`; [por quê](api-rotas.md#documento--get-cgibrdocumentdoc)) |
 | `GET /cgibr/asns` | `listASNs` | `dados` | `asns` |
 | `GET /cgibr/meta` | `getMeta` | `meta` | — (sem cache) |
 | `GET /cgibr/` | `getIndex` | `meta` | — |
@@ -93,7 +93,9 @@ derivado destas specs. O que é desta API:
   `StatusOK` (exemplos `ok`, `starting`, `degraded`) e `StatusError`.
 - `components.schemas`: `Dataset`, `ASNRef`, `ASNName`, `Prefixes`,
   `ASNResponse` (`allOf` de `ASNRef` e dos demais campos), `IPResponse`,
-  `PrefixResponse`, `DocumentResponse`, `ASNListResponse`, `MetaResponse`
+  `PrefixResponse`, `DocumentResponse`, `ASNPrefix` (item de
+  `DocumentResponse.prefixes`: `asn`, `ipv` com `enum: [4, 6]`, `prefix`),
+  `ASNListResponse`, `MetaResponse`
   (`dataset` e `collector` como `oneOf` do objeto ou `null`), `MetaDataset`,
   `MetaCollector`, `Status`, `StatusChecks`, `IndexResponse` e `Error` (`code`
   com `enum` dos seis códigos do padrão). `asn` é `integer`/`int64` de 0 a
@@ -102,18 +104,21 @@ derivado destas specs. O que é desta API:
   `pattern: '^([0-9]{8}|[0-9]{14})$'`.
 - Exemplos: os de [api-rotas.md](api-rotas.md#exemplos); `XDatasetVersion`
   usa `01a0ea50-add2-7bcf-998a-a2e3b04b8cdc`; o de `ETag` e de `IfNoneMatch` é
-  `W/"a344bf03cbbadb4a"`, o ETag de `/cgibr/document/35980592000130` no
-  dataset `01a0eb55-…`.
+  `W/"c87c7cc78d84541a"`, o ETag de `/cgibr/document/35980592000130` (chave
+  `doc2:35980592000130`) no dataset `01a0eb55-…`.
 
-ETags reais (`etagFor` em `internal/httpapi/server.go`) no dataset
-`01a0eb55-1a1c-7bdb-915a-e885abbaaf72`, vistos em 2026-09-29:
+ETags (`etagFor` em `internal/httpapi/server.go`) no dataset
+`01a0eb55-1a1c-7bdb-915a-e885abbaaf72`, recalculados em 2026-10-21 (a tabela
+anterior, de 2026-09-29, só acertava `asns`; a função foi conferida contra
+produção: `/cgibr/document/35980592000130` no dataset `01a15c77-…` responde
+`W/"f63b2f2da03300d9"`, o mesmo que ela calcula para `doc:35980592000130`):
 
 | Consulta | ETag |
 |---|---|
-| `asn:61610` | `W/"95b0ac1a4da4653c"` |
-| `ip:187.87.29.10` | `W/"1469e8c53664ae70"` |
-| `prefix:200.225.48.0/24` | `W/"53a5a111c8334474"` |
-| `doc:35980592000130` | `W/"a344bf03cbbadb4a"` |
+| `asn:61610` | `W/"95b0af1a4da46a55"` |
+| `ip:187.87.29.10` | `W/"aa422dd21430ee67"` |
+| `prefix:200.225.48.0/24` | `W/"4c81ea305dfe36c5"` |
+| `doc2:35980592000130` | `W/"c87c7cc78d84541a"` (era `doc:…`, `W/"7751652ac4a0e62"`, antes de `prefixes`) |
 | `asns` | `W/"e7b073256f3130d0"` |
 
 ## Opções
@@ -265,6 +270,9 @@ ASNs), por `curl` na porta do loopback:
 | `/asn`, `/ip`, `/prefix`, `/document` de um registro | 265 a 1.481 bytes (`/asn/1916`, com 39 blocos: 1.002; `/document/10996639`, com 24 ASNs: 1.481) | 2,4 a 4,4 ms no `MISS`; 1,2 a 2,4 ms no `HIT` |
 | `/cgibr/meta` e `/cgibr/status` (sem cache) | 480 e 156 bytes | ~1,4 ms |
 
+Os tamanhos de `/document` são de antes de `prefixes` (2026-10-21): cada
+bloco acrescenta ~45 a 55 bytes ao corpo; não remedidos.
+
 O manifesto tem ~43 KB. Não há tempos com o arquivo real carregado num banco
 descartável: o app não tem `make test-real`.
 
@@ -280,6 +288,7 @@ Unitários (`make test`), com o store falso de `internal/httpapi/httpapi_test.go
 | `httpapi` | `TestErrors` | 404 (`AS1`, `8.8.8.8`, `11111111`, `/cgibr/v2/...`, `/cgibr/nada`, fora do caminho de base) e 400 (`abc`, `4294967296`, `999.1.1.1`, `/33`, `123`), sempre JSON |
 | `httpapi` | `TestIPAndPrefix` | IPv4 e IPv6; bits de host zerados (`187.87.29.1/24` → `187.87.29.0/24`); `exact` falso e verdadeiro |
 | `httpapi` | `TestDocumentAcceptsFormatted` | só dígitos e `35.980.592%2F0001-30` |
+| `httpapi` | `TestDocumentPrefixes` | `prefixes` logo depois de `asns` e antes de `dataset`, com `asn`, `ipv` e `prefix`; ordem por ASN, `ipv` e endereço numérico (o store falso devolve fora de ordem: `9.0.0.0/24` antes de `10.0.0.0/16` antes de `10.0.0.0/24`); ASN sem bloco só em `asns`; chave `doc2:` (nenhuma `doc:`) e o ETag dela |
 | `httpapi` | `TestASNsList` | `count` 2 e `foreign` para 8 dígitos |
 | `httpapi` | `TestCacheAndETag` | `MISS` e depois `HIT` pela `/v1` (uma consulta só, uma chave com o prefixo `badblock:api-cgibr:0192-v1:`), `X-Dataset-Version`, 304 com `If-None-Match` |
 | `httpapi` | `TestNotReady` | 503 `dataset_not_ready` e `/status` `starting` |
@@ -298,7 +307,10 @@ e AS275690 (`10996639`), uma execução recusada e uma aplicada, e a linha de
 `jobs`. Confere a execução aplicada (a recusada não conta), `jobs`, os blocos
 do AS61610 em ordem (`187.87.28.0/22`, `200.225.48.0/21`, `2804:8ae0::/32`),
 o bloco mais específico (`187.87.30.10/32` → AS262287), IPv6, IP fora
-(`8.8.8.8`), os dois ASNs do `10996639` e a lista inteira em ordem.
+(`8.8.8.8`), os dois ASNs do `10996639` (só o AS275690 com blocos, inseridos
+fora de ordem: `2001:500:2::/48`, `10.0.0.0/24`, `9.0.0.0/24`, `10.0.0.0/16`)
+com os blocos em ordem de ASN, família e endereço, os três blocos do
+`35980592000130`, um documento sem ASN e a lista inteira em ordem.
 
 **Pendente** — o que o [padrão](../../padroes/api.md#testes) pede e ainda
 falta: em `httpapi`, `HEAD`, erro de banco (503), timeout (504), panic (500),
