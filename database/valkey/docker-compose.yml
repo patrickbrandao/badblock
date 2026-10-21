@@ -11,18 +11,30 @@ services:
     image: valkey/valkey:9-alpine
     container_name: badblock-valkey
     restart: unless-stopped
-    # Com VALKEY_PASSWORD vazio o Valkey sobe sem senha (só a rede badblock o
-    # alcança); com valor, exige autenticação.
+    # Toda a configuração vai na linha de comando, sem arquivo montado.
+    # Nada é persistido (save "", appendonly no): se o container reiniciar, o
+    # cache recomeça vazio e os pedidos de tempo real na fila se perdem.
+    # volatile-lru: com a memória cheia, saem só as chaves com TTL (todo o
+    # cache e as listas de retorno do rdns); a fila do rdns, sem TTL, nunca é
+    # despejada. Com VALKEY_PASSWORD vazio o Valkey sobe sem senha (só a rede
+    # badblock o alcança); com valor, exige autenticação.
     command:
       - sh
       - -c
-      - exec valkey-server /usr/local/etc/valkey/valkey.conf --maxmemory "$$VALKEY_MAXMEMORY" $${VALKEY_PASSWORD:+--requirepass "$$VALKEY_PASSWORD"}
+      - >-
+        exec valkey-server
+        --bind 0.0.0.0 '-::*'
+        --port 6379
+        --save ''
+        --appendonly no
+        --maxmemory-policy volatile-lru
+        --lazyfree-lazy-eviction yes
+        --maxmemory "$$VALKEY_MAXMEMORY"
+        $${VALKEY_PASSWORD:+--requirepass "$$VALKEY_PASSWORD"}
     environment:
       VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
       VALKEY_MAXMEMORY: ${VALKEY_MAXMEMORY:-256mb}
       VALKEYCLI_AUTH: ${VALKEY_PASSWORD:-}
-    volumes:
-      - ./valkey.conf:/usr/local/etc/valkey/valkey.conf:ro
     networks:
       badblock:
         aliases: [badblock-valkey]

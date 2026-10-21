@@ -16,21 +16,27 @@ Projeto compose `badblock-valkey`; sobe sozinho a partir da pasta (com o
 |---|---|
 | Serviço / container | `valkey` / `badblock-valkey` (alias `badblock-valkey` na rede `badblock`) |
 | Imagem | `valkey/valkey:9-alpine` |
-| Comando | `sh -c 'exec valkey-server /usr/local/etc/valkey/valkey.conf --maxmemory "$VALKEY_MAXMEMORY" ${VALKEY_PASSWORD:+--requirepass "$VALKEY_PASSWORD"}'` (no compose, com `$$` para o shell do container expandir) |
+| Comando | `sh -c` com `exec valkey-server` e toda a configuração em argumentos (abaixo); no compose, com `$$` para o shell do container expandir |
 | Ambiente | `VALKEY_PASSWORD` (vazia = sem senha), `VALKEY_MAXMEMORY` (`256mb`), `VALKEYCLI_AUTH` = a senha |
 | Porta | **nenhuma** publicada no host: só a rede `badblock` o alcança |
 | Healthcheck | `valkey-cli ping \| grep -q PONG`, desfazendo antes o `VALKEYCLI_AUTH` vazio (que faria um AUTH sem senha); a cada 5 s, prazo de 3 s, 20 tentativas |
 | Outros | `restart: unless-stopped`, `traefik.enable=false`, log json-file 10m × 3 |
 
-`valkey.conf` (montado só leitura):
+Configuração toda na linha de comando, **sem arquivo montado** (o container
+sobe em qualquer servidor só com a imagem; decisão #36 em
+[../projeto/decisoes.md](../projeto/decisoes.md)). O `docker-compose.yml` e o
+`run-server.sh` passam os mesmos argumentos:
 
 ```
-bind 0.0.0.0 -::*
-port 6379
-save ""
-appendonly no
-maxmemory-policy volatile-lru
-lazyfree-lazy-eviction yes
+exec valkey-server \
+  --bind 0.0.0.0 '-::*' \
+  --port 6379 \
+  --save '' \
+  --appendonly no \
+  --maxmemory-policy volatile-lru \
+  --lazyfree-lazy-eviction yes \
+  --maxmemory "$VALKEY_MAXMEMORY" \
+  ${VALKEY_PASSWORD:+--requirepass "$VALKEY_PASSWORD"}
 ```
 
 Nada é persistido: se o container reiniciar, o cache recomeça vazio, as
