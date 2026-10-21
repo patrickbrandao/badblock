@@ -78,7 +78,7 @@ O nome da fonte é a chave de tudo: um token minúsculo, **sem hífen**
 | Module Go | `github.com/patrickbrandao/badblock/apps/<fonte>/<collector\|api>` | `.../apps/cgibr/api` |
 | Binário e `cmd/` | `cmd/<app>/main.go` → `/<app>` na imagem | `/api-cgibr` |
 | Imagem | `tmsoftbrasil/badblock-<app>` | `tmsoftbrasil/badblock-api-cgibr` |
-| Container | `badblock-<app>` (o `collector-rdns`, com réplicas: `<projeto>-collector-rdns-<n>`) | `badblock-collector-cgibr` |
+| Container | `badblock-<app>` (os coletores de sonda, com réplicas: `<projeto>-<app>-<n>`, ex.: `badblock-collector-rdns-1`) | `badblock-collector-cgibr` |
 | Serviço e projeto compose | serviço `<app>`, projeto `badblock-<app>` | `api-cgibr` |
 | Tag de release | `<app>/vX.Y.Z` | `api-cgibr/v0.1.0` |
 | Tabelas | `<fonte>_<tabela>` | `cgibr_asn`, `cgibr_run` |

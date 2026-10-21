@@ -20,6 +20,7 @@ pastas abaixo trazem só o que é de cada fonte.
 | `rootanchors` | IANA (`root-anchors.xml`) | âncoras de confiança DNSSEC da raiz (KSKs) | — | `/rootanchors/` | 8111 | `rootanchors_key`, `rootanchors_run` | [rootanchors/](rootanchors/README.md) |
 | `anatel/pst` | Anatel (site [`anatel`](anatel/README.md)) | prestadoras de serviços de telecomunicações (CNPJ) e os serviços que cada uma notificou (SCM, STFC, SMP…) | — | `/anatel/pst/` | 8112 | `anatel_pst_provider`, `anatel_pst_service`, `anatel_pst_run` | [anatel/pst/](anatel/pst/README.md) |
 | `rdns` | o próprio BadBlock (sonda ativa: consulta PTR a resolvedores recursivos) | o reverso (PTR) de todo IPv4 dos prefixos do `cgibr`, quebrados em /24, e dos estáticos | sonda | `/rdns/` | 8113 | `rdns_prefix`, `rdns_ptr`, `rdns_run`, `rdns_worker`, `rdns_config` | [rdns/](rdns/README.md) |
+| `registrobr/rdapnum` | registro.br (site [`registrobr`](registrobr/README.md), serviço RDAP; sonda ativa) | o RDAP de cada ASN e bloco do `cgibr`: titular, CNPJ, contatos e e-mails, datas, delegações reversas | sonda | `/registrobr/rdapnum/` | 8114 | `registrobr_rdapnum_target`, `_response`, `_autnum`, `_network`, `_entity`, `_link`, `_reverse`, `_run`, `_worker`, `_config` | [registrobr/rdapnum/](registrobr/rdapnum/README.md) |
 
 Para cada fonte: apps em `apps/<fonte>/collector/` e `apps/<fonte>/api/`,
 migrations em `database/postgres/<fonte>/`, sub-agentes
@@ -43,6 +44,10 @@ O `rdns` não importa arquivo: o coletor dele mede o DNS reverso, sem parar,
 dos prefixos que deriva do `cgibr` e dos que o administrador cadastra. O
 coletor segue também o [padrão de sonda](../padroes/sonda.md); a API segue o
 padrão comum, com os desvios no [`api.md`](rdns/api.md) dele.
+
+O `registrobr/rdapnum` também é sonda: consulta ele mesmo o RDAP do
+registro.br de cada ASN e bloco do `cgibr`, guarda a resposta crua e só
+depois a processa ([registrobr/rdapnum/](registrobr/rdapnum/README.md)).
 
 ## Pasta de uma fonte
 

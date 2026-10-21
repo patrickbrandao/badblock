@@ -218,12 +218,20 @@ for d in specs/fontes/*/; do
 		fi
 		continue
 	fi
-	# Pasta de site: só o README.md e uma pasta por conjunto.
+	# Pasta de site: só o README.md e uma pasta por conjunto (o conjunto só
+	# especificado traz a mesma linha "> **Estado:** só specs").
 	[ -f "specs/fontes/$fonte/README.md" ] || falha "falta specs/fontes/$fonte/README.md"
 	for sub in "specs/fontes/$fonte"/*/; do
 		[ -d "$sub" ] || continue
 		c=$(basename "$sub")
-		[ -d "apps/$fonte/$c" ] || falha "specs/fontes/$fonte/$c/ sem apps/$fonte/$c/"
+		so_specs=no
+		grep -qF '> **Estado:** só specs' "specs/fontes/$fonte/$c/README.md" 2>/dev/null && so_specs=yes
+		if [ ! -d "apps/$fonte/$c" ] && [ "$so_specs" = no ]; then
+			falha "specs/fontes/$fonte/$c/ sem apps/$fonte/$c/"
+		fi
+		if [ -d "apps/$fonte/$c" ] && [ "$so_specs" = yes ]; then
+			falha "specs/fontes/$fonte/$c/README.md ainda diz só specs, mas apps/$fonte/$c/ existe"
+		fi
 	done
 done
 for arq in README formato dados collector api; do

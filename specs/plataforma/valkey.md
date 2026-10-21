@@ -73,6 +73,12 @@ Exceções do `rdns`:
   `badblock:rdns:live:` (`queue` sem TTL; `inflight:<ip>` e `reply:<ip>` com
   30 s).
 
+O `registrobr/rdapnum` segue as mesmas duas exceções: chaves sem versão
+(`badblock:api-registrobr-rdapnum:<consulta>`, TTL de 300 s) e a fila de
+atualização com o prefixo `badblock:registrobr-rdapnum:refresh:` (`queue`
+sem TTL; `inflight:<kind>:<alvo>` com 60 s)
+([../fontes/registrobr/rdapnum/dados.md](../fontes/registrobr/rdapnum/dados.md#fila-de-atualização-valkey)).
+
 ```bash
 docker exec -it badblock-valkey valkey-cli          # inspecionar
 ```

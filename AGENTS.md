@@ -42,7 +42,7 @@ das specs: aponte o arquivo.
 | Traefik, release de imagens, produção | [specs/plataforma/publicacao.md](specs/plataforma/publicacao.md) |
 | Segredos e gitleaks | [specs/plataforma/seguranca.md](specs/plataforma/seguranca.md) |
 | Padrão de todo coletor | [specs/padroes/coletor.md](specs/padroes/coletor.md) |
-| Padrão do coletor de sonda ativa (`rdns`) | [specs/padroes/sonda.md](specs/padroes/sonda.md) |
+| Padrão do coletor de sonda ativa (`rdns`, `registrobr/rdapnum`) | [specs/padroes/sonda.md](specs/padroes/sonda.md) |
 | Padrão de toda API | [specs/padroes/api.md](specs/padroes/api.md) |
 | Manifesto OpenAPI | [specs/padroes/openapi.md](specs/padroes/openapi.md) |
 | Padrão de todo site (`websites/<site>/`) | [specs/padroes/website.md](specs/padroes/website.md) |
@@ -84,3 +84,4 @@ das specs: aponte o arquivo.
 | `roothints` | [specs/fontes/roothints/](specs/fontes/roothints/README.md) | `collector-roothints` | `api-roothints` |
 | `rootzone` | [specs/fontes/rootzone/](specs/fontes/rootzone/README.md) | `collector-rootzone` | `api-rootzone` |
 | `rdns` | [specs/fontes/rdns/](specs/fontes/rdns/README.md) | `collector-rdns` (sonda ativa, [padrão](specs/padroes/sonda.md)) | `api-rdns` |
+| `registrobr/rdapnum` (só specs) | [specs/fontes/registrobr/rdapnum/](specs/fontes/registrobr/rdapnum/README.md) | `collector-registrobr-rdapnum` (sonda ativa) | `api-registrobr-rdapnum` |

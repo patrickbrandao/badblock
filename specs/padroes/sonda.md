@@ -1,9 +1,11 @@
 # Padrão do coletor de sonda ativa
 
 Vale para o coletor que **mede** a internet em vez de importar um arquivo
-publicado: ele mesmo faz as consultas (DNS, hoje) a uma lista de alvos e
-grava o resultado, sem parar. Hoje só o `collector-rdns` segue este padrão
-([../fontes/rdns/collector.md](../fontes/rdns/collector.md)). O que é da
+publicado: ele mesmo faz as consultas a uma lista de alvos e grava o
+resultado, sem parar. Seguem este padrão o `collector-rdns`, com consultas
+DNS ([../fontes/rdns/collector.md](../fontes/rdns/collector.md)), e o
+`collector-registrobr-rdapnum`, com consultas RDAP por HTTP
+([../fontes/registrobr/rdapnum/collector.md](../fontes/registrobr/rdapnum/collector.md#desvios-do-padrão-de-sonda)). O que é da
 fonte (protocolo, alvos, tabelas, valores) fica na spec dela; quando ela diz
 outra coisa, vale a da fonte — e ela diz por quê.
 
@@ -47,7 +49,7 @@ Os nomes exatos estão no `dados.md` da fonte; os papéis são estes:
 
 | Papel | Uma linha por | Quem escreve |
 |---|---|---|
-| alvos (`<fonte>_prefix` no rdns) | unidade de varredura, com o estado da varredura em colunas | o coletor (derivação e varredura) e o sistema de gestão do administrador (estáticos, ativar, desativar, remover, pedir nova varredura) |
+| alvos (`<fonte>_prefix` no rdns, `<fonte>_target` no rdapnum) | unidade de varredura, com o estado da varredura em colunas | o coletor (derivação e varredura) e o sistema de gestão do administrador (estáticos, ativar, desativar, remover, pedir nova varredura) |
 | resultados | o que a medição achou de cada alvo | o coletor |
 | `<fonte>_run` | derivação que leu uma versão nova de uma fonte de origem | o coletor |
 | `<fonte>_worker` | instância do coletor no ar | a própria instância |

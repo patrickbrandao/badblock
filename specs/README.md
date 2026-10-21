@@ -43,7 +43,7 @@ bastam para reconstruir o projeto se o código for apagado
 | [padroes/api.md](padroes/api.md) | O que toda `api-<fonte>` faz: código, caminho e versões, formato, cache e ETag, rotas comuns, erros, configuração, testes |
 | [padroes/openapi.md](padroes/openapi.md) | Regras do manifesto OpenAPI 3.1 e o teste que o confere |
 | [padroes/website.md](padroes/website.md) | O que todo `website-<site>` faz: nomes, Vite + React estático, lighttpd, imagem, compose e Traefik, testes, Makefile |
-| [padroes/sonda.md](padroes/sonda.md) | Coletor de sonda ativa (hoje só o `collector-rdns`): o que vale do padrão dos coletores, alvos derivados e estáticos, derivação, fila com lease, taxa, instâncias e réplicas, tempo real pelo Valkey |
+| [padroes/sonda.md](padroes/sonda.md) | Coletor de sonda ativa (`collector-rdns` e `collector-registrobr-rdapnum`): o que vale do padrão dos coletores, alvos derivados e estáticos, derivação, fila com lease, taxa, instâncias e réplicas, tempo real pelo Valkey |
 
 ### Fontes
 
@@ -71,6 +71,8 @@ bastam para reconstruir o projeto se o código for apagado
 | [fontes/anatel/](fontes/anatel/README.md) | Anatel (site): os conjuntos de dados dela |
 | [fontes/anatel/pst/](fontes/anatel/pst/README.md) | Anatel: prestadoras de serviços de telecomunicações |
 | [fontes/rdns/](fontes/rdns/README.md) | DNS reverso (PTR) dos IPv4 cadastrados: sonda ativa, sem arquivo publicado |
+| [fontes/registrobr/](fontes/registrobr/README.md) | registro.br (site): o serviço RDAP e os conjuntos coletados dele |
+| [fontes/registrobr/rdapnum/](fontes/registrobr/rdapnum/README.md) | RDAP do registro.br por ASN e bloco: sonda ativa, resposta crua e processada |
 
 Cada pasta de fonte tem `README.md`, `fonte.md`, `dados.md`, `collector.md` e
 `api.md` ([fontes/README.md](fontes/README.md#pasta-de-uma-fonte)).
