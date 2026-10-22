@@ -1,7 +1,5 @@
 # registrobr/rdapnum — RDAP dos ASNs e blocos brasileiros
 
-> **Estado:** só specs
-
 O BadBlock consulta ele mesmo o RDAP do registro.br
 (`https://rdap.registro.br/`) para **cada ASN e cada bloco IP** do
 [`cgibr`](../../cgibr/README.md) e guarda o que o arquivo do NIC.br não

@@ -76,7 +76,8 @@ sessão `pg_try_advisory_lock(hashtext('collector-registrobr-rdapnum'))`,
    WHERE NOT EXISTS (SELECT 1 FROM registrobr_rdapnum_link l WHERE
    l.entity_uuid = e.uuid OR l.via_uuid = e.uuid)`).
 5. `jobs`: `last_check_at` em toda passada com a trava; `last_sync_at` e
-   `consolidated = 0` se `inserted > 0`.
+   `consolidated = 0` se `inserted > 0` ou se alguma entidade órfã saiu (o
+   dado processado mudou).
 
 Com o arquivo de 2026-09-28, a primeira derivação insere 31.125 alvos. Log
 `derivação aplicada` com `source`, `version`, `asns`, `prefixes`,
@@ -204,11 +205,15 @@ instância processando a mesma: pula) e confere que ela ainda é a
 `response_uuid` do alvo (senão, uma mais nova já entrou: marca
 `processed_at` e sai sem gravar).
 
-- Grava `parser_version = PARSER_VERSION` (constante do código, começa em
-  `1`), `processed_at = NOW()`, `process_error = NULL`.
+- Grava `parser_version = PARSER_VERSION` (a constante `parse.Version`,
+  começa em `1`), `processed_at = NOW()`, `process_error = NULL`.
 - Recusa (`process_error`, log `processamento recusado`, `warn`, com
   `response` e `err`): a regra do bloco que não é CIDR
-  ([fonte.md](fonte.md#regras-do-parser)) e qualquer erro de leitura.
+  ([fonte.md](fonte.md#regras-do-parser)), qualquer erro de leitura e um
+  `objectClassName` que não é o do tipo do alvo. A recusa também grava
+  `parser_version` e `processed_at` (o reprocessamento tenta de novo depois
+  de 1 h, não a cada minuto); uma falha do banco no meio do processamento
+  vai para `process_error` do mesmo jeito, fora da transação desfeita.
 - Log `resposta processada` (`debug`) com `response`, `kind`, `changed` e
   `ms`.
 
@@ -234,8 +239,8 @@ O laço da fila de [dados.md](dados.md#fila-de-atualização-valkey):
 3. `UPDATE registrobr_rdapnum_target SET rescan = true WHERE <asn ou prefix>
    = $1 AND active`. Nenhuma linha: `pedido de atualização para alvo
    inexistente ou inativo` (`debug`).
-4. `_worker.refreshes + 1`. O alvo sai na frente da fila (respeitando
-   `retry_at`), na taxa normal.
+4. Alvo marcado: `_worker.refreshes + 1`. O alvo sai na frente da fila
+   (respeitando `retry_at`), na taxa normal.
 
 Pedido velho não é descartado: marcar `rescan` de novo é inofensivo. Sem
 `REDIS_URL`: `atualização desligada (REDIS_URL vazia)` na subida; Valkey
@@ -355,5 +360,7 @@ e `registrobr_rdapnum/`, Valkey e o servidor RDAP falso:
 Rede real (opcional, nunca no `make test`):
 `make -C apps/registrobr/rdapnum/collector test-real ASN=61610` coleta um
 ASN e os blocos dele num PG18 descartável, a 8/min, e mostra o resultado e
-o IP de saída; `BURST=30` faz uma rajada curta e mostra a partir de qual
-consulta veio truncada (o ensaio de [fonte.md](fonte.md#limite-do-servidor)).
+o IP de saída (com `PROXY_URL` no ambiente, sai pelo proxy); `BURST=30`
+faz uma rajada curta e mostra a partir de qual consulta veio truncada (o
+ensaio de [fonte.md](fonte.md#limite-do-servidor)). Em 2026-10-21, sem
+proxy: AS61610 e os três blocos, 4 consultas, 4 completas, em 23 s.

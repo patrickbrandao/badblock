@@ -84,4 +84,4 @@ das specs: aponte o arquivo.
 | `roothints` | [specs/fontes/roothints/](specs/fontes/roothints/README.md) | `collector-roothints` | `api-roothints` |
 | `rootzone` | [specs/fontes/rootzone/](specs/fontes/rootzone/README.md) | `collector-rootzone` | `api-rootzone` |
 | `rdns` | [specs/fontes/rdns/](specs/fontes/rdns/README.md) | `collector-rdns` (sonda ativa, [padrão](specs/padroes/sonda.md)) | `api-rdns` |
-| `registrobr/rdapnum` (só specs) | [specs/fontes/registrobr/rdapnum/](specs/fontes/registrobr/rdapnum/README.md) | `collector-registrobr-rdapnum` (sonda ativa) | `api-registrobr-rdapnum` |
+| `registrobr/rdapnum` | [specs/fontes/registrobr/rdapnum/](specs/fontes/registrobr/rdapnum/README.md) | `collector-registrobr-rdapnum` (sonda ativa) | `api-registrobr-rdapnum` |

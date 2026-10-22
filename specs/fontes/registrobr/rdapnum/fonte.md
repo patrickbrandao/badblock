@@ -195,8 +195,10 @@ de [dados-processados.md](dados-processados.md#mapeamento-resposta--colunas):
 ## Fixtures
 
 Em `apps/registrobr/rdapnum/collector/testdata/`, respostas **reais** de
-2026-10-21 com os **dados de pessoas físicas trocados** (nome por `CONTATO
-EXEMPLO`, e-mail por `contato@example.com`, o IP do aviso por `192.0.2.1`)
+2026-10-21 com os **dados de pessoas físicas trocados** (o `fn` dos vCards
+`individual` por `CONTATO EXEMPLO`, o e-mail deles por `contato@example.com`,
+o `legalRepresentative` por `REPRESENTANTE EXEMPLO`, o IP do aviso por
+`192.0.2.1`)
 — o repositório é público ([../../../plataforma/seguranca.md](../../../plataforma/seguranca.md)).
 Dados de empresas (razão social, CNPJ) e do NIC.br ficam como vieram:
 
@@ -210,7 +212,17 @@ Dados de empresas (razão social, CNPJ) e do NIC.br ficam como vieram:
 | `ip-2804-8ae0--32.json` | bloco IPv6 com delegação reversa |
 | `ip-187.87.28.0-22.json` | bloco sem delegação reversa |
 
-Sintéticas, ao lado, para o que o real não garante: faixa reversa que não é
-CIDR, entidade sem vCard, `events` ausente, JSON inválido e
-`objectClassName` trocado. Os testes que usam cada uma:
-[collector.md](collector.md#testes-específicos).
+Sintéticas, ao lado, para o que o real não garante (blocos e ASNs de
+documentação, CNPJ fictício `11.111.111/0001-11`):
+
+| Arquivo | O que é |
+|---|---|
+| `synthetic-ip-reverse-not-cidr.json` | bloco com uma faixa reversa que não é CIDR (`prefix` NULL) e outra que é, nameserver sem `events` |
+| `synthetic-ip-block-not-cidr.json` | bloco cuja faixa não é CIDR, sem `cidr0_cidrs`: o processamento recusa |
+| `synthetic-autnum-no-vcard.json` | ASN sem `events`, titular sem vCard, entidade sem `handle` (ignorada), `fn` vazio e e-mail com espaços e maiúsculas |
+| `synthetic-invalid.json` | JSON cortado no meio |
+| `synthetic-wrong-class.json` | `objectClassName` `domain` |
+
+Os testes que usam cada uma: [collector.md](collector.md#testes-específicos);
+um teste do `parse` confere que nenhuma fixture tem nome de pessoa física
+ou e-mail fora de `example.com`.

@@ -1,0 +1,57 @@
+# collector-registrobr-rdapnum: consulta o RDAP do registro.br de cada ASN e
+# bloco do cgibr para as tabelas registrobr_rdapnum_* do PostgreSQL. Sonda
+# ativa: deriva os alvos do cgibr, consulta a rate_limit por MINUTO, guarda a
+# resposta crua com histórico, processa e atende a atualização pedida pela
+# api-registrobr-rdapnum pelo Valkey.
+#
+# Sobe junto com o resto pelo compose da raiz (include) ou sozinho, a partir
+# desta pasta, com um .env próprio (copie o .env.example) — também noutro
+# host, com outro proxy, e POSTGRES_URL/REDIS_URL que alcancem o host
+# principal pelo caminho de rede do operador. Não tem porta nem API HTTP.
+#
+# Sem container_name e com deploy.replicas: roda em várias instâncias, que
+# dividem a fila de alvos pelo Postgres. Réplicas com o mesmo .env saem pelo
+# mesmo proxy; para proxies diferentes, uma pasta (projeto compose) por proxy.
+# Sem proxy, mais de 8 consultas/min de um IP vêm truncadas.
+#
+# A imagem vem do Docker Hub; se a tag não existir lá, o compose gera a imagem
+# a partir do código desta pasta.
+
+name: badblock-collector-registrobr-rdapnum
+
+services:
+  collector-registrobr-rdapnum:
+    image: ${DOCKERHUB_NAMESPACE:-tmsoftbrasil}/badblock-collector-registrobr-rdapnum:${COLLECTOR_REGISTROBR_RDAPNUM_TAG:-latest}
+    build:
+      context: .
+      args:
+        VERSION: ${COLLECTOR_REGISTROBR_RDAPNUM_TAG:-dev}
+    restart: unless-stopped
+    deploy:
+      replicas: ${COLLECTOR_REGISTROBR_RDAPNUM_REPLICAS:-1}
+    environment:
+      # Usuário postgres no banco badblock. Senhas só com letras e números.
+      POSTGRES_URL: ${POSTGRES_URL:-postgres://postgres:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}@badblock-postgres:5432/badblock?sslmode=disable}
+      # Fila de atualização pedida pela API (vazia desliga).
+      REDIS_URL: ${COLLECTOR_REGISTROBR_RDAPNUM_REDIS_URL:-redis://:${VALKEY_PASSWORD:-}@badblock-valkey:6379/0}
+      # Proxy de saída que roda o IP; leva senha, nunca no git.
+      PROXY_URL: ${COLLECTOR_REGISTROBR_RDAPNUM_PROXY_URL:-}
+      RATE_LIMIT: ${COLLECTOR_REGISTROBR_RDAPNUM_RATE_LIMIT:-32}
+      SCAN_INTERVAL: ${COLLECTOR_REGISTROBR_RDAPNUM_SCAN_INTERVAL:-168h}
+      SOURCES: ${COLLECTOR_REGISTROBR_RDAPNUM_SOURCES:-cgibr}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_FORMAT: json
+    networks: [badblock]
+    labels:
+      # O Traefik do servidor publica todo container por padrão.
+      traefik.enable: "false"
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+networks:
+  badblock:
+    name: badblock
+    external: true

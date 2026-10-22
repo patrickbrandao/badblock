@@ -1,0 +1,2306 @@
+openapi: 3.1.0
+info:
+  title: api-registrobr-rdapnum
+  version: '0.1.0'
+  summary: RDAP do registro.br por ASN e bloco, coletado pelo BadBlock.
+  description: |
+    API HTTP (JSON), pública, do RDAP do registro.br (`https://rdap.registro.br/`)
+    de cada ASN e bloco IP brasileiro. Não há arquivo publicado: o
+    `collector-registrobr-rdapnum` é uma sonda ativa que consulta o RDAP de
+    cada alvo — os ASNs e blocos do `cgibr` (NIC.br) e os que o administrador
+    cadastra —, guarda a resposta crua com histórico e a processa em titular
+    (com CNPJ e representante legal), contatos (com nome e e-mail), blocos e
+    delegações reversas, nas tabelas `registrobr_rdapnum_*` do PostgreSQL.
+    Esta API lê essas tabelas.
+
+    - Cada alvo é coletado de novo a cada 7 dias (`scan_interval`). O
+      registro.br **trunca** as respostas de quem consulta demais (tira
+      e-mails, endereços e o CNPJ e responde 200 mesmo assim); o coletor
+      detecta a truncagem e nunca deixa a resposta truncada virar o dado
+      processado: o que esta API serve é sempre o da última resposta
+      completa. `scan.last_result` `truncated` com `scan.checked_at` antigo
+      quer dizer exatamente isso.
+    - O bloco `scan` de cada resposta de dados é o alvo que gerou o objeto e o
+      estado da coleta dele; `scan.checked_at` é a data do dado.
+    - Cache sem versão de dataset: o dado muda um alvo de cada vez, o dia
+      inteiro, então a resposta em cache pode ter até 5 min (`REDIS_KEY_TTL`)
+      de atraso em relação ao banco. O ETag é o hash do corpo; não existe
+      `X-Dataset-Version`.
+    - `POST .../refresh` pede uma nova coleta do alvo: entra numa fila que o
+      coletor atende antes da fila normal, na taxa normal, sem prazo
+      garantido. Responde 202 na hora; o resultado aparece em
+      `scan.checked_at` (até 5 min depois, pelo cache). No Traefik, o `POST`
+      tem rate limit próprio, mais apertado (6 por minuto por IP, rajada 3).
+    - Aviso de uso do NIC.br: "Distribution, commercialization, reproduction,
+      and use for advertising or similar purposes are expressly prohibited".
+      Os dados, inclusive contatos e e-mails, são servidos por decisão do
+      mantenedor (decisão #42 das specs). O IP de saída do coletor nunca
+      aparece: a resposta crua sai sem a linha `<hora> - <ip>` do aviso.
+    - A API é dona de tudo abaixo do caminho de base (`BASE_PATH`, padrão
+      `/registrobr/rdapnum`), que já está nos `servers`. As rotas de dados
+      respondem sem versão (versão atual, hoje v1) e no servidor
+      `.../registrobr/rdapnum/v1` (v1 fixa), com o mesmo conteúdo, a mesma
+      chave de cache e o mesmo ETag.
+    - Saúde (`/health`, `/status`, `/ping`) e este manifesto (`/openapi.yaml`)
+      ficam fora do versionamento: só existem nos servidores sem `/v1`.
+    - Toda rota `GET` também responde `HEAD`; `OPTIONS` em qualquer caminho
+      responde o preflight de CORS (204, com `GET, HEAD, POST, OPTIONS`).
+    - Todas as respostas levam `X-Content-Type-Options: nosniff`,
+      `Referrer-Policy: no-referrer`, `Access-Control-Allow-Origin`
+      (`CORS_ORIGIN`, padrão `*`), `Access-Control-Expose-Headers: ETag,
+      X-Cache, X-Response-UUID` e `Server: badblock-api-registrobr-rdapnum/<versão>`.
+    - Erros são sempre JSON `{"error": {"code", "message"}}` com
+      `Cache-Control: no-store`. O caminho de base sem barra redireciona (301)
+      para o índice; qualquer outro caminho inexistente responde 404
+      `not_found`.
+    - Sem chave de acesso; o Traefik aplica rate limit por IP.
+  license:
+    name: MIT
+    identifier: MIT
+externalDocs:
+  description: Especificações da fonte (fonte da verdade)
+  url: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/registrobr/rdapnum
+servers:
+  - url: https://api.badblock.net.br/registrobr/rdapnum
+    description: Produção, versão atual (hoje v1)
+  - url: https://api.badblock.net.br/registrobr/rdapnum/v1
+    description: Produção, v1 fixa (só rotas de dados)
+  - url: http://127.0.0.1:8114/registrobr/rdapnum
+    description: Desenvolvimento local, versão atual (porta API_REGISTROBR_RDAPNUM_HOST_PORT no loopback)
+  - url: http://127.0.0.1:8114/registrobr/rdapnum/v1
+    description: Desenvolvimento local, v1 fixa (só rotas de dados)
+tags:
+  - name: dados
+    description: ASN, bloco, documento e contato processados, cacheados no Valkey e com ETag.
+  - name: cru
+    description: A resposta RDAP como o registro.br mandou (sem o IP de saída) e o histórico dela.
+  - name: atualização
+    description: Pedido de nova coleta de um alvo (202, sem espera).
+  - name: meta
+    description: Índice, estado da coleta e este manifesto.
+  - name: saúde
+    description: Verificações de saúde, fora do versionamento.
+paths:
+  /:
+    get:
+      operationId: getIndex
+      summary: Índice da API
+      description: >-
+        Nome do app, versão do build, caminho de base, versões da API, lista
+        de rotas `GET`, a spec da fonte (`source`), o serviço consultado
+        (`upstream`) e as fontes de onde vêm os alvos derivados
+        (`derived_from`). Não consulta o banco.
+      tags: [meta]
+      responses:
+        '200':
+          description: Índice.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexResponse'
+              example:
+                app: api-registrobr-rdapnum
+                version: 0.1.0
+                base_path: /registrobr/rdapnum
+                versions: [v1]
+                endpoints:
+                  - /registrobr/rdapnum/asn/{asn}
+                  - /registrobr/rdapnum/asn/{asn}/raw
+                  - /registrobr/rdapnum/asn/{asn}/history
+                  - /registrobr/rdapnum/ip/{ip}
+                  - /registrobr/rdapnum/prefix/{ip}/{len}
+                  - /registrobr/rdapnum/prefix/{ip}/{len}/raw
+                  - /registrobr/rdapnum/prefix/{ip}/{len}/history
+                  - /registrobr/rdapnum/document/{document}
+                  - /registrobr/rdapnum/contact/{handle}
+                  - /registrobr/rdapnum/response/{uuid}
+                  - /registrobr/rdapnum/meta
+                  - /registrobr/rdapnum/status
+                  - /registrobr/rdapnum/openapi.yaml
+                source: https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/registrobr/rdapnum
+                upstream: https://rdap.registro.br/
+                derived_from: [cgibr]
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /asn/{asn}:
+    get:
+      operationId: getASN
+      summary: Um ASN com titular, contatos e blocos
+      description: >-
+        O ASN processado da última resposta completa: titular (com CNPJ e
+        representante legal), contatos do ASN e do titular (um item por
+        handle e `via`, com os papéis) e os blocos registrados com esse ASN.
+        Um alvo ainda sem dado processado (nunca coletado, ou 404 no
+        registro.br) responde 200 com os campos do ASN `null`, `contacts` e
+        `networks` vazios e o `scan`, que diz o porquê. Fora dos alvos: 404.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/ASN'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Alvo do rdapnum.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ASNResponse'
+              examples:
+                processado:
+                  summary: ASN com dado processado (AS61610, 2026-10-21; contato pessoa física trocado)
+                  value:
+                    asn: 61610
+                    handle: '61610'
+                    name: ASN61610
+                    type: DIRECT ALLOCATION
+                    country: BR
+                    registered_at: '2023-02-27T15:58:28Z'
+                    changed_at: '2023-02-27T15:58:28Z'
+                    registrant:
+                      handle: '35980592000130'
+                      kind: org
+                      name: ELEA DATA CENTERS
+                      email: null
+                      country: BR
+                      document: 35.980.592/0001-30
+                      document_type: cnpj
+                      document_digits: '35980592000130'
+                      legal_representative: REPRESENTANTE EXEMPLO
+                      registered_at: '2023-02-06T21:58:30Z'
+                      changed_at: '2026-04-22T15:11:18Z'
+                    contacts:
+                      - handle: ROBEL308
+                        kind: individual
+                        name: CONTATO EXEMPLO
+                        email: contato@example.com
+                        country: BR
+                        document: null
+                        document_type: null
+                        document_digits: null
+                        legal_representative: null
+                        registered_at: '2023-02-08T17:39:14Z'
+                        changed_at: '2026-07-07T18:30:11Z'
+                        roles: [abuse, administrative]
+                        via: null
+                      - handle: ROBEL308
+                        kind: individual
+                        name: CONTATO EXEMPLO
+                        email: contato@example.com
+                        country: BR
+                        document: null
+                        document_type: null
+                        document_digits: null
+                        legal_representative: null
+                        registered_at: '2023-02-08T17:39:14Z'
+                        changed_at: '2026-07-07T18:30:11Z'
+                        roles: [administrative]
+                        via: '35980592000130'
+                    networks:
+                      - prefix: 187.87.28.0/22
+                        type: ALLOCATED
+                        status: [active]
+                      - prefix: 200.225.48.0/21
+                        type: ALLOCATED
+                        status: [active]
+                      - prefix: 2804:8ae0::/32
+                        type: ALLOCATED
+                        status: [active]
+                    scan:
+                      kind: asn
+                      target: '61610'
+                      source: cgibr
+                      active: true
+                      checked_at: '2026-10-21T20:36:01Z'
+                      attempted_at: '2026-10-21T20:36:01Z'
+                      last_result: complete
+                      retry_at: null
+                      response: 019a0a4e-7c11-7a3e-9b51-6d1c0e7b2a10
+                nunca_coletado:
+                  summary: Alvo estático ainda não coletado
+                  value:
+                    asn: 64500
+                    handle: null
+                    name: null
+                    type: null
+                    country: null
+                    registered_at: null
+                    changed_at: null
+                    registrant: null
+                    contacts: []
+                    networks: []
+                    scan:
+                      kind: asn
+                      target: '64500'
+                      source: static
+                      active: true
+                      checked_at: null
+                      attempted_at: null
+                      last_result: null
+                      retry_at: null
+                      response: null
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /asn/{asn}/raw:
+    get:
+      operationId: getASNRaw
+      summary: A resposta RDAP atual do ASN
+      description: >-
+        O corpo RDAP da resposta atual do alvo (a do dado processado), como o
+        registro.br mandou, com `Content-Type: application/rdap+json`, menos
+        as linhas de `notices[*].description` no formato `<hora> - <ip>` (o IP
+        de saída do coletor). Sem resposta atual (nunca coletado, ou 404 no
+        registro.br): 404.
+      tags: [cru]
+      parameters:
+        - $ref: '#/components/parameters/ASN'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/Raw'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /asn/{asn}/history:
+    get:
+      operationId: getASNHistory
+      summary: O histórico das respostas do ASN
+      description: >-
+        Todas as versões da resposta do alvo, a mais nova primeiro (uma versão
+        nova só quando o corpo mudou), com o resultado, o hash, o tamanho, as
+        datas e se foi processada. Sem o IP de saída nem a hora do servidor.
+      tags: [cru]
+      parameters:
+        - $ref: '#/components/parameters/ASN'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/History'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /asn/{asn}/refresh:
+    post:
+      operationId: refreshASN
+      summary: Pede uma nova coleta do ASN
+      description: >-
+        Põe o alvo na fila de atualização do Valkey e responde 202 na hora,
+        sem esperar a coleta. Coletado há menos de `REFRESH_MIN_AGE` (10 min):
+        `queued` false, `reason` `recent`. Pedido do mesmo alvo há menos de
+        60 s: `reason` `already_queued`. Alvo desativado: 409. Valkey fora ou
+        fila acima de `REFRESH_QUEUE_MAX` (1000): 503. O corpo da requisição
+        é ignorado. O cache não é apagado: o dado novo aparece quando a chave
+        vence (até 5 min depois da coleta).
+      tags: [atualização]
+      parameters:
+        - $ref: '#/components/parameters/ASN'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/RefreshUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /ip/{ip}:
+    get:
+      operationId: getIP
+      summary: O bloco registrado que contém um IP
+      description: >-
+        O bloco registrado mais específico que contém o IP (consultado como
+        `/32` ou `/128`), com titular, contatos, delegações reversas e o
+        `scan` do alvo que o gerou. Fora de qualquer bloco: 404.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/IP'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/Network'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /prefix/{ip}/{len}:
+    get:
+      operationId: getPrefix
+      summary: O bloco registrado que contém um prefixo
+      description: >-
+        O bloco registrado mais específico que contém o prefixo pedido (bits
+        de host zerados: `/prefix/200.225.48.77/24` consulta
+        `200.225.48.0/24`), como em `/ip`. O bloco devolvido pode ser maior
+        que o pedido.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/PrefixIP'
+        - $ref: '#/components/parameters/PrefixLength'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/Network'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /prefix/{ip}/{len}/raw:
+    get:
+      operationId: getPrefixRaw
+      summary: A resposta RDAP atual do alvo de um bloco
+      description: >-
+        Como `/asn/{asn}/raw`. O alvo é o que tem esse bloco exato ou, sem
+        ele, o alvo que gerou o bloco registrado que contém o pedido.
+      tags: [cru]
+      parameters:
+        - $ref: '#/components/parameters/PrefixIP'
+        - $ref: '#/components/parameters/PrefixLength'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/Raw'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /prefix/{ip}/{len}/history:
+    get:
+      operationId: getPrefixHistory
+      summary: O histórico das respostas do alvo de um bloco
+      description: Como `/asn/{asn}/history`, com o alvo achado como em `/prefix/{ip}/{len}/raw`.
+      tags: [cru]
+      parameters:
+        - $ref: '#/components/parameters/PrefixIP'
+        - $ref: '#/components/parameters/PrefixLength'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          $ref: '#/components/responses/History'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /prefix/{ip}/{len}/refresh:
+    post:
+      operationId: refreshPrefix
+      summary: Pede uma nova coleta do alvo de um bloco
+      description: >-
+        Como `POST /asn/{asn}/refresh`. O alvo é o que tem esse bloco exato
+        ou, sem ele, o alvo que gerou o bloco registrado que contém o pedido;
+        `target` na resposta é o bloco do alvo.
+      tags: [atualização]
+      parameters:
+        - $ref: '#/components/parameters/PrefixIP'
+        - $ref: '#/components/parameters/PrefixLength'
+      responses:
+        '202':
+          $ref: '#/components/responses/Accepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/RefreshUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /document/{document}:
+    get:
+      operationId: getDocument
+      summary: Tudo de um CNPJ ou CPF
+      description: >-
+        As entidades com o documento (em geral uma) e os ASNs e blocos em que
+        alguma delas é titular. O documento pode vir com ou sem pontuação
+        (`35.980.592/0001-30` ou `35980592000130`; a barra pode ir crua ou
+        como `%2F`); os dígitos têm de ser 14 (CNPJ) ou 11 (CPF).
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/Document'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Documento com alguma entidade no rdapnum.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+              example:
+                document_digits: '35980592000130'
+                document_type: cnpj
+                entities:
+                  - handle: '35980592000130'
+                    kind: org
+                    name: ELEA DATA CENTERS
+                    email: null
+                    country: BR
+                    document: 35.980.592/0001-30
+                    document_type: cnpj
+                    document_digits: '35980592000130'
+                    legal_representative: REPRESENTANTE EXEMPLO
+                    registered_at: '2023-02-06T21:58:30Z'
+                    changed_at: '2026-04-22T15:11:18Z'
+                asns:
+                  - asn: 61610
+                    name: ASN61610
+                    scan:
+                      checked_at: '2026-10-21T20:36:01Z'
+                networks:
+                  - prefix: 187.87.28.0/22
+                    asn: 61610
+                    type: ALLOCATED
+                    status: [active]
+                  - prefix: 200.225.48.0/21
+                    asn: 61610
+                    type: ALLOCATED
+                    status: [active]
+                  - prefix: 2804:8ae0::/32
+                    asn: 61610
+                    type: ALLOCATED
+                    status: [active]
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /contact/{handle}:
+    get:
+      operationId: getContact
+      summary: Um contato e os objetos em que aparece
+      description: >-
+        A entidade de um handle (comparação exata; o registro.br usa
+        maiúsculas) e os ASNs e blocos em que ela aparece, um item por objeto
+        e `via`, com os papéis.
+      tags: [dados]
+      parameters:
+        - $ref: '#/components/parameters/Handle'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: Entidade do rdapnum.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContactResponse'
+              example:
+                entity:
+                  handle: ROBEL308
+                  kind: individual
+                  name: CONTATO EXEMPLO
+                  email: contato@example.com
+                  country: BR
+                  document: null
+                  document_type: null
+                  document_digits: null
+                  legal_representative: null
+                  registered_at: '2023-02-08T17:39:14Z'
+                  changed_at: '2026-07-07T18:30:11Z'
+                objects:
+                  - kind: asn
+                    asn: 61610
+                    prefix: null
+                    roles: [abuse, administrative]
+                    via: null
+                  - kind: asn
+                    asn: 61610
+                    prefix: null
+                    roles: [administrative]
+                    via: '35980592000130'
+                  - kind: prefix
+                    asn: null
+                    prefix: 187.87.28.0/22
+                    roles: [administrative]
+                    via: '35980592000130'
+                  - kind: prefix
+                    asn: null
+                    prefix: 200.225.48.0/21
+                    roles: [abuse, technical]
+                    via: null
+                  - kind: prefix
+                    asn: null
+                    prefix: 200.225.48.0/21
+                    roles: [administrative]
+                    via: '35980592000130'
+                  - kind: prefix
+                    asn: null
+                    prefix: 2804:8ae0::/32
+                    roles: [abuse, technical]
+                    via: null
+                  - kind: prefix
+                    asn: null
+                    prefix: 2804:8ae0::/32
+                    roles: [administrative]
+                    via: '35980592000130'
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /response/{uuid}:
+    get:
+      operationId: getResponse
+      summary: Uma versão do histórico
+      description: >-
+        Uma versão da resposta pelo `uuid` (do histórico ou de `scan.response`),
+        com a mesma regra de `/raw`: corpo RDAP sem a linha do IP de saída.
+        Pode ser uma versão truncada (o histórico guarda todas). Uma versão
+        `not_found` responde 200 com `{"result": "not_found", "http_status":
+        404}`. O `uuid` é imutável: `Cache-Control: public, max-age=86400`.
+      tags: [cru]
+      parameters:
+        - $ref: '#/components/parameters/ResponseUUID'
+        - $ref: '#/components/parameters/IfNoneMatch'
+      responses:
+        '200':
+          description: A versão pedida.
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlImmutable'
+            X-Cache:
+              $ref: '#/components/headers/XCache'
+            X-Response-UUID:
+              $ref: '#/components/headers/XResponseUUID'
+            Last-Modified:
+              $ref: '#/components/headers/LastModified'
+          content:
+            application/rdap+json:
+              schema:
+                $ref: '#/components/schemas/RawResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotFoundResponse'
+              example:
+                result: not_found
+                http_status: 404
+        '304':
+          $ref: '#/components/responses/NotModified'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/DataUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /meta:
+    get:
+      operationId: getMeta
+      summary: Estado da coleta
+      description: >-
+        Resumo dos alvos (fila, vencidos, em espera, último resultado), das
+        respostas guardadas, das tabelas processadas, a configuração em
+        `registrobr_rdapnum_config`, a última derivação aplicada, as
+        instâncias do coletor com sinal nas últimas 24 h (sem o IP de saída),
+        a linha dele em `jobs` e o tamanho da fila de atualização. Consulta o
+        banco a cada requisição (sem cache, sem ETag) e responde 200 mesmo
+        antes do primeiro alvo.
+      tags: [meta]
+      responses:
+        '200':
+          description: Estado da coleta.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
+              examples:
+                carregado:
+                  summary: Com a primeira derivação feita (formato)
+                  value:
+                    app: api-registrobr-rdapnum
+                    version: 0.1.0
+                    targets:
+                      total: 31125
+                      asn: 9134
+                      prefix: 21991
+                      active: 31125
+                      static: 0
+                      never_scanned: 30200
+                      overdue: 0
+                      rescan: 1
+                      scanning: 2
+                      waiting: 3
+                      oldest_scan_at: '2026-10-21T20:36:01Z'
+                      complete: 900
+                      truncated: 3
+                      not_found: 20
+                      error: 2
+                    responses:
+                      total: 930
+                      complete: 900
+                      truncated: 10
+                      not_found: 20
+                      pending: 0
+                      process_errors: 0
+                    data:
+                      autnum: 300
+                      network: 600
+                      entity: 1200
+                      reverse: 450
+                    config:
+                      rate_limit: null
+                      scan_interval: null
+                    derivations:
+                      - source: cgibr
+                        version: 019a0a00-1b2c-7d3e-8f40-516273849a0b
+                        source_version: 019a09f0-2c3d-7e4f-9051-62738495a6b7
+                        source_updated_at: '2026-10-21T03:00:00Z'
+                        created_at: '2026-10-21T03:05:00Z'
+                        asns: 9134
+                        prefixes: 21991
+                        inserted: 31125
+                        not_in_source: 0
+                    workers:
+                      - host: 1f2e3d4c5b6a
+                        version: 0.1.0
+                        started_at: '2026-10-21T19:00:00Z'
+                        seen_at: '2026-10-21T21:00:00Z'
+                        alive: true
+                        rate_limit: 32
+                        proxy: true
+                        requests: 935
+                        complete: 900
+                        truncated: 10
+                        not_found: 20
+                        errors: 5
+                        refreshes: 2
+                        egress_ips: 37
+                        paused_until: null
+                    collector:
+                      app: collector-registrobr-rdapnum
+                      last_sync_at: '2026-10-21T20:36:01Z'
+                      last_check_at: '2026-10-21T21:00:00Z'
+                      consolidated: false
+                    refresh:
+                      queue: 0
+                vazio:
+                  summary: Antes do primeiro alvo, sem Valkey
+                  value:
+                    app: api-registrobr-rdapnum
+                    version: 0.1.0
+                    targets:
+                      total: 0
+                      asn: 0
+                      prefix: 0
+                      active: 0
+                      static: 0
+                      never_scanned: 0
+                      overdue: 0
+                      rescan: 0
+                      scanning: 0
+                      waiting: 0
+                      oldest_scan_at: null
+                      complete: 0
+                      truncated: 0
+                      not_found: 0
+                      error: 0
+                    responses:
+                      total: 0
+                      complete: 0
+                      truncated: 0
+                      not_found: 0
+                      pending: 0
+                      process_errors: 0
+                    data:
+                      autnum: 0
+                      network: 0
+                      entity: 0
+                      reverse: 0
+                    config:
+                      rate_limit: null
+                      scan_interval: null
+                    derivations: []
+                    workers: []
+                    collector: null
+                    refresh:
+                      queue: null
+        '503':
+          $ref: '#/components/responses/DatabaseUnavailable'
+        '504':
+          $ref: '#/components/responses/Timeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /health:
+    servers:
+      - url: https://api.badblock.net.br/registrobr/rdapnum
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8114/registrobr/rdapnum
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getHealth
+      summary: Saúde da API
+      description: >-
+        Confere o PostgreSQL, o Valkey e se já há algum alvo cadastrado. Mesma
+        resposta de `/status`. Sem cache. Precedência: `error` (PostgreSQL
+        fora) > `degraded` (Valkey fora) > `starting` (sem alvos) > `ok`.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postHealth
+      summary: Saúde da API (POST)
+      description: Igual ao `GET /health`; o corpo da requisição é ignorado.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /status:
+    servers:
+      - url: https://api.badblock.net.br/registrobr/rdapnum
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8114/registrobr/rdapnum
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getStatus
+      summary: Estado da API
+      description: >-
+        Confere o PostgreSQL, o Valkey e se já há algum alvo cadastrado. Mesma
+        resposta de `/health`. Sem cache.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postStatus
+      summary: Estado da API (POST)
+      description: Igual ao `GET /status`; o corpo da requisição é ignorado.
+      tags: [saúde]
+      responses:
+        '200':
+          $ref: '#/components/responses/StatusOK'
+        '503':
+          $ref: '#/components/responses/StatusError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /ping:
+    servers:
+      - url: https://api.badblock.net.br/registrobr/rdapnum
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8114/registrobr/rdapnum
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: ping
+      summary: Ping
+      description: >-
+        Responde o texto `pong` sem consultar nada. É o healthcheck do Docker
+        (`api-registrobr-rdapnum healthcheck`) e fica fora do log de acesso.
+      tags: [saúde]
+      responses:
+        '200':
+          description: Processo no ar.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlNoStore'
+          content:
+            text/plain:
+              schema:
+                type: string
+                const: pong
+              example: pong
+  /openapi.yaml:
+    servers:
+      - url: https://api.badblock.net.br/registrobr/rdapnum
+        description: Produção (fora do versionamento)
+      - url: http://127.0.0.1:8114/registrobr/rdapnum
+        description: Desenvolvimento local (fora do versionamento)
+    get:
+      operationId: getOpenAPI
+      summary: Manifesto OpenAPI
+      description: >-
+        Este manifesto (OpenAPI 3.1), embutido no binário: o mesmo conteúdo de
+        `openapi/openapi.yaml` no repositório. Não consulta o banco nem o
+        Valkey.
+      tags: [meta]
+      responses:
+        '200':
+          description: Manifesto em YAML.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/CacheControlPublic'
+          content:
+            application/yaml:
+              schema:
+                type: string
+components:
+  parameters:
+    ASN:
+      name: asn
+      in: path
+      required: true
+      description: >-
+        Número do ASN, de 0 a 4294967295, com ou sem `AS`/`as` na frente
+        (`61610`, `AS61610`). O resto responde 400 `ASN inválido`.
+      schema:
+        type: string
+        pattern: '^(AS|as)?[0-9]+$'
+      example: '61610'
+    IP:
+      name: ip
+      in: path
+      required: true
+      description: >-
+        Endereço IPv4 ou IPv6. O IPv4 mapeado em IPv6 (`::ffff:200.225.48.10`)
+        vira IPv4. Inválido responde 400 `endereço IP inválido`.
+      schema:
+        type: string
+        format: ip
+      example: 200.225.48.10
+    PrefixIP:
+      name: ip
+      in: path
+      required: true
+      description: >-
+        Endereço do prefixo, IPv4 ou IPv6 (as mesmas regras de `ip`). Os bits
+        de host são zerados (`200.225.48.77/24` vira `200.225.48.0/24`).
+      schema:
+        type: string
+        format: ip
+      example: 200.225.48.0
+    PrefixLength:
+      name: len
+      in: path
+      required: true
+      description: >-
+        Tamanho do prefixo: de 0 a 32 (IPv4) ou de 0 a 128 (IPv6). Fora da
+        faixa ou não numérico responde 400 `tamanho de prefixo inválido`.
+      schema:
+        type: integer
+        minimum: 0
+        maximum: 128
+      example: 24
+    Document:
+      name: document
+      in: path
+      required: true
+      description: >-
+        CNPJ ou CPF, com ou sem pontuação (`.`, `/`, `-`); os dígitos têm de
+        ser 14 ou 11. O resto responde 400 `documento inválido: use CNPJ (14
+        dígitos) ou CPF (11)`.
+      schema:
+        type: string
+      example: '35980592000130'
+    Handle:
+      name: handle
+      in: path
+      required: true
+      description: >-
+        Handle da entidade: de 1 a 64 caracteres `[A-Za-z0-9._-]`. O resto
+        responde 400 `handle inválido`.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._-]{1,64}$'
+      example: ROBEL308
+    ResponseUUID:
+      name: uuid
+      in: path
+      required: true
+      description: '`uuid` de uma versão da resposta (do histórico). Inválido responde 400 `uuid inválido`.'
+      schema:
+        type: string
+        format: uuid
+      example: 019a0a4e-7c11-7a3e-9b51-6d1c0e7b2a10
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: >-
+        ETag de uma resposta anterior (lista separada por vírgula, ou `*`; a
+        comparação ignora o `W/`). Se bater com o ETag do corpo atual, responde
+        304 sem corpo. O corpo é lido do cache (ou do banco) para comparar.
+      schema:
+        type: string
+      example: W/"625c765155159382"
+  headers:
+    ETag:
+      description: >-
+        ETag fraco, `W/"<hash>"`: o FNV-1a de 64 bits do corpo, em
+        hexadecimal minúsculo. Muda quando o corpo muda.
+      schema:
+        type: string
+      example: W/"625c765155159382"
+    CacheControlPublic:
+      description: Resposta cacheável por 5 minutos.
+      schema:
+        type: string
+        const: public, max-age=300
+      example: public, max-age=300
+    CacheControlImmutable:
+      description: Uma versão do histórico não muda; cacheável por um dia.
+      schema:
+        type: string
+        const: public, max-age=86400
+      example: public, max-age=86400
+    CacheControlNoStore:
+      description: Resposta que não deve ser guardada em cache.
+      schema:
+        type: string
+        const: no-store
+      example: no-store
+    XCache:
+      description: >-
+        Origem da resposta: `HIT` (Valkey), `MISS` (lida do banco agora e
+        guardada no Valkey) ou `BYPASS` (cache desligado, ou o `POST` de
+        atualização). No 304, de onde veio o corpo comparado.
+      schema:
+        type: string
+        enum: [HIT, MISS, BYPASS]
+      example: MISS
+    XResponseUUID:
+      description: '`uuid` da versão da resposta servida.'
+      schema:
+        type: string
+        format: uuid
+      example: 019a0a4e-7c11-7a3e-9b51-6d1c0e7b2a10
+    LastModified:
+      description: Última vez que essa versão chegou igual do registro.br (`last_seen_at`).
+      schema:
+        type: string
+      example: Wed, 21 Oct 2026 20:36:01 GMT
+  responses:
+    NotModified:
+      description: O ETag enviado em `If-None-Match` é o do corpo atual; sem corpo.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+    Network:
+      description: Bloco registrado que contém o pedido.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NetworkResponse'
+          example:
+            query: 200.225.48.0/24
+            prefix: 200.225.48.0/21
+            start_address: 200.225.48.0
+            end_address: 200.225.55.255
+            ip_version: 4
+            handle: 200.225.48.0/21
+            name: '462539'
+            type: ALLOCATED
+            country: BR
+            status: [active]
+            parent_handle: null
+            asn: 61610
+            registered_at: '1999-11-18T12:00:00Z'
+            changed_at: '2023-07-19T11:05:57Z'
+            registrant:
+              handle: '35980592000130'
+              kind: org
+              name: ELEA DATA CENTERS
+              email: null
+              country: BR
+              document: 35.980.592/0001-30
+              document_type: cnpj
+              document_digits: '35980592000130'
+              legal_representative: REPRESENTANTE EXEMPLO
+              registered_at: '2023-02-06T21:58:30Z'
+              changed_at: '2026-04-22T15:11:18Z'
+            contacts:
+              - handle: ROBEL308
+                kind: individual
+                name: CONTATO EXEMPLO
+                email: contato@example.com
+                country: BR
+                document: null
+                document_type: null
+                document_digits: null
+                legal_representative: null
+                registered_at: '2023-02-08T17:39:14Z'
+                changed_at: '2026-07-07T18:30:11Z'
+                roles: [abuse, technical]
+                via: null
+              - handle: ROBEL308
+                kind: individual
+                name: CONTATO EXEMPLO
+                email: contato@example.com
+                country: BR
+                document: null
+                document_type: null
+                document_digits: null
+                legal_representative: null
+                registered_at: '2023-02-08T17:39:14Z'
+                changed_at: '2026-07-07T18:30:11Z'
+                roles: [administrative]
+                via: '35980592000130'
+            reverse:
+              - prefix: 200.225.48.0/24
+                start_address: 200.225.48.0
+                end_address: 200.225.48.255
+                nameservers:
+                  - name: keenan.ns.cloudflare.com
+                    status: [ns aa]
+                    checked_at: '2026-10-21T12:00:00Z'
+                    last_ok_at: '2026-10-21T12:00:00Z'
+                  - name: sureena.ns.cloudflare.com
+                    status: [ns aa]
+                    checked_at: '2026-10-21T12:00:00Z'
+                    last_ok_at: '2026-10-21T12:00:00Z'
+                signed: false
+                registered_at: '2024-09-27T15:31:56Z'
+                changed_at: '2024-09-27T15:31:56Z'
+            scan:
+              kind: prefix
+              target: 200.225.48.0/21
+              source: cgibr
+              active: true
+              checked_at: '2026-10-21T20:36:01Z'
+              attempted_at: '2026-10-21T20:36:01Z'
+              last_result: complete
+              retry_at: null
+              response: 019a0a4e-8d22-7b4f-8c62-7e2d1f8c3b21
+    Raw:
+      description: >-
+        O corpo RDAP da resposta atual, como o registro.br mandou (chaves na
+        ordem guardada, JSON compacto), sem as linhas `<hora> - <ip>` de
+        `notices[*].description`.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+        X-Response-UUID:
+          $ref: '#/components/headers/XResponseUUID'
+        Last-Modified:
+          $ref: '#/components/headers/LastModified'
+      content:
+        application/rdap+json:
+          schema:
+            $ref: '#/components/schemas/RawResponse'
+          example:
+            objectClassName: autnum
+            handle: '61610'
+            startAutnum: 61610
+            endAutnum: 61610
+            name: ASN61610
+            type: DIRECT ALLOCATION
+            country: BR
+            notices:
+              - title: Use and Privacy Policy
+                description:
+                  - Copyright (c) Nic.br - Use of this data is governed by the Use and Privacy Policy. Distribution, commercialization, reproduction, and use for advertising or similar purposes are expressly prohibited.
+    History:
+      description: Histórico das respostas do alvo, a mais nova primeiro.
+      headers:
+        ETag:
+          $ref: '#/components/headers/ETag'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlPublic'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/HistoryResponse'
+          example:
+            target: '61610'
+            kind: asn
+            current: 019a0a4e-7c11-7a3e-9b51-6d1c0e7b2a10
+            responses:
+              - uuid: 019a0a4e-7c11-7a3e-9b51-6d1c0e7b2a10
+                result: complete
+                http_status: 200
+                sha256: 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08
+                bytes: 3412
+                fetched_at: '2026-10-21T20:36:01Z'
+                last_seen_at: '2026-10-21T20:36:01Z'
+                seen_count: 1
+                processed: true
+                process_error: null
+              - uuid: 019a0a10-0000-7000-8000-000000000001
+                result: truncated
+                http_status: 200
+                sha256: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
+                bytes: 2205
+                fetched_at: '2026-10-21T20:35:12Z'
+                last_seen_at: '2026-10-21T20:35:12Z'
+                seen_count: 1
+                processed: false
+                process_error: null
+    Accepted:
+      description: Pedido aceito; `queued` diz se entrou na fila.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+        X-Cache:
+          $ref: '#/components/headers/XCache'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/RefreshResponse'
+          examples:
+            queued:
+              summary: Entrou na fila
+              value:
+                kind: asn
+                target: '61610'
+                queued: true
+                reason: null
+                checked_at: '2026-10-21T20:36:01Z'
+            recent:
+              summary: Coletado há menos de REFRESH_MIN_AGE
+              value:
+                kind: prefix
+                target: 200.225.48.0/21
+                queued: false
+                reason: recent
+                checked_at: '2026-10-21T20:36:01Z'
+            already_queued:
+              summary: Pedido do mesmo alvo há menos de 60 s
+              value:
+                kind: asn
+                target: '61610'
+                queued: false
+                reason: already_queued
+                checked_at: '2026-10-21T20:36:01Z'
+    BadRequest:
+      description: Parâmetro inválido.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: ASN inválido
+              value:
+                error:
+                  code: bad_request
+                  message: ASN inválido
+            ip:
+              summary: IP inválido
+              value:
+                error:
+                  code: bad_request
+                  message: endereço IP inválido
+            prefix:
+              summary: Tamanho de prefixo inválido
+              value:
+                error:
+                  code: bad_request
+                  message: tamanho de prefixo inválido
+            document:
+              summary: Documento inválido
+              value:
+                error:
+                  code: bad_request
+                  message: 'documento inválido: use CNPJ (14 dígitos) ou CPF (11)'
+            handle:
+              summary: Handle inválido
+              value:
+                error:
+                  code: bad_request
+                  message: handle inválido
+            uuid:
+              summary: uuid inválido
+              value:
+                error:
+                  code: bad_request
+                  message: uuid inválido
+    NotFound:
+      description: Fora dos alvos, dos blocos ou das entidades do rdapnum.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            asn:
+              summary: ASN fora dos alvos
+              value:
+                error:
+                  code: not_found
+                  message: AS1 não é alvo do rdapnum
+            ip:
+              summary: IP fora dos blocos
+              value:
+                error:
+                  code: not_found
+                  message: 8.8.8.8 não está em nenhum bloco do rdapnum
+            document:
+              summary: Documento sem entidade
+              value:
+                error:
+                  code: not_found
+                  message: documento 11144477735 não encontrado no rdapnum
+            contact:
+              summary: Handle sem entidade
+              value:
+                error:
+                  code: not_found
+                  message: contato NINGUEM não encontrado no rdapnum
+            raw:
+              summary: Alvo sem resposta atual
+              value:
+                error:
+                  code: not_found
+                  message: AS64500 sem resposta coletada
+            response:
+              summary: Versão inexistente
+              value:
+                error:
+                  code: not_found
+                  message: resposta 019a0a4e-0000-7000-8000-000000000000 não encontrada
+    Conflict:
+      description: O alvo está desativado (`active` false); a atualização não vale para ele.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: target_inactive
+              message: AS64501 está desativado no rdapnum
+    RefreshUnavailable:
+      description: >-
+        A atualização está indisponível: sem Valkey (`REDIS_URL` vazia) ou
+        Valkey fora, ou a fila acima de `REFRESH_QUEUE_MAX`.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            valkey:
+              summary: Valkey fora
+              value:
+                error:
+                  code: refresh_unavailable
+                  message: 'atualização indisponível: Valkey fora do ar'
+            queue:
+              summary: Fila cheia
+              value:
+                error:
+                  code: refresh_unavailable
+                  message: fila de atualização cheia; tente mais tarde
+            database_unavailable:
+              summary: Falha no PostgreSQL ao achar o alvo
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DataUnavailable:
+      description: >-
+        Dados indisponíveis: nenhum alvo cadastrado ainda
+        (`dataset_not_ready`) ou o PostgreSQL falhou (`database_unavailable`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dataset_not_ready:
+              summary: Antes do primeiro alvo
+              value:
+                error:
+                  code: dataset_not_ready
+                  message: 'nenhum alvo cadastrado ainda: a primeira derivação do collector-registrobr-rdapnum não terminou; tente em alguns minutos'
+            database_unavailable:
+              summary: Falha no PostgreSQL
+              value:
+                error:
+                  code: database_unavailable
+                  message: banco de dados indisponível
+    DatabaseUnavailable:
+      description: Falha no PostgreSQL.
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: database_unavailable
+              message: banco de dados indisponível
+    Timeout:
+      description: A consulta passou de `DB_TIMEOUT` (padrão 5s).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: timeout
+              message: a consulta demorou demais
+    InternalError:
+      description: Panic no handler (registrado no log).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              code: internal_error
+              message: erro interno
+    StatusOK:
+      description: >-
+        API no ar: `ok`, `starting` (nenhum alvo ainda) ou `degraded` (Valkey
+        fora; a API segue sem cache e sem atualização).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          examples:
+            ok:
+              summary: Tudo no ar
+              value:
+                success: true
+                status: ok
+                timestamp: '2026-10-21T21:00:00Z'
+                message: api-registrobr-rdapnum operacional
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: ok
+            starting:
+              summary: Nenhum alvo ainda
+              value:
+                success: true
+                status: starting
+                timestamp: '2026-10-21T21:00:00Z'
+                message: aguardando a primeira derivação do collector-registrobr-rdapnum
+                checks:
+                  dataset: empty
+                  postgres: ok
+                  valkey: ok
+            degraded:
+              summary: Valkey fora
+              value:
+                success: true
+                status: degraded
+                timestamp: '2026-10-21T21:00:00Z'
+                message: Valkey indisponível; respondendo sem cache e sem atualização
+                checks:
+                  dataset: ok
+                  postgres: ok
+                  valkey: error
+    StatusError:
+      description: PostgreSQL fora (`success` é `false`).
+      headers:
+        Cache-Control:
+          $ref: '#/components/headers/CacheControlNoStore'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Status'
+          example:
+            success: false
+            status: error
+            timestamp: '2026-10-21T21:00:00Z'
+            message: PostgreSQL indisponível
+            checks:
+              dataset: ok
+              postgres: error
+              valkey: ok
+  schemas:
+    Scan:
+      type: object
+      description: >-
+        O alvo que gerou o objeto e o estado da coleta dele; acompanha toda
+        resposta de dados (no lugar do `dataset` das outras APIs).
+        `last_result` `truncated` com `checked_at` antigo: a última tentativa
+        veio truncada, e o dado mostrado é o da última completa.
+      required: [kind, target, source, active, checked_at, attempted_at, last_result, retry_at, response]
+      properties:
+        kind:
+          type: string
+          enum: [asn, prefix]
+        target:
+          type: string
+          description: O ASN (`"61610"`) ou o bloco consultado (`"200.225.48.0/21"`).
+          example: '61610'
+        source:
+          type: string
+          enum: [cgibr, static]
+          description: '`cgibr` = derivado do cgibr; `static` = cadastrado pelo administrador.'
+        active:
+          type: boolean
+          description: '`false` = fora da coleta e da atualização; o dado continua servido.'
+        checked_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última coleta conclusiva (completa ou 404) — a data do dado; `null` = nunca.
+        attempted_at:
+          type: [string, 'null']
+          format: date-time
+          description: Última tentativa, conclusiva ou não.
+        last_result:
+          type: [string, 'null']
+          enum: [complete, truncated, not_found, error, null]
+          description: Resultado da última tentativa; `null` = nunca tentado.
+        retry_at:
+          type: [string, 'null']
+          format: date-time
+          description: Próxima tentativa depois de truncada ou erro; `null` sem espera.
+        response:
+          type: [string, 'null']
+          format: uuid
+          description: '`uuid` da resposta atual (a do dado); `null` sem ela.'
+    Entity:
+      type: object
+      description: O titular ou um contato (`registrobr_rdapnum_entity`).
+      required: [handle, kind, name, email, country, document, document_type, document_digits, legal_representative, registered_at, changed_at]
+      properties:
+        handle:
+          type: string
+          description: O CNPJ só com dígitos (titular) ou o handle do contato.
+          example: ROBEL308
+        kind:
+          type: [string, 'null']
+          description: vCard `kind` (`org`, `individual`).
+        name:
+          type: [string, 'null']
+          description: vCard `fn`.
+        email:
+          type: [string, 'null']
+          description: O primeiro e-mail do vCard, em minúsculas.
+        country:
+          type: [string, 'null']
+        document:
+          type: [string, 'null']
+          description: CNPJ ou CPF como publicado (`35.980.592/0001-30`).
+        document_type:
+          type: [string, 'null']
+          description: '`cnpj`, `cpf` ou o que vier, em minúsculas.'
+        document_digits:
+          type: [string, 'null']
+          description: Só os dígitos do documento.
+        legal_representative:
+          type: [string, 'null']
+        registered_at:
+          type: [string, 'null']
+          format: date-time
+        changed_at:
+          type: [string, 'null']
+          format: date-time
+    Contact:
+      description: >-
+        Uma entidade com os papéis dela neste objeto. Um item por (`handle`,
+        `via`), ordenados por `via` (`null` primeiro) e `handle`.
+      allOf:
+        - $ref: '#/components/schemas/Entity'
+        - type: object
+          required: [roles, via]
+          properties:
+            roles:
+              type: array
+              description: Papéis neste objeto, em ordem alfabética.
+              items:
+                type: string
+              example: [abuse, administrative]
+            via:
+              type: [string, 'null']
+              description: Handle da entidade dentro da qual veio (o titular); `null` = contato do próprio objeto.
+    NetworkBrief:
+      type: object
+      description: Um bloco registrado com o ASN.
+      required: [prefix, type, status]
+      properties:
+        prefix:
+          type: string
+          example: 200.225.48.0/21
+        type:
+          type: [string, 'null']
+          example: ALLOCATED
+        status:
+          type: array
+          items:
+            type: string
+          example: [active]
+    ASNResponse:
+      type: object
+      description: Resposta de `GET /asn/{asn}`; campos do ASN `null` enquanto não há dado processado.
+      required: [asn, handle, name, type, country, registered_at, changed_at, registrant, contacts, networks, scan]
+      properties:
+        asn:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 4294967295
+        handle:
+          type: [string, 'null']
+        name:
+          type: [string, 'null']
+        type:
+          type: [string, 'null']
+          example: DIRECT ALLOCATION
+        country:
+          type: [string, 'null']
+        registered_at:
+          type: [string, 'null']
+          format: date-time
+        changed_at:
+          type: [string, 'null']
+          format: date-time
+        registrant:
+          oneOf:
+            - $ref: '#/components/schemas/Entity'
+            - type: 'null'
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+        networks:
+          type: array
+          description: Blocos registrados com este ASN, IPv4 primeiro.
+          items:
+            $ref: '#/components/schemas/NetworkBrief'
+        scan:
+          $ref: '#/components/schemas/Scan'
+    Nameserver:
+      type: object
+      required: [name, status, checked_at, last_ok_at]
+      properties:
+        name:
+          type: [string, 'null']
+          example: keenan.ns.cloudflare.com
+        status:
+          type: array
+          items:
+            type: string
+          example: [ns aa]
+        checked_at:
+          type: [string, 'null']
+          description: Última verificação da delegação pelo registro.br.
+        last_ok_at:
+          type: [string, 'null']
+          description: Última verificação correta.
+    Reverse:
+      type: object
+      description: Uma delegação reversa do bloco.
+      required: [prefix, start_address, end_address, nameservers, signed, registered_at, changed_at]
+      properties:
+        prefix:
+          type: [string, 'null']
+          description: A faixa como CIDR, quando é exata; `null` senão.
+          example: 200.225.48.0/24
+        start_address:
+          type: string
+          format: ip
+        end_address:
+          type: string
+          format: ip
+        nameservers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Nameserver'
+        signed:
+          type: [boolean, 'null']
+          description: '`secureDNS.delegationSigned`.'
+        registered_at:
+          type: [string, 'null']
+          format: date-time
+        changed_at:
+          type: [string, 'null']
+          format: date-time
+    NetworkResponse:
+      type: object
+      description: Resposta de `GET /ip/{ip}` e `GET /prefix/{ip}/{len}`.
+      required: [query, prefix, start_address, end_address, ip_version, handle, name, type, country, status, parent_handle, asn, registered_at, changed_at, registrant, contacts, reverse, scan]
+      properties:
+        query:
+          type: string
+          description: O IP ou prefixo pedido, normalizado.
+        prefix:
+          type: string
+          description: O bloco registrado mais específico que contém o pedido.
+        start_address:
+          type: string
+          format: ip
+        end_address:
+          type: string
+          format: ip
+        ip_version:
+          type: integer
+          enum: [4, 6]
+        handle:
+          type: [string, 'null']
+        name:
+          type: [string, 'null']
+          description: Um número interno do registro.br.
+        type:
+          type: [string, 'null']
+        country:
+          type: [string, 'null']
+        status:
+          type: array
+          items:
+            type: string
+        parent_handle:
+          type: [string, 'null']
+        asn:
+          type: [integer, 'null']
+          format: int64
+          description: '`nicbr_autnum` do bloco.'
+        registered_at:
+          type: [string, 'null']
+          format: date-time
+        changed_at:
+          type: [string, 'null']
+          format: date-time
+        registrant:
+          oneOf:
+            - $ref: '#/components/schemas/Entity'
+            - type: 'null'
+        contacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Contact'
+        reverse:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reverse'
+        scan:
+          $ref: '#/components/schemas/Scan'
+    DocumentResponse:
+      type: object
+      description: Resposta de `GET /document/{document}`.
+      required: [document_digits, document_type, entities, asns, networks]
+      properties:
+        document_digits:
+          type: string
+        document_type:
+          type: string
+          enum: [cnpj, cpf]
+          description: Pelo número de dígitos (14 ou 11).
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+        asns:
+          type: array
+          description: ASNs em que alguma das entidades é titular.
+          items:
+            type: object
+            required: [asn, name, scan]
+            properties:
+              asn:
+                type: integer
+                format: int64
+              name:
+                type: [string, 'null']
+              scan:
+                type: object
+                required: [checked_at]
+                properties:
+                  checked_at:
+                    type: [string, 'null']
+                    format: date-time
+        networks:
+          type: array
+          description: Blocos em que alguma das entidades é titular.
+          items:
+            type: object
+            required: [prefix, asn, type, status]
+            properties:
+              prefix:
+                type: string
+              asn:
+                type: [integer, 'null']
+                format: int64
+              type:
+                type: [string, 'null']
+              status:
+                type: array
+                items:
+                  type: string
+    ContactObject:
+      type: object
+      description: Um objeto em que o contato aparece (um item por objeto e `via`).
+      required: [kind, asn, prefix, roles, via]
+      properties:
+        kind:
+          type: string
+          enum: [asn, prefix]
+        asn:
+          type: [integer, 'null']
+          format: int64
+          description: O ASN, quando `kind` é `asn`.
+        prefix:
+          type: [string, 'null']
+          description: O bloco, quando `kind` é `prefix`.
+        roles:
+          type: array
+          items:
+            type: string
+        via:
+          type: [string, 'null']
+    ContactResponse:
+      type: object
+      description: Resposta de `GET /contact/{handle}`.
+      required: [entity, objects]
+      properties:
+        entity:
+          $ref: '#/components/schemas/Entity'
+        objects:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactObject'
+    HistoryItem:
+      type: object
+      description: Uma versão da resposta (sem o IP de saída nem a hora do servidor).
+      required: [uuid, result, http_status, sha256, bytes, fetched_at, last_seen_at, seen_count, processed, process_error]
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        result:
+          type: string
+          enum: [complete, truncated, not_found]
+        http_status:
+          type: integer
+          enum: [200, 404]
+        sha256:
+          type: string
+          description: SHA-256 do corpo sem `notices`, com as chaves em ordem.
+        bytes:
+          type: integer
+        fetched_at:
+          type: string
+          format: date-time
+          description: Primeira vez que esta versão chegou.
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Última vez que chegou igual.
+        seen_count:
+          type: integer
+        processed:
+          type: boolean
+          description: Já processada (truncadas nunca são).
+        process_error:
+          type: [string, 'null']
+          description: Por que o processamento recusou; `null` se deu certo ou não foi tentado.
+    HistoryResponse:
+      type: object
+      description: Resposta de `GET .../history`.
+      required: [target, kind, current, responses]
+      properties:
+        target:
+          type: string
+        kind:
+          type: string
+          enum: [asn, prefix]
+        current:
+          type: [string, 'null']
+          format: uuid
+          description: '`uuid` da resposta atual; `null` sem ela.'
+        responses:
+          type: array
+          description: A mais nova primeiro.
+          items:
+            $ref: '#/components/schemas/HistoryItem'
+    RawResponse:
+      type: object
+      description: >-
+        Corpo RDAP (RFC 9083) como o registro.br mandou, sem as linhas do IP
+        de saída em `notices[*].description`; objeto livre.
+      additionalProperties: true
+    NotFoundResponse:
+      type: object
+      description: Uma versão `not_found` em `GET /response/{uuid}`.
+      required: [result, http_status]
+      properties:
+        result:
+          type: string
+          const: not_found
+        http_status:
+          type: integer
+          const: 404
+    RefreshResponse:
+      type: object
+      description: Resposta 202 do `POST .../refresh`.
+      required: [kind, target, queued, reason, checked_at]
+      properties:
+        kind:
+          type: string
+          enum: [asn, prefix]
+        target:
+          type: string
+          description: O ASN ou o bloco do alvo.
+        queued:
+          type: boolean
+        reason:
+          type: [string, 'null']
+          enum: [recent, already_queued, null]
+          description: Por que não entrou na fila; `null` quando entrou.
+        checked_at:
+          type: [string, 'null']
+          format: date-time
+          description: A última coleta conclusiva do alvo (antes deste pedido).
+    MetaResponse:
+      type: object
+      description: Resposta de `GET /meta`.
+      required: [app, version, targets, responses, data, config, derivations, workers, collector, refresh]
+      properties:
+        app:
+          type: string
+          const: api-registrobr-rdapnum
+        version:
+          type: string
+        targets:
+          $ref: '#/components/schemas/MetaTargets'
+        responses:
+          $ref: '#/components/schemas/MetaResponses'
+        data:
+          type: object
+          description: Linhas das tabelas processadas.
+          required: [autnum, network, entity, reverse]
+          properties:
+            autnum:
+              type: integer
+              format: int64
+            network:
+              type: integer
+              format: int64
+            entity:
+              type: integer
+              format: int64
+            reverse:
+              type: integer
+              format: int64
+        config:
+          $ref: '#/components/schemas/MetaConfig'
+        derivations:
+          type: array
+          description: A última derivação aplicada; `[]` antes da primeira.
+          items:
+            $ref: '#/components/schemas/MetaDerivation'
+        workers:
+          type: array
+          description: Instâncias do coletor com sinal nas últimas 24 h (sem o IP de saída).
+          items:
+            $ref: '#/components/schemas/MetaWorker'
+        collector:
+          description: Linha do coletor em `jobs`; `null` se ainda não existe.
+          oneOf:
+            - $ref: '#/components/schemas/MetaCollector'
+            - type: 'null'
+        refresh:
+          type: object
+          required: [queue]
+          properties:
+            queue:
+              type: [integer, 'null']
+              minimum: 0
+              description: Pedidos na fila de atualização (`LLEN`); `null` sem Valkey.
+    MetaTargets:
+      type: object
+      description: >-
+        Resumo dos alvos. `never_scanned`, `overdue`, `rescan` e
+        `oldest_scan_at` contam só os ativos (os que a fila pega); `overdue`
+        usa `config.scan_interval` ou, sem ele, 168h. `complete`,
+        `truncated`, `not_found` e `error` são o `last_result`.
+      required: [total, asn, prefix, active, static, never_scanned, overdue, rescan, scanning, waiting, oldest_scan_at, complete, truncated, not_found, error]
+      properties:
+        total:
+          type: integer
+        asn:
+          type: integer
+        prefix:
+          type: integer
+        active:
+          type: integer
+        static:
+          type: integer
+        never_scanned:
+          type: integer
+        overdue:
+          type: integer
+        rescan:
+          type: integer
+          description: Pedidos de nova coleta pendentes (inclusive os da atualização).
+        scanning:
+          type: integer
+          description: Alvos com uma instância consultando.
+        waiting:
+          type: integer
+          description: Alvos em espera depois de truncada ou erro (`retry_at` no futuro).
+        oldest_scan_at:
+          type: [string, 'null']
+          format: date-time
+        complete:
+          type: integer
+        truncated:
+          type: integer
+        not_found:
+          type: integer
+        error:
+          type: integer
+    MetaResponses:
+      type: object
+      description: Resumo das respostas guardadas.
+      required: [total, complete, truncated, not_found, pending, process_errors]
+      properties:
+        total:
+          type: integer
+          format: int64
+        complete:
+          type: integer
+          format: int64
+        truncated:
+          type: integer
+          format: int64
+        not_found:
+          type: integer
+          format: int64
+        pending:
+          type: integer
+          format: int64
+          description: Respostas conclusivas atuais ainda sem processar.
+        process_errors:
+          type: integer
+          format: int64
+    MetaConfig:
+      type: object
+      description: >-
+        `registrobr_rdapnum_config`; `null` = sem linha (ou valor inválido):
+        cada coletor usa a reserva do ambiente (`RATE_LIMIT`, `SCAN_INTERVAL`).
+      required: [rate_limit, scan_interval]
+      properties:
+        rate_limit:
+          type: [integer, 'null']
+          minimum: 1
+          description: Consultas por minuto, por coletor.
+          example: 32
+        scan_interval:
+          type: [string, 'null']
+          description: Meta por alvo, em duração Go.
+          example: 168h
+    MetaDerivation:
+      type: object
+      description: A última derivação aplicada (linha de `registrobr_rdapnum_run`).
+      required: [source, version, source_version, source_updated_at, created_at, asns, prefixes, inserted, not_in_source]
+      properties:
+        source:
+          type: string
+          enum: [cgibr]
+        version:
+          type: string
+          format: uuid
+        source_version:
+          type: string
+          format: uuid
+          description: A versão do cgibr que foi lida (`cgibr_run.uuid`).
+        source_updated_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        asns:
+          type: [integer, 'null']
+        prefixes:
+          type: [integer, 'null']
+        inserted:
+          type: [integer, 'null']
+        not_in_source:
+          type: [integer, 'null']
+          description: Alvos `cgibr` que esta versão não traz mais (continuam cadastrados).
+    MetaWorker:
+      type: object
+      description: Uma instância do coletor, sem o IP de saída nem a URL do proxy.
+      required: [host, version, started_at, seen_at, alive, rate_limit, proxy, requests, complete, truncated, not_found, errors, refreshes, egress_ips, paused_until]
+      properties:
+        host:
+          type: string
+        version:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        seen_at:
+          type: string
+          format: date-time
+        alive:
+          type: boolean
+          description: Sinal há menos de 90 s.
+        rate_limit:
+          type: integer
+          description: Taxa em vigor, em consultas por minuto.
+        proxy:
+          type: boolean
+          description: Sai por um proxy (`PROXY_URL`).
+        requests:
+          type: integer
+          format: int64
+        complete:
+          type: integer
+          format: int64
+        truncated:
+          type: integer
+          format: int64
+        not_found:
+          type: integer
+          format: int64
+        errors:
+          type: integer
+          format: int64
+        refreshes:
+          type: integer
+          format: int64
+          description: Pedidos de atualização atendidos.
+        egress_ips:
+          type: integer
+          description: IPs de saída distintos nas últimas 100 respostas (só a contagem).
+        paused_until:
+          type: [string, 'null']
+          format: date-time
+          description: Pausa por truncadas seguidas.
+    MetaCollector:
+      type: object
+      description: Linha do coletor na tabela central `jobs`.
+      required: [app, last_sync_at, last_check_at, consolidated]
+      properties:
+        app:
+          type: string
+          const: collector-registrobr-rdapnum
+        last_sync_at:
+          type: [string, 'null']
+          format: date-time
+        last_check_at:
+          type: [string, 'null']
+          format: date-time
+        consolidated:
+          type: boolean
+    Status:
+      type: object
+      description: Resposta de `/health` e `/status`.
+      required: [success, status, timestamp, message, checks]
+      properties:
+        success:
+          type: boolean
+          description: '`false` só quando o PostgreSQL está fora.'
+        status:
+          type: string
+          enum: [ok, starting, degraded, error]
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+        checks:
+          $ref: '#/components/schemas/StatusChecks'
+    StatusChecks:
+      type: object
+      required: [postgres, valkey, dataset]
+      properties:
+        postgres:
+          type: string
+          enum: [ok, error]
+        valkey:
+          type: string
+          enum: [ok, error, disabled]
+          description: '`disabled` sem cache e sem atualização.'
+        dataset:
+          type: string
+          enum: [ok, empty]
+          description: '`empty` enquanto não há nenhum alvo cadastrado.'
+    IndexResponse:
+      type: object
+      description: Resposta do índice (`GET /`, na versão atual e na v1 fixa).
+      required: [app, version, base_path, versions, endpoints, source, upstream, derived_from]
+      properties:
+        app:
+          type: string
+          const: api-registrobr-rdapnum
+        version:
+          type: string
+        base_path:
+          type: string
+          example: /registrobr/rdapnum
+        versions:
+          type: array
+          items:
+            type: string
+        endpoints:
+          type: array
+          description: As rotas GET de dados, o /meta, o /status e o manifesto.
+          items:
+            type: string
+        source:
+          type: string
+          format: uri
+          description: As specs da fonte (não há arquivo publicado).
+        upstream:
+          type: string
+          format: uri
+          description: O serviço RDAP consultado pelo coletor.
+        derived_from:
+          type: array
+          items:
+            type: string
+          example: [cgibr]
+    Error:
+      type: object
+      description: Corpo de toda resposta de erro.
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              enum: [bad_request, not_found, dataset_not_ready, database_unavailable, timeout, internal_error, target_inactive, refresh_unavailable]
+              example: not_found
+            message:
+              type: string
+              description: Mensagem em português para pessoas.
+              example: AS1 não é alvo do rdapnum

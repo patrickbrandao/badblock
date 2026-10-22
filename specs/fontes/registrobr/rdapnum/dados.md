@@ -212,8 +212,9 @@ passar na frente ([collector.md](collector.md#atualização-pedida-pela-api)).
 | `badblock:registrobr-rdapnum:refresh:queue` | lista | **nenhum** | API (`RPUSH`) | coletor (`BLPOP`) |
 | `badblock:registrobr-rdapnum:refresh:inflight:<kind>:<alvo>` | texto `1` | 60 s | API (`SET NX EX 60`) | API (pedido repetido no minuto não entra de novo) |
 
-`<alvo>` é o ASN (`asn:61610`) ou o bloco do alvo em forma canônica
-(`prefix:200.225.48.0/21`). Pedido:
+`<kind>` é `asn` ou `prefix`, e `<alvo>` o ASN ou o bloco do alvo em forma
+canônica: `...:inflight:asn:61610`, `...:inflight:prefix:200.225.48.0/21`.
+Pedido:
 
 ```json
 {"kind":"asn","target":"61610","at":"2026-10-21T21:10:00.123Z"}

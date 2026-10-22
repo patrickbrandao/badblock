@@ -46,6 +46,7 @@ APPS="$APPS collector-rootanchors api-rootanchors collector-roothints api-roothi
 APPS="$APPS collector-rootzone api-rootzone"
 APPS="$APPS collector-anatel-pst api-anatel-pst"
 APPS="$APPS collector-rdns api-rdns"
+APPS="$APPS collector-registrobr-rdapnum api-registrobr-rdapnum"
 APPS="$APPS website-www"
 APPS="$APPS postgres-migrate"
 

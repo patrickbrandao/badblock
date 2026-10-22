@@ -36,7 +36,11 @@ anterior gerou para o mesmo objeto; uma truncada nunca toca estas tabelas
 
 `uq_<p>_autnum_asn`: `UNIQUE (asn)`; `uq_<p>_autnum_target`: `UNIQUE
 (target_uuid)`; `chk_<p>_autnum_asn` como nos alvos;
-`trg_<p>_autnum_updated_at`.
+`trg_<p>_autnum_updated_at`: `BEFORE UPDATE ... WHEN ((OLD.<colunas de
+dado>) IS DISTINCT FROM (NEW.<colunas de dado>))` — as colunas de dado são
+todas menos `uuid`, `target_uuid`, `response_uuid`, `created_at` e
+`updated_at`: o `response_uuid` anda a cada processamento sem andar o
+`updated_at`.
 
 ## `registrobr_rdapnum_network`
 
@@ -61,7 +65,8 @@ anterior gerou para o mesmo objeto; uma truncada nunca toca estas tabelas
   contém um IP ou prefixo (`>>=`).
 - `ix_<p>_network_asn`: B-tree em `(asn)` — os blocos de um ASN.
 - `ix_<p>_network_target`: B-tree em `(target_uuid)`.
-- `trg_<p>_network_updated_at`.
+- `trg_<p>_network_updated_at`: como o do `autnum` (fora das colunas de dado
+  também `family`, que é gerada).
 
 ## `registrobr_rdapnum_entity`
 
@@ -91,7 +96,8 @@ anterior gerou para o mesmo objeto; uma truncada nunca toca estas tabelas
   compartilhada por vários objetos, e apagar o alvo que a atualizou por
   último não pode levar as ligações dos outros. A que fica sem ligação
   nenhuma sai na manutenção.
-- `trg_<p>_entity_updated_at`.
+- `trg_<p>_entity_updated_at`: como o do `autnum` (fora das colunas de dado
+  também `document_digits`, que é gerada).
 
 ## `registrobr_rdapnum_link`
 
@@ -137,9 +143,13 @@ Processar uma resposta é uma transação só ([collector.md](collector.md#proce
 | `ip network` completa | entidades como acima; `UPSERT` de `_network` por `prefix`; apaga e regrava os `_link` e os `_reverse` do bloco |
 | 404 | apaga o `_autnum` ou os `_network` cujo `target_uuid` é o alvo (as ligações e reversos caem em cascata) |
 
-- `UPSERT` só regrava a linha se algum valor mudou (`... DO UPDATE ... WHERE
-  (colunas) IS DISTINCT FROM (EXCLUDED...)`), para o `updated_at` dizer quando
-  o dado mudou; o `response_uuid` anda sempre.
+- `UPSERT` (`... ON CONFLICT ... DO UPDATE SET` todas as colunas): o
+  `response_uuid` (e, no bloco, o `target_uuid`) anda sempre, e o trigger
+  só anda o `updated_at` quando um valor de dado mudou — ele diz quando o
+  dado mudou. O processamento sabe que a linha mudou por `RETURNING
+  updated_at = NOW()`.
+- `_link` e `_reverse` são comparados com o que já está gravado: iguais,
+  ficam; diferentes, o objeto tem os dele apagados e regravados.
 - Bloco devolvido diferente do anterior para o mesmo alvo (o registro.br
   reagrupou): a linha antiga com esse `target_uuid` é apagada.
 - Entidade que ficou sem nenhuma ligação sai na manutenção

@@ -19,7 +19,7 @@ padrões. Cada rota, com parâmetros, campos e exemplos:
 | Tabelas lidas | `_target`, `_response`, `_autnum`, `_network`, `_entity`, `_link`, `_reverse`; no `/meta`, também `_run`, `_worker`, `_config` e a linha `collector-registrobr-rdapnum` de `jobs` (todas com o prefixo `registrobr_rdapnum`) |
 | Escreve | **nada** no Postgres; no Valkey, o cache e a fila de atualização |
 | Pacotes | os do padrão, com `internal/dataset` reduzido a "há alvos?", e `internal/refresh` (o pedido de atualização) |
-| Nomes nas conexões | `application_name=api-registrobr-rdapnum`; `ClientName` `badblock-api-registrobr-rdapnum` |
+| Nomes nas conexões | `application_name=api-registrobr-rdapnum`; `ClientName` `badblock-api-registrobr-rdapnum` (cache) e `badblock-api-registrobr-rdapnum-refresh` (atualização: um segundo cliente, fora do disjuntor do cache, pool de 16, 1 s de prazo) |
 | Fonte citada no índice | `source`: `https://github.com/patrickbrandao/badblock/tree/main/specs/fontes/registrobr/rdapnum`; `upstream`: `https://rdap.registro.br/`; `derived_from`: `["cgibr"]` |
 | Descrição da imagem | `API HTTP do RDAP do registro.br por ASN e bloco, coletado pelo BadBlock` |
 
@@ -40,6 +40,7 @@ O dado muda um alvo de cada vez, o dia inteiro, como no `rdns`
 | a API não escreve nada | escreve na fila de atualização do Valkey |
 | códigos de erro do padrão | também `409 target_inactive` e `503 refresh_unavailable` |
 | um router no Traefik | um segundo router para o `POST .../refresh`, com rate limit próprio |
+| CORS: `GET, HEAD, OPTIONS`; expõe `ETag, X-Cache, X-Dataset-Version` | `GET, HEAD, POST, OPTIONS`; expõe `ETag, X-Cache, X-Response-UUID` |
 
 A API é **pública e sem chave, com contatos e e-mails** — decisão do
 mantenedor, registrada com o aviso do NIC.br de que os dados não podem ser
@@ -65,7 +66,7 @@ também em `/registrobr/rdapnum/v1/...`. Chave de cache com o prefixo
 | `GET /prefix/{ip}/{len}/raw` | `getPrefixRaw` | `cru` | `prefix-raw:200.225.48.0/24` |
 | `GET /prefix/{ip}/{len}/history` | `getPrefixHistory` | `cru` | `prefix-history:200.225.48.0/24` |
 | `POST /prefix/{ip}/{len}/refresh` | `refreshPrefix` | `atualização` | — |
-| `GET /document/{document}` | `getDocument` | `dados` | `document:35980592000130` |
+| `GET /document/{document}` (a rota pega o resto do caminho: a `/` do CNPJ pode ir crua) | `getDocument` | `dados` | `document:35980592000130` |
 | `GET /contact/{handle}` | `getContact` | `dados` | `contact:ROBEL308` |
 | `GET /response/{uuid}` | `getResponse` | `cru` | `response:<uuid>` |
 | `GET /meta` | `getMeta` | `meta` | — (sem cache) |
@@ -111,7 +112,7 @@ Sem cache, lida direto do banco:
 | Bloco | Conteúdo |
 |---|---|
 | `app`, `version` | do padrão |
-| `targets` | `total`, `asn`, `prefix`, `active`, `static`, `never_scanned`, `overdue` (`last_scan_at` mais velho que `scan_interval`), `rescan`, `scanning`, `waiting` (`retry_at` no futuro), `oldest_scan_at`, e por `last_result`: `complete`, `truncated`, `not_found`, `error` |
+| `targets` | `total`, `asn`, `prefix`, `active`, `static`, `never_scanned`, `overdue` (`last_scan_at` mais velho que `scan_interval`), `rescan`, `scanning`, `waiting` (`retry_at` no futuro), `oldest_scan_at`, e por `last_result`: `complete`, `truncated`, `not_found`, `error`. `never_scanned`, `overdue`, `rescan` e `oldest_scan_at` contam só os alvos ativos (os que a fila pega); os demais, a tabela inteira |
 | `responses` | `total`, `complete`, `truncated`, `not_found`, `pending` (conclusivas atuais sem processar), `process_errors` |
 | `data` | linhas de `_autnum`, `_network`, `_entity`, `_reverse` |
 | `config` | `rate_limit` (por minuto) e `scan_interval` de `_config` (`null` sem linha válida); `overdue` usa `scan_interval` ou `168h` |
@@ -222,9 +223,14 @@ Unitários (`make test`, store e Valkey falsos):
 | `refresh` | `queued: true` com `RPUSH`; `recent`; `already_queued` (marca presente); 404 sem alvo; 409 inativo; 503 sem Valkey e com a fila cheia (marca apagada); bloco sem alvo exato cai no alvo do bloco que o contém |
 | `openapi_test.go` | o do [padrão](../../../padroes/openapi.md#teste) |
 
-Integração (`make test-int`): PG18 com as migrations de `central/` e
-`registrobr_rdapnum/`, as tabelas carregadas pelas fixtures processadas, e
-Valkey: cada consulta de
+Integração (`make test-int`, em `internal/httpapi`): PG18 com as migrations
+de `central/` e `registrobr_rdapnum/`, as tabelas carregadas com as fixtures
+do coletor (`collector/testdata/`: o corpo cru em `_response` e o dado
+processado gravado pelo teste conforme o mapeamento de
+[dados-processados.md](dados-processados.md#mapeamento-resposta--colunas) —
+o processamento é do coletor, outro módulo), 6 mil alvos de volume, e
+Valkey: as rotas de ponta a ponta (formato de [api-rotas.md](api-rotas.md),
+a resposta crua sem `192.0.2.1`, o `/meta` sem o IP de saída), cada consulta de
 [dados-processados.md](dados-processados.md#consultas-da-api-registrobr-rdapnum)
 com uso de índice (`enable_seqscan = off`), e o `POST` pondo o pedido na
 fila com a marca `inflight` de 60 s.

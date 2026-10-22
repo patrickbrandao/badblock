@@ -4,10 +4,13 @@ Parte do [api.md](api.md): cada rota com parâmetros, validações, campos,
 exemplos e erros. Dono: sub-agente `api-registrobr-rdapnum`. Caminhos
 relativos a `/registrobr/rdapnum` (e `/registrobr/rdapnum/v1`).
 
-Os exemplos são o formato que a API deve dar para as respostas reais de
-2026-10-21 ([fonte.md](fonte.md#respostas)), com o contato pessoa física
-trocado por `CONTATO EXEMPLO` / `contato@example.com` (o repositório é
-público); quando a API existir, trocar por respostas reais dela, com a data.
+Os exemplos são respostas da API (2026-10-21, teste de integração) sobre as
+respostas reais do registro.br do mesmo dia — as fixtures do coletor
+([fonte.md](fonte.md#fixtures)) — gravadas nas tabelas processadas como o
+processamento as grava; as pessoas físicas estão trocadas por `CONTATO
+EXEMPLO` / `contato@example.com` e `REPRESENTANTE EXEMPLO` (o repositório é
+público). O `uuid` das respostas é ilustrativo. Medir de novo com o stack no
+ar e a primeira volta do coletor ([api.md](api.md#medições)).
 
 ## Bloco `scan`
 
@@ -39,12 +42,15 @@ tentativa veio truncada, e o dado mostrado é o da última completa.
 | `via` | `handle` da entidade dentro da qual veio (o titular), ou `null` (só em `contacts`) |
 
 `contacts` tem um item por par (`handle`, `via`), ordenado por `via`
-(`null` primeiro) e `handle`.
+(`null` primeiro) e `handle`. O papel `registrant` não entra em `contacts`
+(o titular sai em `registrant`); a entidade que só tem esse papel não
+aparece lá.
 
 ## ASN — `GET /asn/{asn}`
 
-- `{asn}`: inteiro de 0 a 4294967295, com ou sem `AS`/`as` na frente;
-  senão 400 `ASN inválido`. Chave `asn:<número>`.
+- `{asn}`: inteiro de 0 a 4294967295, com ou sem `AS`/`as` na frente
+  (`As`, sinal e espaço não valem; zeros à esquerda sim); senão 400 `ASN
+  inválido`. Chave `asn:<número>`.
 - 404 `AS<n> não é alvo do rdapnum` sem alvo; com alvo mas sem dado
   processado (nunca coletado, ou 404 no registro.br): **200** com os campos
   do ASN `null`, `contacts` e `networks` `[]` e o `scan` (é por ele que se
@@ -93,8 +99,9 @@ tentativa veio truncada, e o dado mostrado é o da última completa.
 - `{ip}`: IPv4 ou IPv6 que `netip.ParseAddr` aceita (IPv4 mapeado vira
   IPv4); senão 400 `endereço IP inválido`. `/ip` consulta como `/32` ou
   `/128`.
-- `{len}`: 0 a 32 (IPv4) ou 0 a 128 (IPv6); senão 400 `tamanho de prefixo
-  inválido`. Bits de host zerados; chave `prefix:<prefixo>`.
+- `{len}`: 0 a 32 (IPv4) ou 0 a 128 (IPv6), em decimal sem zero à esquerda
+  nem sinal; senão 400 `tamanho de prefixo inválido`. Bits de host zerados;
+  chave `prefix:<prefixo>`; `/ip` usa `ip:<ip>`.
 - Responde o **bloco registrado mais específico que contém** o pedido; nenhum
   → 404 `<pedido> não está em nenhum bloco do rdapnum`.
 
@@ -114,7 +121,9 @@ tentativa veio truncada, e o dado mostrado é o da última completa.
   "handle": "200.225.48.0/21", "name": "462539", "type": "ALLOCATED", "country": "BR", "status": ["active"],
   "parent_handle": null, "asn": 61610, "registered_at": "1999-11-18T12:00:00Z", "changed_at": "2023-07-19T11:05:57Z",
   "registrant": {"handle": "35980592000130", "name": "ELEA DATA CENTERS", "document": "35.980.592/0001-30", "…": "…"},
-  "contacts": [{"handle": "ROBEL308", "name": "CONTATO EXEMPLO", "email": "contato@example.com", "roles": ["abuse", "technical"], "via": null, "…": "…"}],
+  "contacts": [
+    {"handle": "ROBEL308", "name": "CONTATO EXEMPLO", "email": "contato@example.com", "roles": ["abuse", "technical"], "via": null, "…": "…"},
+    {"handle": "ROBEL308", "name": "CONTATO EXEMPLO", "email": "contato@example.com", "roles": ["administrative"], "via": "35980592000130", "…": "…"}],
   "reverse": [{"prefix": "200.225.48.0/24", "start_address": "200.225.48.0", "end_address": "200.225.48.255",
     "nameservers": [
       {"name": "keenan.ns.cloudflare.com", "status": ["ns aa"], "checked_at": "2026-10-21T12:00:00Z", "last_ok_at": "2026-10-21T12:00:00Z"},
@@ -129,9 +138,11 @@ todos.)
 
 ## Documento — `GET /document/{document}`
 
-- `{document}`: CNPJ ou CPF com ou sem pontuação; os dígitos têm de ser 11
-  ou 14; senão 400 `documento inválido: use CNPJ (14 dígitos) ou CPF (11)`.
-  Chave `document:<dígitos>`.
+- `{document}`: CNPJ ou CPF com ou sem pontuação (só dígitos, `.`, `/`, `-`
+  e espaço); os dígitos têm de ser 11 ou 14; senão 400 `documento inválido:
+  use CNPJ (14 dígitos) ou CPF (11)`. A barra pode ir crua
+  (`/document/35.980.592/0001-30`: a rota pega o resto do caminho) ou como
+  `%2F`. Chave `document:<dígitos>`.
 - Nenhuma entidade com esses dígitos → 404 `documento <dígitos> não
   encontrado no rdapnum`.
 
@@ -139,8 +150,18 @@ todos.)
 |---|---|
 | `document_digits`, `document_type` | o pedido e o tipo (`cnpj`, `cpf`) |
 | `entities` | as entidades com o documento (em geral uma), como o `registrant` |
-| `asns` | ASNs em que alguma delas é titular: `asn`, `name`, `scan.checked_at` |
-| `networks` | blocos em que alguma delas é titular: `prefix`, `asn`, `type`, `status` |
+| `asns` | ASNs em que alguma delas é titular: `asn`, `name` e `scan` só com `checked_at`, em ordem de ASN |
+| `networks` | blocos em que alguma delas é titular: `prefix`, `asn`, `type`, `status`, IPv4 primeiro |
+
+```json
+{"document_digits": "35980592000130", "document_type": "cnpj",
+ "entities": [{"handle": "35980592000130", "kind": "org", "name": "ELEA DATA CENTERS", "…": "…"}],
+ "asns": [{"asn": 61610, "name": "ASN61610", "scan": {"checked_at": "2026-10-21T20:36:01Z"}}],
+ "networks": [
+   {"prefix": "187.87.28.0/22", "asn": 61610, "type": "ALLOCATED", "status": ["active"]},
+   {"prefix": "200.225.48.0/21", "asn": 61610, "type": "ALLOCATED", "status": ["active"]},
+   {"prefix": "2804:8ae0::/32", "asn": 61610, "type": "ALLOCATED", "status": ["active"]}]}
+```
 
 ## Contato — `GET /contact/{handle}`
 
@@ -152,7 +173,19 @@ todos.)
 | Campo | Conteúdo |
 |---|---|
 | `entity` | a entidade, como o `registrant` |
-| `objects` | onde aparece: `kind` (`asn`/`prefix`), `asn` ou `prefix`, `roles`, `via`; em ordem de `kind` e objeto |
+| `objects` | onde aparece, um item por objeto e `via`: `kind` (`asn`/`prefix`), `asn` e `prefix` (o do outro tipo `null`), `roles` (em ordem alfabética, com `registrant` quando é o titular), `via`; em ordem de `kind`, objeto (blocos IPv4 primeiro) e `via` (`null` primeiro) |
+
+```json
+{"entity": {"handle": "ROBEL308", "kind": "individual", "name": "CONTATO EXEMPLO", "email": "contato@example.com", "…": "…"},
+ "objects": [
+   {"kind": "asn", "asn": 61610, "prefix": null, "roles": ["abuse", "administrative"], "via": null},
+   {"kind": "asn", "asn": 61610, "prefix": null, "roles": ["administrative"], "via": "35980592000130"},
+   {"kind": "prefix", "asn": null, "prefix": "187.87.28.0/22", "roles": ["administrative"], "via": "35980592000130"},
+   {"kind": "prefix", "asn": null, "prefix": "200.225.48.0/21", "roles": ["abuse", "technical"], "via": null},
+   {"kind": "prefix", "asn": null, "prefix": "200.225.48.0/21", "roles": ["administrative"], "via": "35980592000130"},
+   {"kind": "prefix", "asn": null, "prefix": "2804:8ae0::/32", "roles": ["abuse", "technical"], "via": null},
+   {"kind": "prefix", "asn": null, "prefix": "2804:8ae0::/32", "roles": ["administrative"], "via": "35980592000130"}]}
+```
 
 ## Resposta crua
 
@@ -162,16 +195,24 @@ O corpo RDAP da resposta **atual** do alvo (a do dado processado), como o
 registro.br mandou, com `Content-Type: application/rdap+json`, **menos** as
 linhas de `notices[*].description` no formato `<hora> - <ip>` (o IP de
 saída do coletor). O alvo sai como no `refresh`: `asn` pelo número; `prefix`
-pelo bloco exato ou pelo bloco registrado que contém o pedido. Sem resposta
-atual (nunca coletado, ou 404) → 404 `<alvo> sem resposta coletada`.
-Cabeçalhos a mais: `X-Response-UUID` (o `uuid`) e `Last-Modified`
-(`last_seen_at`).
+pelo bloco exato ou pelo bloco registrado que contém o pedido; nenhum → 404
+`<pedido> não é alvo do rdapnum`. Sem resposta atual completa (nunca
+coletado, ou 404) → 404 `<alvo> sem resposta coletada` (`AS61610` ou o
+bloco do alvo). Cabeçalhos a mais: `X-Response-UUID` (o `uuid`) e
+`Last-Modified` (`last_seen_at`). Chaves de cache `asn-raw:<n>` e
+`prefix-raw:<pedido>`; os cabeçalhos vão ao cache junto com o corpo.
+
+O corpo sai em JSON compacto, com as chaves na ordem em que o `jsonb`
+as guarda (não é byte a byte o que chegou). A regra que tira o IP de saída é
+conservadora: some de `description` a linha `^\S+ - \S+$` e **qualquer**
+linha com um endereço IP solto; um `notices` fora do formato (não é lista)
+sai como `[]`. Nada fora de `notices` é mexido.
 
 ### `GET /asn/{asn}/history` e `GET /prefix/{ip}/{len}/history`
 
 | Campo | Conteúdo |
 |---|---|
-| `target`, `kind` | o alvo |
+| `target`, `kind` | o alvo (`"61610"` ou o bloco do alvo); sem alvo → 404 `<pedido> não é alvo do rdapnum` |
 | `current` | `uuid` da resposta atual, ou `null` |
 | `responses` | todas as versões, a mais nova primeiro: `uuid`, `result` (`complete`, `truncated`, `not_found`), `http_status`, `sha256`, `bytes`, `fetched_at`, `last_seen_at`, `seen_count`, `processed` (booleano), `process_error` — **sem** `egress_ip` nem `server_time` |
 
@@ -180,8 +221,11 @@ Cabeçalhos a mais: `X-Response-UUID` (o `uuid`) e `Last-Modified`
 Uma versão do histórico pelo `uuid` (inválido → 400 `uuid inválido`;
 inexistente → 404 `resposta <uuid> não encontrada`), com a mesma regra do
 `/raw` (corpo RDAP sem a linha do IP; `X-Response-UUID`, `Last-Modified`).
-Uma `not_found` responde 200 com `{"result":"not_found","http_status":404}`.
-O `uuid` é imutável: `Cache-Control: public, max-age=86400`.
+Uma `not_found` responde 200 com `{"result":"not_found","http_status":404}`
+(`application/json`). Serve também as versões truncadas do histórico (é uma
+versão pedida pelo `uuid`, não o dado atual). O `uuid` é imutável (aceito em
+qualquer caixa, normalizado em minúsculas na chave `response:<uuid>`):
+`Cache-Control: public, max-age=86400`.
 
 ## Atualização
 
@@ -197,6 +241,12 @@ O `uuid` é imutável: `Cache-Control: public, max-age=86400`.
 | `true` | `null` | o pedido entrou na fila |
 | `false` | `recent` | coletado há menos de `REFRESH_MIN_AGE` |
 | `false` | `already_queued` | pedido do mesmo alvo há menos de 60 s |
+
+`target` é sempre o alvo (no `prefix`, o bloco do alvo, que pode ser maior que
+o pedido) e `checked_at` o `last_scan_at` dele antes do pedido. Cabeçalhos:
+`Cache-Control: no-store`, `X-Cache: BYPASS`, sem `ETag`. A marca de 60 s é
+`badblock:registrobr-rdapnum:refresh:inflight:asn:61610` (ou
+`...:inflight:prefix:200.225.48.0/21`).
 
 Erros: 400 (validação da rota), 404 `<alvo> não é alvo do rdapnum`, 409
 `target_inactive` (`<alvo> está desativado no rdapnum`), 503
