@@ -34,7 +34,7 @@ func dp(s string) *time.Time {
 
 var (
 	created = time.Date(2026, 9, 28, 23, 19, 10, 0, time.UTC)
-	elea  = store.Info{CC: new("BR"), RegDate: dp("2019-02-11"), Status: "allocated", OpaqueID: new("258500")}
+	elea    = store.Info{CC: new("BR"), RegDate: dp("2019-02-11"), Status: "allocated", OpaqueID: new("258500")}
 	empty   = store.Info{Status: "available"}
 
 	asns = []store.ASNRange{
