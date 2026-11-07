@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -374,6 +375,25 @@ func TestTLDUnicode(t *testing.T) {
 	// O JSON sai em UTF-8, sem escapar o Unicode.
 	if body := do(h, "GET", base+"/tld/xn--p1ai").Body.String(); !strings.HasPrefix(body, `{"tld":"xn--p1ai","tld_unicode":"рф",`) {
 		t.Errorf("рф = %s", body)
+	}
+}
+
+// TestHugeTLD: um caminho de ~1 MiB de ideogramas distintos
+// percent-encoded (o limite padrão do Go para a linha de requisição) é 400
+// sem chegar ao punycode nem ao banco.
+func TestHugeTLD(t *testing.T) {
+	st := &fakeStore{}
+	h, _ := newAPI(t, st, true)
+	var b strings.Builder
+	for r := rune(0x4E00); b.Len() < 1<<20-len(base+"/tld/")-9; r++ {
+		b.WriteString(url.PathEscape(string(r)))
+	}
+	rec := do(h, "GET", base+"/tld/"+b.String())
+	if rec.Code != 400 || !strings.Contains(rec.Body.String(), `"code":"bad_request"`) {
+		t.Errorf("caminho de %d bytes: %d (%.200s)", b.Len(), rec.Code, rec.Body)
+	}
+	if st.Calls() != 0 {
+		t.Errorf("calls = %d, quero 0", st.Calls())
 	}
 }
 

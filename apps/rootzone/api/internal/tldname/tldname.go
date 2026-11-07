@@ -20,6 +20,17 @@ const MaxLabel = 63
 // ErrInvalid é devolvido para um nome que não é um rótulo de TLD válido.
 var ErrInvalid = errors.New("TLD inválido")
 
+// maxBytes é o maior nome que pode dar um rótulo válido: 63 runas de até 4
+// bytes. maxRunes é o maior nome não-ASCII que cabe em "xn--" + punycode.
+const (
+	maxBytes = 4 * MaxLabel
+	maxRunes = MaxLabel - len("xn--")
+)
+
+// encode é o Encode usado por Normalize; variável só para o teste conferir
+// que um nome grande é recusado sem chegar ao punycode.
+var encode = Encode
+
 // Normalize devolve o TLD na forma gravada pelo coletor. Aceita qualquer
 // caixa, com ou sem um ponto final, em ASCII (br, xn--p1ai) ou em Unicode
 // (рф, РФ). Um nome em Unicode — só letras, marcas e dígitos fora do
@@ -28,10 +39,19 @@ var ErrInvalid = errors.New("TLD inválido")
 // prefixo "xn--"; o resultado passa pela mesma regra do rótulo ASCII.
 func Normalize(raw string) (string, error) {
 	name := strings.TrimSuffix(raw, ".")
-	if name == "" || !utf8.ValidString(name) {
+	// Corta cedo, antes de qualquer trabalho proporcional ao tamanho.
+	if name == "" || len(name) > maxBytes || !utf8.ValidString(name) {
 		return "", ErrInvalid
 	}
 	if !isASCII(name) {
+		// O punycode nunca encurta: cada ASCII é copiado e cada não-ASCII
+		// gera ao menos um caractere, então n runas dão ao menos 4+n com o
+		// "xn--" (vale para o rótulo misto). Conferido antes de Encode, que
+		// custa O(distintos × tamanho). strings.ToLower não muda a contagem
+		// de runas.
+		if utf8.RuneCountInString(name) > maxRunes {
+			return "", ErrInvalid
+		}
 		// Fora do ASCII, só letras, marcas e dígitos (o ASCII é conferido
 		// depois, pela regra do rótulo).
 		if strings.ContainsFunc(name, func(r rune) bool {
@@ -39,7 +59,7 @@ func Normalize(raw string) (string, error) {
 		}) {
 			return "", ErrInvalid
 		}
-		enc, err := Encode(strings.ToLower(name))
+		enc, err := encode(strings.ToLower(name))
 		if err != nil {
 			return "", ErrInvalid
 		}

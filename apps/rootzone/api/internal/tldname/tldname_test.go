@@ -1,8 +1,10 @@
 package tldname
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // idn são pares reais de rootzone_tld (arquivo de 2026-09-29): o rótulo
@@ -91,6 +93,75 @@ func TestNormalize(t *testing.T) {
 	for _, in := range bad {
 		if got, err := Normalize(in); err == nil {
 			t.Errorf("Normalize(%q) = %q, quero erro", in, got)
+		}
+	}
+}
+
+// hugeCJK devolve n ideogramas CJK distintos (unificados, a partir de
+// U+4E00, e da extensão A, U+3400): o pior caso do Encode, Θ(distintos ×
+// tamanho).
+func hugeCJK(n int) string {
+	var b strings.Builder
+	b.Grow(3 * n)
+	r := rune(0x4E00)
+	for range n {
+		b.WriteRune(r)
+		r++
+		if r == 0x9FFF+1 {
+			r = 0x3400 // extensão A
+		}
+		if r == 0x4DBF+1 {
+			r = 0x4E00 // volta ao começo: repete, mas o tamanho é o que pesa
+		}
+	}
+	return b.String()
+}
+
+// TestNormalizeEarlyReject confere que os nomes que não cabem num rótulo
+// são recusados antes do punycode (o encode de teste falha se chamado), e
+// que o limite não recusa um IDN válido.
+func TestNormalizeEarlyReject(t *testing.T) {
+	orig := encode
+	t.Cleanup(func() { encode = orig })
+	encode = func(s string) (string, error) {
+		t.Errorf("encode chamado com %d runas", utf8.RuneCountInString(s))
+		return orig(s)
+	}
+	for name, in := range map[string]string{
+		"300 mil CJK distintos": hugeCJK(300_000),
+		"60 runas":              strings.Repeat("ф", 60),
+		"59 ф + ASCII":          strings.Repeat("ф", 59) + "a",
+		"253 bytes ASCII":       strings.Repeat("a", 253),
+		"253 bytes com ponto":   strings.Repeat("a", 253) + ".",
+		"1 MiB ASCII":           strings.Repeat("a", 1<<20),
+	} {
+		if got, err := Normalize(in); !errors.Is(err, ErrInvalid) {
+			t.Errorf("%s: Normalize = %q, %v; quero ErrInvalid", name, got, err)
+		}
+	}
+
+	// No limite (59 runas) o punycode roda e decide pelo tamanho final.
+	encode = orig
+	if _, err := Normalize(strings.Repeat("ф", 59)); !errors.Is(err, ErrInvalid) {
+		t.Errorf("59 ф: %v; quero ErrInvalid (o punycode passa de 63)", err)
+	}
+	// Nenhum IDN real passa do limite de runas: a checagem não tem falso
+	// negativo (os 151 da zona são conferidos no teste com o arquivo real).
+	for ascii, uni := range idn {
+		if n := utf8.RuneCountInString(uni); n > maxRunes || len(ascii) < len("xn--")+n {
+			t.Errorf("%s: %d runas, rótulo de %d caracteres", uni, n, len(ascii))
+		}
+		if got, err := Normalize(uni); err != nil || got != ascii {
+			t.Errorf("Normalize(%q) = %q, %v; quero %q", uni, got, err, ascii)
+		}
+	}
+}
+
+func BenchmarkNormalizeHuge(b *testing.B) {
+	in := hugeCJK(300_000)
+	for b.Loop() {
+		if _, err := Normalize(in); !errors.Is(err, ErrInvalid) {
+			b.Fatal(err)
 		}
 	}
 }

@@ -117,8 +117,17 @@ estão em [dados.md](dados.md#consultas-da-api)). Para acrescentar uma:
 `rootzone_tld.tld` (regra de `chk_rootzone_tld_tld`, `^[a-z0-9_-]{1,63}$`):
 
 1. Tira **um** ponto final (`br.` → `br`; `br..` é inválido).
-2. Nome vazio ou UTF-8 inválido: 400.
-3. Com algum caractere fora do ASCII: todo caractere não-ASCII tem de ser
+2. Nome vazio, com mais de 252 bytes (`4 × 63`: nenhum rótulo válido tem
+   mais de 63 runas de até 4 bytes) ou UTF-8 inválido: 400.
+3. Com algum caractere fora do ASCII: mais de 59 runas (`63 − len("xn--")`)
+   é 400 **antes** do punycode. O punycode nunca encurta: cada caractere
+   ASCII é copiado, cada não-ASCII gera ao menos um caractere (e o
+   delimitador `-` só soma), então `xn--` + a codificação de _n_ runas tem
+   ao menos `4 + n` caracteres — vale também para o rótulo misto
+   (`vermögensberater`) e nenhum IDN válido é recusado por isso. A checagem
+   cedo existe porque `Encode` custa O(distintos × tamanho): um caminho de
+   centenas de milhares de ideogramas distintos prenderia a CPU por
+   segundos. Depois, todo caractere não-ASCII tem de ser
    letra, marca ou dígito Unicode (`unicode.L`, `unicode.M`, `unicode.Nd`;
    espaço, controle, pontuação e formatação como U+200B são 400); o nome
    passa a minúsculas (`strings.ToLower`) e é codificado em punycode com o
@@ -294,11 +303,11 @@ Camadas e comandos: [padrão](../../padroes/api.md#testes) e
 | Pacote | Testes | O quê |
 |---|---|---|
 | `httpapi` | `TestTLDs`, `TestTLD`, `TestTLDUnicode` | store falso com um recorte real (`bo`, `br`, `top`, `xn--p1ai`, com NS, DS e glue como o coletor grava): `/tlds` com e sem `/v1` numa chave só, formato do JSON (`zone` primeiro); `/tld` em qualquer caixa, com ponto final e `/v1` numa chave só (uma consulta ao banco); NS com glue, DS decomposto; `bo` sem DS (`ds: []`), servidor sem AAAA (`ipv6: []`), glue sob outro TLD, a ordem do store mantida; `top` com 2 DS e servidores só IPv4 ou só IPv6; `рф`, `РФ`, `рф.`, `XN--P1AI.` e `/v1/tld/рф` na chave `tld:xn--p1ai`, Unicode sem escape no JSON |
-| `httpapi` | `TestErrors`, `TestDatabaseErrors`, `TestParseDS`, `TestPanicIsJSON500`, `TestNotReady` | 400 (64 caracteres, ponto no meio, `br..`, espaço, NUL, UTF-8 inválido, `*`, U+200B, `рф!`) e 404 (`nada-disso`, `xn--zz`, 63 caracteres, Unicode válido fora do recorte, com a mensagem no nome normalizado), rotas inexistentes, `DELETE`, `/tld/.` limpo pelo `ServeMux`; 503 `database_unavailable` e 504 `timeout`; erro e 404 fora do cache; DS fora do formato → 500; `parseDS` com campos a mais, a menos e fora da faixa; panic → 500 JSON; `dataset_not_ready` sem consultar o banco, 400 antes do 503, `/status` `starting`, `/meta` com `null` |
+| `httpapi` | `TestErrors`, `TestHugeTLD`, `TestDatabaseErrors`, `TestParseDS`, `TestPanicIsJSON500`, `TestNotReady` | 400 (64 caracteres, ponto no meio, `br..`, espaço, NUL, UTF-8 inválido, `*`, U+200B, `рф!`, caminho de ~1 MiB de ideogramas distintos percent-encoded) e 404 (`nada-disso`, `xn--zz`, 63 caracteres, Unicode válido fora do recorte, com a mensagem no nome normalizado), rotas inexistentes, `DELETE`, `/tld/.` limpo pelo `ServeMux`; 503 `database_unavailable` e 504 `timeout`; erro e 404 fora do cache; DS fora do formato → 500; `parseDS` com campos a mais, a menos e fora da faixa; panic → 500 JSON; `dataset_not_ready` sem consultar o banco, 400 antes do 503, `/status` `starting`, `/meta` com `null` |
 | `httpapi` | `TestCacheAndETag`, `TestHEAD`, `TestBypassAndBigBody` | `MISS` → `HIT` com a mesma chave e o mesmo ETag com e sem `/v1`; `If-None-Match` fraco, forte, em lista e `*` → 304 sem corpo nem `Content-Type`, sem consultar; ETag por consulta; os três ETags dos exemplos; `HEAD` nas rotas de dados, no índice e na meta; `BYPASS` sem cache; corpo acima de 8 MiB (60 mil TLDs sintéticos) fora do cache |
 | `httpapi` | `TestStatus`, `TestCORSAndHeaders`, `TestIndexMetaAndRedirect` | `/health` e `/status` em GET e POST nos quatro estados e com o cache desligado (`disabled`), `pong`, saúde e `ping` 404 em `/v1`; preflight e cabeçalhos comuns, inclusive no 404; índice nas duas versões (`endpoints` na ordem), redirect de `/rootzone` com e sem query, `/meta` com o SOA, `no-store` e sem `X-Cache` |
 | `httpapi` | `TestOpenAPIMatchesRoutes`, `TestOpenAPIDocument`, `TestOpenAPIRoute` | o teste completo do [padrão](../../padroes/openapi.md#teste): rotas × paths nos dois sentidos, `info.title`, os quatro `servers` com a porta lida do `Makefile`, `servers` próprios, `operationId` um por operação e sem repetição, `$ref` existentes, `GET`/`HEAD` do manifesto, `/v1/openapi.yaml` 404 e o índice sem rota fora do manifesto |
-| `tldname` | `TestPunycodeRoundTrip`, `TestNormalize` | `Encode` e `Decode` em 14 IDN reais da zona (cirílico, CJK, coreano, devanágari, árabe, tâmil, latino com `ö`) e nos exemplos da RFC 3492; `Normalize` com caixa, ponto final, Unicode, 63/64 caracteres e os inválidos |
+| `tldname` | `TestPunycodeRoundTrip`, `TestNormalize`, `TestNormalizeEarlyReject` | `Encode` e `Decode` em 14 IDN reais da zona (cirílico, CJK, coreano, devanágari, árabe, tâmil, latino com `ö`) e nos exemplos da RFC 3492; `Normalize` com caixa, ponto final, Unicode, 63/64 caracteres e os inválidos; 60 runas `ф`, 253 bytes e ~300 mil runas CJK distintas recusados antes do punycode (o teste usa um `Encode` que falha se chamado); benchmark `BenchmarkNormalizeHuge` |
 | `dataset` | `TestWatcherRefresh`, `TestWatcherRunStopsWithContext` | versão e serial lidos juntos, erro mantém a versão, linha sem SOA (serial nulo), volta a "sem carga"; `Run` para com o contexto |
 | `store` (integração) | `TestQueries` | as consultas no PG18 (abaixo) |
 | `httpapi` (integração) | `TestRealFile` | a fonte real, carregada pelo coletor (abaixo) |
