@@ -4,7 +4,7 @@
 - **Confiança:** confirmado
 - **Categoria:** bug
 - **Subcategoria:** validação de entrada / estouro de inteiro
-- **Status:** aberto — correção não aplicada
+- **Status:** correção aplicada na branch local `melhorias/rdns-ptr-conflict-e-status-tasks` (13/11/2026) nos cinco coletores de RIR, com casos novos em `TestSplitIPv4`; NÃO compilada nem testada (sem Go na estação)
 - **Arquivos afetados:** `apps/lacnic/collector/internal/parse/parse.go:323-345`, `apps/lacnic/collector/internal/parse/parse.go:386-410`, `apps/afrinic/collector/internal/parse/parse.go:392`, `apps/apnic/collector/internal/parse/parse.go:392`, `apps/arin/collector/internal/parse/parse.go:392`, `apps/ripencc/collector/internal/parse/parse.go:392`, `specs/fontes/rir/formato.md:154`
 - **Depende de / relacionado a:** 009 (o arquivo recusado por este bug seria baixado e recusado de novo sem fim)
 - **Esforço estimado:** P (até ~1 h)

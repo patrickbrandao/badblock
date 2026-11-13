@@ -389,7 +389,8 @@ func SplitIPv4(start netip.Addr, count uint64) ([]netip.Prefix, error) {
 	}
 	b := start.As4()
 	cur := uint64(b[0])<<24 | uint64(b[1])<<16 | uint64(b[2])<<8 | uint64(b[3])
-	if count < 1 || cur+count > 1<<32 {
+	// 1<<32 - cur >= 1 (cur <= 2^32-1): a subtração não estoura, a soma sim.
+	if count < 1 || count > 1<<32-cur {
 		return nil, fmt.Errorf("quantidade de endereços inválida %d a partir de %s", count, start)
 	}
 	var out []netip.Prefix

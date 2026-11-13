@@ -2,6 +2,7 @@ package parse
 
 import (
 	"fmt"
+	"math"
 	"net/netip"
 	"os"
 	"strings"
@@ -370,7 +371,7 @@ func TestSplitIPv4(t *testing.T) {
 	for _, bad := range []struct {
 		start string
 		count uint64
-	}{{"10.0.0.0", 0}, {"255.255.255.0", 257}, {"0.0.0.0", 1<<32 + 1}, {"2001:db8::", 1}} {
+	}{{"10.0.0.0", 0}, {"255.255.255.0", 257}, {"0.0.0.0", 1<<32 + 1}, {"0.0.0.1", math.MaxUint64}, {"255.255.255.255", math.MaxUint64 - 4294967294}, {"2001:db8::", 1}} {
 		if _, err := SplitIPv4(netip.MustParseAddr(bad.start), bad.count); err == nil {
 			t.Errorf("%s + %d: esperava erro", bad.start, bad.count)
 		}
