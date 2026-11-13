@@ -136,7 +136,7 @@ Regras de escrita (o coletor as aplica na varredura e no tempo real):
 
 | Linha atual | Resultado novo | Faz |
 |---|---|---|
-| nenhuma | `ptr` ou falha | `INSERT` |
+| nenhuma | `ptr` ou falha | `INSERT ... ON CONFLICT (ip) DO UPDATE` (a linha pode ter nascido noutra transação; uma falha nunca sobrescreve um PTR) |
 | nenhuma | `no_ptr` | nada |
 | `ptr` | `ptr` com outros nomes | `UPDATE` |
 | `ptr` | falha | nada (**a falha nunca apaga um PTR**) |

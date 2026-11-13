@@ -252,7 +252,11 @@ func queueChange(b *pgx.Batch, op Op, res resolver.Result) {
 	ip := res.IP.String()
 	switch op {
 	case Insert:
-		b.Queue(`INSERT INTO rdns_ptr (ip, status, name, names) VALUES ($1::inet, $2, $3, $4)`,
+		// A linha pode ter nascido noutra transação (varredura × tempo real)
+		// depois da leitura: vira um UPDATE, sem uma falha apagar um PTR.
+		b.Queue(`INSERT INTO rdns_ptr (ip, status, name, names) VALUES ($1::inet, $2, $3, $4)
+			ON CONFLICT (ip) DO UPDATE SET status = EXCLUDED.status, name = EXCLUDED.name, names = EXCLUDED.names
+			 WHERE EXCLUDED.status = 1 OR rdns_ptr.status <> 1`,
 			ip, int16(res.Status), nullName(res), nullNames(res))
 	case Update:
 		b.Queue(`UPDATE rdns_ptr SET status = $2, name = $3, names = $4 WHERE ip = $1::inet`,
@@ -376,6 +380,10 @@ func (s *Store) LiveAllowed(ctx context.Context, ip netip.Addr) (bool, error) {
 	return ok, err
 }
 
+// ErrNotAllowed indica que o prefixo do IP sumiu (ou saiu da regra) entre o
+// pedido de tempo real e a gravação: nada é gravado.
+var ErrNotAllowed = errors.New("ip fora dos prefixos ativos")
+
 // SaveLive grava o resultado de um pedido de tempo real numa transação de um
 // IP, com as mesmas regras da varredura (e jobs, se mudou). O last_scan_at
 // do prefixo não muda. Devolve se a linha mudou.
@@ -385,6 +393,18 @@ func (s *Store) SaveLive(ctx context.Context, res resolver.Result) (bool, error)
 		return false, err
 	}
 	defer tx.Rollback(ctx)
+	// Reconfere o prefixo com trava: um DELETE do administrador espera este
+	// commit, e o trigger dele apaga também o que for gravado aqui.
+	var one int
+	err = tx.QueryRow(ctx, `
+		SELECT 1 FROM rdns_prefix WHERE prefix >>= $1::inet AND active AND `+RuleSQL+`
+		 LIMIT 1 FOR KEY SHARE`, res.IP.String()).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrNotAllowed
+	}
+	if err != nil {
+		return false, err
+	}
 	cur, err := current(ctx, tx, netip.PrefixFrom(res.IP, 32))
 	if err != nil {
 		return false, err

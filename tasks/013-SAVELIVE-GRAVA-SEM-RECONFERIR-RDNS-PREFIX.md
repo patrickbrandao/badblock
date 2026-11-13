@@ -4,7 +4,7 @@
 - **Confiança:** confirmado
 - **Categoria:** bug
 - **Subcategoria:** condição de corrida / integridade referencial
-- **Status:** aberto — correção não aplicada
+- **Status:** correção aplicada na branch local `melhorias/rdns-ptr-conflict-e-status-tasks` (13/11/2026), junto com a 013; spec atualizada; NÃO compilada nem testada (sem Go na estação)
 - **Arquivos afetados:** `apps/rdns/collector/internal/live/live.go:170-195`, `apps/rdns/collector/internal/store/store.go:370-402`, `database/postgres/rdns/20261010120000_rdns.sql:313-321`, `specs/fontes/rdns/dados.md:104-108,220-222`, `specs/fontes/rdns/collector.md:199-221`
 - **Depende de / relacionado a:** 012 (mesma transação de SaveLive; aplicar os dois diffs juntos)
 - **Esforço estimado:** P (até ~1 h)

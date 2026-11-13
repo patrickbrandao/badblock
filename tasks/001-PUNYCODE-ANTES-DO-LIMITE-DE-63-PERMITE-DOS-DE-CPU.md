@@ -4,7 +4,7 @@
 - **Confiança:** provável
 - **Categoria:** segurança
 - **Subcategoria:** negação de serviço por complexidade algorítmica
-- **Status:** aberto — correção não aplicada
+- **Status:** corrigido no código (conferido por leitura em 13/11/2026: corte por tamanho antes do punycode em `tldname.go`, teste `TestNormalizeEarlyReject`); registro atualizado
 - **Arquivos afetados:** `apps/rootzone/api/internal/tldname/tldname.go:29-53`, `apps/rootzone/api/internal/tldname/punycode.go:25-86`, `apps/rootzone/api/internal/httpapi/handlers_tld.go:38-45`, `apps/rootzone/api/cmd/api-rootzone/main.go:116-123`, `specs/fontes/rootzone/api.md:117-140`
 - **Depende de / relacionado a:** nenhum (o rate limit do Traefik por IP, `specs/plataforma/publicacao.md:37`, só atenua)
 - **Esforço estimado:** P (até ~1 h)

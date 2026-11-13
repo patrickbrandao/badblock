@@ -21,6 +21,7 @@ import (
 
 	"github.com/patrickbrandao/badblock/apps/rdns/collector/internal/limiter"
 	"github.com/patrickbrandao/badblock/apps/rdns/collector/internal/resolver"
+	"github.com/patrickbrandao/badblock/apps/rdns/collector/internal/store"
 )
 
 const (
@@ -184,13 +185,18 @@ func (l *Loop) Handle(ctx context.Context, payload string) {
 			}
 			return
 		}
-		if _, err := l.store.SaveLive(ctx, res); err != nil {
+		_, err = l.store.SaveLive(ctx, res)
+		switch {
+		case errors.Is(err, store.ErrNotAllowed):
+			reply.Result = "not_allowed"
+		case err != nil:
 			l.fail(ctx, ip, err)
 			return
-		}
-		reply.Result = res.Status.String()
-		if res.Status == resolver.PTR {
-			reply.Names = res.Names
+		default:
+			reply.Result = res.Status.String()
+			if res.Status == resolver.PTR {
+				reply.Names = res.Names
+			}
 		}
 	}
 	reply.CheckedAt = l.now().UTC().Format(time.RFC3339)

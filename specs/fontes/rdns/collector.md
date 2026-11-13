@@ -139,8 +139,13 @@ A [fila da sonda](../../padroes/sonda.md#fila-de-varredura), com a regra
    WHERE ip <<= $1::cidr FOR UPDATE`; as diferenças pelas
    [regras de escrita](dados.md#rdns_ptr) vão num `pgx.Batch` (uma volta ao
    banco) com uma instrução por linha mudada — `INSERT INTO rdns_ptr (ip,
-   status, name, names) VALUES (...)`, `UPDATE rdns_ptr SET status = $2, name
-   = $3, names = $4 WHERE ip = $1` ou `DELETE FROM rdns_ptr WHERE ip = $1`;
+   status, name, names) VALUES (...) ON CONFLICT (ip) DO UPDATE SET status =
+   EXCLUDED.status, name = EXCLUDED.name, names = EXCLUDED.names WHERE
+   EXCLUDED.status = 1 OR rdns_ptr.status <> 1` (a linha pode ter nascido
+   noutra transação, do tempo real, depois da leitura; o `WHERE` mantém a
+   regra de que uma falha nunca apaga um PTR), `UPDATE rdns_ptr SET status =
+   $2, name = $3, names = $4 WHERE ip = $1` ou `DELETE FROM rdns_ptr WHERE ip
+   = $1`;
    depois o `UPDATE` de `rdns_prefix` com a conferência do lease e os
    contadores (`last_scan_ms`, `last_scan_ptr`, `last_scan_no_ptr`,
    `last_scan_failed`, `last_scan_changed`); por último, `jobs` se
@@ -213,7 +218,12 @@ mensagens de [dados.md](dados.md#fila-de-tempo-real-valkey):
    consulta.
 4. Consulta pela fila de prioridade do limitador; grava em `rdns_ptr` numa
    transação de um IP, com as mesmas regras (e `jobs`, se mudou); o
-   `last_scan_at` do prefixo não muda.
+   `last_scan_at` do prefixo não muda. A transação começa reconferindo o
+   prefixo com `SELECT 1 FROM rdns_prefix WHERE prefix >>= $1::inet AND
+   active AND <regra> LIMIT 1 FOR KEY SHARE`: um `DELETE` do administrador
+   espera este commit (e o trigger dele apaga também o que for gravado aqui).
+   Sem linha (o prefixo sumiu entre o passo 3 e a gravação): nada é gravado e
+   a resposta é `not_allowed`.
 5. Num só pipeline (`MULTI`/`EXEC`): `RPUSH` da resposta em
    `badblock:rdns:live:reply:<ip>`, `EXPIRE` de 30 s e `DEL` de
    `badblock:rdns:live:inflight:<ip>`. Falha no Postgres antes disso: aviso
